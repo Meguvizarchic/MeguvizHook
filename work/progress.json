@@ -201,7 +201,13 @@
       "status": "planned"
     },
     "INT-011": {
-      "status": "planned"
+      "status": "done",
+      "evidence": [
+        "work/integration/bil_readonly_consumer_fixture.json",
+        "work/performance/workloads.md",
+        "work/evidence/logs/round7-int011-fixture-check.log"
+      ],
+      "notes": "BIL read-only source fixture and B01/B02 A0/A1/A2 design validated at pinned commit; no BIL modifications, execution, device measurement or threshold freezing; A1 execution requires a BIL-owned adapter/cell"
     },
     "INT-012": {
       "status": "planned"
@@ -229,5 +235,5 @@
       "notes": "optional service track; not started"
     }
   },
-  "current_slice": "round6: independent JVM/Android consumers with BIL-aligned built-in Kotlin; 80 JVM/stub tests and three release/default-off audits pass; release_qualified remains false"
+  "current_slice": "round7: BIL read-only A0/A1/A2 design complete; JVM/Android consumers and 80 tests pass; device cells, A/A and performance measurement remain blocked; release_qualified remains false"
 }

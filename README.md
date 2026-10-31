@@ -3,9 +3,10 @@
 独立的 Android Hook SDK：自有 Java API、JVM 执行核心、互斥的 libxposed 后端适配制品与手工入口样例。
 真实的方法拦截始终由所选运行框架提供——本项目**不**替代管理器、注入器或 ART。
 
-当前状态：**第六轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
+当前状态：**第七轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
 独立 Java/Kotlin JVM 与 Android consumer、101/102 双 backend、`MatchPolicy.ALL`、可选 Kotlin DSL、
-JVM 合同和静态 release 隔离已验证；真实框架/设备资格全部未执行。
+JVM 合同和静态 release 隔离已验证；BIL 只读 A0/A1/A2 对照设计已完成但未执行，
+真实框架/设备资格和性能测量全部未执行。
 
 ## 模块
 

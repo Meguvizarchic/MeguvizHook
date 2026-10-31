@@ -1,7 +1,18 @@
-# MeguvizHook 移交（第六轮：独立 Android consumers）
+# MeguvizHook 移交（第七轮：BIL 只读对照设计）
 
 日期：2026-10-31。范围仅 MeguvizHook 仓库；BIL 仅作只读上游参考，未修改其源码。
 任务状态以 `work/progress.json` 为准；task done ≠ release qualified（当前仍为 false）。
+
+## 第七轮结果（INT-011）
+
+- 新增 `work/integration/bil_readonly_consumer_fixture.json`：固定 BIL `dba9ed9` 和 5 个源码 SHA-256，
+  明确 internal facade 边界、基线快路、API101/102 分 cell 及 `PROTECT_HOST`/`PROPAGATE` 差异。
+- B01/B02 已形成 A0 直接 backend、A1 BIL facade、A2 MeguvizHook 的同语义输入、执行约束和
+  correctness 判据；BIL lazy/no-copy、常量快路、配置 snapshot 和成员缓存只算基线，不算 A2 新收益。
+- 仅无异常 B01/B02 可比较；B03–B10 不自动获得 A1 对照。A1 执行仍需 BIL 自有只读 adapter/cell，
+  本任务未修改 BIL、未执行性能测量、未冻结阈值，GATE-002 保持 blocked。
+- 校验：`work/evidence/logs/round7-int011-fixture-check.log` 全部通过；`work/performance/workloads.md`
+  已同步。回退：对第七轮提交执行 `git revert`，上一基线为 `2973006`；禁止强推。
 
 ## 第六轮结果（INT-005）
 
@@ -58,10 +69,9 @@
 
 ### 下一批 ready 任务（按 DAG）
 
-1. **INT-011**：BIL 只读消费夹具与 A0/A1/A2 对照设计；不创建 BIL 开发任务。
-2. **INT-009/VAL-001/VAL-002**：真实 101/102 设备 cell（需要设备）。
-3. **GATE-002**：A/A 后才允许冻结阈值和 A/B。
-4. 远端：仅发布源码、文档和脱敏证据；本机 SDK 配置、构建缓存、签名材料与开发包不上传。
+1. **INT-009/VAL-001/VAL-002**：真实 101/102 设备 cell（需要设备）；性能 A1 还需 BIL 自有只读 adapter。
+2. **GATE-002**：先完成真实 A/A，再冻结阈值并执行 A/B；当前保持 blocked。
+3. 其余 planned 任务没有在本轮已验证 DAG 中解锁，不擅自启动；远端仅发布源码、文档和脱敏证据。
 
 ## 第二轮历史记录
 

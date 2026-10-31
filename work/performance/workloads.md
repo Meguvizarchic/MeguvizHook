@@ -36,3 +36,21 @@
 
 校验证据：`work/evidence/logs/profile-draft-check.log`（draft 通过）、
 `profile-frozen-check-expected-reject.log`（未冻结时 frozen 校验按预期拒绝）。
+
+## INT-011：BIL 只读消费夹具与 A0/A1/A2 对照设计
+
+机器可读夹具：`work/integration/bil_readonly_consumer_fixture.json`。上游固定为 BIL `dba9ed9`，
+5 个相关源码均记录 SHA-256；BIL 未修改，夹具和设计均为 `not_run`，不是性能数据。
+
+- B01：A0 直接 backend、A1 `ModernMemberHookCreator`、A2 `NO_ARGS` 均为空 before/after，
+  原方法恰好一次且返回 42L；禁止参数访问、日志、配置和业务工作。
+- B02：A0 读取 `chain.args[0/1]`，A1 读取 `argOrNull(0/1)`，A2 以 `READ_ARGS` 读取两槽；
+  输入 3、4，返回 7，原方法恰好一次且参数/结果不变。
+- A1 的 lazy/no-copy、常量快路、配置 snapshot 和成员缓存均为 BIL 基线，不计作 A2 新收益；
+  常量 replacement 和安装期配置不得混入上述 callback CPU 对照。
+- BIL 默认 `PROTECT_HOST` 与 SDK `PROPAGATE` 不同，因此这里只对无异常 B01/B02 声明同语义；
+  B03–B10 不自动获得 A1 对照，异常路径不得用来宣称性能等价。
+- A1 facade 是 BIL internal 实现，未来执行需 BIL 自有只读 adapter/cell；本任务不复制其源码、
+  不创建 BIL 开发任务。A/A、设备 cell 和阈值仍未执行/冻结，GATE-002 保持 blocked。
+
+夹具源码与结构校验：`work/evidence/logs/round7-int011-fixture-check.log`。
