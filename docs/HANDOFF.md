@@ -1,6 +1,6 @@
 # MeguvizHook 第二轮移交（双 backend + MatchPolicy.ALL）
 
-日期：2026-10-31。范围仅 MeguvizHook 本地仓库；未修改 BIL 或其他 Meguviz 仓库。
+日期：2026-10-31。范围仅 MeguvizHook 仓库；未修改 BIL 或其他 Meguviz 仓库。
 任务状态以 `work/progress.json` 为准；task done ≠ release qualified（当前仍为 false）。
 
 ## 1. 本轮实际完成
@@ -96,7 +96,8 @@ apkanalyzer dex packages [--defined-only] <release APK>
 ## 7. 回退方法
 
 - 代码回退：本轮是相对上一 commit 的新增/修改，可用 `git diff` 审查并 `git revert <round2-commit>`；
-  不使用覆盖历史的强推。远端尚未推送，本地上一基线为 `e0c62ac`。
+  不使用覆盖历史的强推。公开远端为 [jichuo1/MeguvizHook](https://github.com/jichuo1/MeguvizHook)；
+  本轮上一基线为 `a761207`。
 - 功能回退：保留单目标 FIRST/UNIQUE 和既有 102 路径；`ALL` 部分安装时调用 receipt.registration().close()
   逐项卸载。epoch 异常路径已由 core 自动回滚未发布项。禁止切换 backend 重放已发生副作用。
 - 101 产品问题可移除 sample 对 backend-101 的依赖并回到 102 sample；不在同一 APK 混放两代。
@@ -110,4 +111,4 @@ apkanalyzer dex packages [--defined-only] <release APK>
 4. **INT-011**：BIL 只读消费夹具与 A0/A1/A2 对照设计；不创建 BIL 开发任务。
 5. **INT-009/VAL-001/VAL-002**：真实 101/102 设备 cell（需要设备）。
 6. **GATE-002**：A/A 后才允许冻结阈值和 A/B。
-7. 远端：等待用户建立公开仓库后添加 origin、再次脱敏扫描并推送 main；不伪造远端提交或许可。
+7. 远端：仅发布源码、文档和证据；本机 SDK 配置、构建缓存、签名材料与开发包不上传。

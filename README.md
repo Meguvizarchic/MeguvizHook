@@ -31,7 +31,11 @@ api/core Java **8**。当前切片为纯 Java：`android.builtInKotlin=false`。
 
 ## 构建与测试
 
+公开仓库：[github.com/jichuo1/MeguvizHook](https://github.com/jichuo1/MeguvizHook)。
+
 ```bash
+git clone https://github.com/jichuo1/MeguvizHook.git
+cd MeguvizHook
 # 环境：JDK 17+（实际用 JDK 20）、Android SDK platform android-37.0 + build-tools 37.0.0
 ./gradlew :hook-testing:test :sample-java-contracts:run
 ./gradlew :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest

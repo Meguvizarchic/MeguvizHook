@@ -9,7 +9,7 @@
         "work/baseline.json",
         "work/evidence/logs/"
       ],
-      "notes": "local repository created; no pre-existing code; remote creation deferred to repository owner"
+      "notes": "public repository prepared by owner; absolute local paths removed from published history"
     },
     "INIT-002": {
       "status": "done",

@@ -11,3 +11,11 @@ local.properties
 captures/
 .externalNativeBuild/
 work/evidence/local/
+.env
+.env.*
+!.env.example
+secrets.properties
+*.pem
+*.key
+*.p12
+*.pfx
