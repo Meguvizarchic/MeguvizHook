@@ -3,9 +3,9 @@
 独立的 Android Hook SDK：自有 Java API、JVM 执行核心、互斥的 libxposed 后端适配制品与手工入口样例。
 真实的方法拦截始终由所选运行框架提供——本项目**不**替代管理器、注入器或 ART。
 
-当前状态：**第七轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
+当前状态：**第八轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
 独立 Java/Kotlin JVM 与 Android consumer、101/102 双 backend、`MatchPolicy.ALL`、可选 Kotlin DSL、
-JVM 合同和静态 release 隔离已验证；BIL 只读 A0/A1/A2 对照设计已完成但未执行，
+JVM 合同和静态 release 隔离已验证；API surface、完整 lint 和 JDK 27 CI 质量门禁通过。
 真实框架/设备资格和性能测量全部未执行。
 
 ## 模块
@@ -33,7 +33,7 @@ Gradle **9.8.2**（wrapper 含 SHA-256 校验）· AGP **9.4.1** · Kotlin **2.4
 libxposed api **102.0.0**（BIL 默认）+ **101.0.0**（独立 backend）· compileSdk **37.2** / minSdk **27** /
 targetSdk **37** · build-tools **37.0.0** · Android 模块 Java/Kotlin **17** · api/core Java **8**、dsl JVM **1.8**。
 Java-only Android variants 排除 Kotlin runtime/metadata；仅 Kotlin102 显式选择 DSL/stdlib。
-第三至六轮实际使用 JDK 17（前两轮为 JDK 20）；BIL CI 使用 JDK 27，一致性尚未验证。
+本地第三至八轮使用 JDK 17（前两轮为 JDK 20）；JDK 27 已由 CI run 41208912796 验证。
 逐项上游版本见 `work/integration/bil_dependency_alignment.json`。
 
 ## 构建与测试
@@ -43,9 +43,10 @@ Java-only Android variants 排除 Kotlin runtime/metadata；仅 Kotlin102 显式
 ```bash
 git clone https://github.com/jichuo1/MeguvizHook.git
 cd MeguvizHook
-# 环境：JDK 17+（第三至六轮实际用 JDK 17）、Android SDK platform android-37.2 + build-tools 37.0.0
+# 环境：JDK 17+（本地用 JDK 17，CI 用 27）、Android SDK platform android-37.2 + build-tools 37.0.0
 ./gradlew :hook-dsl:test :hook-testing:test :sample-java-contracts:run :sample-kotlin-contracts:run
 ./gradlew :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest
+./gradlew apiCheck lint
 ./gradlew :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease
 ./gradlew :sample-module-101:assembleRelease :sample-module-102:assembleRelease
 ./gradlew :sample-module-kotlin-102:assembleRelease
@@ -82,8 +83,8 @@ Java/Kotlin 样例分别输出 `SAMPLE_OK` 与 `KOTLIN_SAMPLE_OK`。证据由 JU
 - Java-only release 无 libxposed、kotlin-stdlib、hook-dsl 或另一代 backend；Kotlin102 显式选择 DSL/stdlib；
 - 三个 APK 均无框架类定义、testing、service、native 或热重载引用；101 无 102 专有 API 引用。
 
-**仍未验证**：真实 101/102 装载与执行、R8 后设备可达性、真实类加载与跨模块优先级、service、
-热重载、native、任何性能阈值、JDK 27 一致性。
+**仍未验证**：旧 consumer 二进制链接兼容、真实 101/102 装载与执行、R8 后设备可达性、
+真实类加载与跨模块优先级、service、热重载、native、任何性能阈值。
 task done ≠ release qualified。
 
 文档导航：`docs/HANDOFF.md`（本轮移交与下一批任务）、`work/`（机器可读证据与原始日志）。

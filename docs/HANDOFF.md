@@ -1,7 +1,19 @@
-# MeguvizHook 移交（第七轮：BIL 只读对照设计）
+# MeguvizHook 移交（第八轮：质量门禁与 JDK 27 CI）
 
 日期：2026-10-31。范围仅 MeguvizHook 仓库；BIL 仅作只读上游参考，未修改其源码。
 任务状态以 `work/progress.json` 为准；task done ≠ release qualified（当前仍为 false）。
+
+## 第八轮结果（QUAL-001）
+
+- 新增无额外依赖的 `apiDump/apiCheck`：JDK `javap` 按完整类名排序生成 hook-api/core/dsl 公开签名，
+  与提交基线比较；历史基线仅做确定性重排，签名集合逐项验证未变。负路径篡改夹具按预期拒绝。
+- 完整 `lint` 首次执行并通过。新增 `.github/workflows/verify.yml`，使用 Temurin 27 和 Android 37.2，
+  覆盖 80 tests、双 JVM consumer、apiCheck、完整 lint、三条 release 与依赖隔离。
+- 实际 CI [run 41208912796](https://github.com/jichuo1/MeguvizHook/actions/runs/41208912796)
+  **SUCCESS / 231s**，本地与远端提交 `0b30665` 对应；JDK 27 parity 由此获得实证。
+- 证据：`work/integration/quality_gate_results.json`、`work/evidence/logs/round8-quality-gates.log`。
+  API snapshot 不等于旧 consumer 二进制链接兼容；真实设备与性能测量仍未执行。
+- 回退：对第八轮提交执行 `git revert`，上一基线为 `82ab5e2`；禁止强推。
 
 ## 第七轮结果（INT-011）
 

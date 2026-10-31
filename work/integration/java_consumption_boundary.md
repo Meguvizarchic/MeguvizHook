@@ -40,5 +40,5 @@ APK 无 `.so`、无框架类。普通回调路径在源码层面无 JNI/IPC 调�
 
 ## 5. 未覆盖
 
-二进制兼容（旧 consumer 链接新库）、ABI 检查工具、lint、真实 101/102 运行时：均为后续任务，
-本切片不声明通过。
+公开 API surface snapshot 与完整 lint 已由 QUAL-001 验证（见 `quality_gate_results.json`）。
+旧 consumer 二进制链接兼容、真实 101/102 运行时仍未覆盖，本切片不声明通过。

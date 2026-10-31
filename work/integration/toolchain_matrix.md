@@ -73,12 +73,12 @@ javap -public -cp <hook-dsl jar> <each public class>                            
 
 ## 4. 差异与未决
 
-- JDK 20（前两轮）/ JDK 17（第三轮）vs BIL CI 27：字节码目标（api/core/dsl=8，Android=17）
-  已固定，但 JDK 27 的编译/R8 一致性未验证。
-- AGP 内建 Kotlin 默认注入 `kotlin-stdlib` 与 `kotlin/**` 元数据：本 Java-only 切片用
-  `android.builtInKotlin=false` + packaging excludes 消除，已复查依赖图与 APK 条目。
+- 本地曾用 JDK 20/17；第八轮 CI run 41208912796 已在 Temurin 27 完成测试、apiCheck、
+  完整 lint 与全部 release，JDK 27 parity 通过。旧 consumer 二进制链接兼容仍未验证。
+- AGP 内建 Kotlin 默认注入 `kotlin-stdlib` 与 `kotlin/**` 元数据：Java-only variants 仅在
+  releaseRuntimeClasspath 排除 stdlib，并保留 APK metadata excludes；Kotlin102 显式选择二者。
 - 第二轮纠正：真实 101 源码同样是 Hooker/Chain，不新增 classic SPI；101 不使用 102 的 setId/replaceHook。
 - 一次依赖报告把 `--configuration` 与两个 dependencies task 同用，导致其中一个输出全配置；已拆成
   `round2-sample-101-release-runtime-deps.log` 与 `round2-sample-102-release-runtime-deps.log` 重新核实。
-- DEX 原始字节包含诊断文案 setId/replaceHook，曾被宽扫描误报；最终以 apkanalyzer 方法/类引用表为准。
-- 未执行：`lint`、instrumented test、签名打包、真实 101/102 框架装载。
+- DEX 原始字节包含诊断文案 setId/replaceHook，曾被宽扫描误报；后续均按定义行与实际引用行分别审计。
+- 完整 `lint` 已通过；未执行 instrumented test、签名打包、真实 101/102 框架装载。

@@ -19,9 +19,10 @@
         "work/evidence/logs/gradle-tasks-all.log",
         "work/baseline.json",
         "work/integration/bil_dependency_alignment.json",
-        "work/evidence/logs/round4-bil-alignment.log"
+        "work/evidence/logs/round4-bil-alignment.log",
+        "work/integration/quality_gate_results.json"
       ],
-      "notes": "shared dependencies/toolchain aligned with BIL dba9ed9 including android-37.2; unused annotation removed; independent libxposed 101 remains 101.0.0; JDK 27 parity open"
+      "notes": "shared dependencies/toolchain aligned with BIL dba9ed9 including android-37.2; unused annotation removed; independent libxposed 101 remains 101.0.0; JDK 27 parity verified in CI run 41208912796"
     },
     "INIT-003": {
       "status": "done",
@@ -212,6 +213,16 @@
     "INT-012": {
       "status": "planned"
     },
+    "QUAL-001": {
+      "status": "done",
+      "evidence": [
+        "gradle/api-tasks.gradle.kts",
+        ".github/workflows/verify.yml",
+        "work/integration/quality_gate_results.json",
+        "work/evidence/logs/round8-quality-gates.log"
+      ],
+      "notes": "deterministic javap API surface checks and full lint pass locally; JDK 27 CI run 41208912796 passes tests, consumers, ABI, lint, releases and dependency isolation; old-consumer binary link compatibility and device cells not covered"
+    },
     "GATE-002": {
       "status": "blocked",
       "reason": "requires A/A on real device cells"
@@ -235,5 +246,5 @@
       "notes": "optional service track; not started"
     }
   },
-  "current_slice": "round7: BIL read-only A0/A1/A2 design complete; JVM/Android consumers and 80 tests pass; device cells, A/A and performance measurement remain blocked; release_qualified remains false"
+  "current_slice": "round8: deterministic API checks, full lint and JDK 27 CI pass across all consumers/releases; device cells, A/A, performance and old-consumer binary link compatibility remain open; release_qualified remains false"
 }
