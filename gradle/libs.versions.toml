@@ -3,6 +3,7 @@
 # first consumer resolve the same AGP / Gradle / libxposed combination.
 [versions]
 agp = "9.4.1"
+kotlin = "2.4.21"
 libxposed = "102.0.0"
 libxposed101 = "101.0.0"
 junit = "4.13.2"
@@ -11,6 +12,7 @@ androidx-annotation = "1.9.1"
 [plugins]
 android-library = { id = "com.android.library", version.ref = "agp" }
 android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 
 [libraries]
 libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposed" }

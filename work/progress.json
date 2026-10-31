@@ -133,16 +133,18 @@
     "VAL-001": {
       "status": "partial",
       "evidence": [
-        "work/hook/dispatch_conformance_results.json"
+        "work/hook/dispatch_conformance_results.json",
+        "work/hook/dsl_contract_results.json"
       ],
-      "notes": "68 JVM/stub tests pass (59 fake/core + 5 adapter-101 + 4 adapter-102); real backend cells not run"
+      "notes": "80 JVM/stub tests pass (59 fake/core + 12 DSL + 5 adapter-101 + 4 adapter-102); real backend cells not run"
     },
     "INT-009": {
       "status": "partial",
       "evidence": [
-        "work/hook/release_artifact_audit.json"
+        "work/hook/release_artifact_audit.json",
+        "work/hook/round3_artifact_recheck.json"
       ],
-      "notes": "dual compileOnly/R8/DEX/dependency audits pass; no device verification"
+      "notes": "dual compileOnly/R8/dexdump/dependency audits pass; Java-only releases contain no DSL/Kotlin; no device verification"
     },
     "HOOK-006": {
       "status": "planned"
@@ -160,7 +162,14 @@
       "status": "planned"
     },
     "INT-004": {
-      "status": "planned"
+      "status": "done",
+      "evidence": [
+        "hook-dsl/",
+        "work/hook/api_dump_hook-dsl.txt",
+        "work/hook/dsl_contract_results.json",
+        "work/evidence/logs/round3-final-verification.log"
+      ],
+      "notes": "optional thin Kotlin 2.4.21 DSL on JVM 1.8; 12 same-fixture contract tests pass; no public inline/PublishedApi; independent Kotlin consumer belongs to HOOK-007"
     },
     "INT-006": {
       "status": "planned"
@@ -203,5 +212,5 @@
       "notes": "optional service track; not started"
     }
   },
-  "current_slice": "round2: dual libxposed backends plus MatchPolicy.ALL; release_qualified remains false"
+  "current_slice": "round3: optional thin Kotlin DSL with 80 JVM/stub tests and dual-backend release regression; release_qualified remains false"
 }

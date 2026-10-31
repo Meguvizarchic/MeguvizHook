@@ -11,7 +11,7 @@
 | AGP | 9.4.1（`com.android.library`/`application`） | 构建日志、release 产物 |
 | Android platform | `platforms;android-37.0`，ApiLevel=37.0，revision 2 | `source.properties` |
 | Build tools | 37.0.0 | SDK 安装记录 |
-| Kotlin | 未使用；`android.builtInKotlin=false` | 运行时依赖图无 kotlin-stdlib |
+| Kotlin | 可选 `hook-dsl` 使用 KGP 2.4.21 / JVM 1.8；Android 仍 `android.builtInKotlin=false` | DSL runtime 含 stdlib；Java-only release 依赖图无 kotlin-stdlib/DSL |
 | libxposed api | 102.0.0（BIL 默认）+ 101.0.0（独立 backend）；均 compileOnly / 对应 stub 测试 | AAR SHA-256 见 baseline_inventory.json / baseline.json |
 | NDK/Rust/KSP | 未选择，未安装要求 | 无对应模块 |
 | 设备/模拟器 | 无 | 设备 cell 全部 not_run |
@@ -46,6 +46,16 @@ gradle -p . :sample-module-101:dependencies \
 gradle -p . :sample-module-102:dependencies \
     --configuration releaseRuntimeClasspath                                      -> rc=0，仅 backend-102
 apkanalyzer dex packages [--defined-only] <101/102 release APK>                  -> DEX 定义/引用审计通过
+
+# 第三轮（JDK 17）
+gradle -p . :hook-dsl:test :hook-testing:test :sample-java-contracts:run \
+    :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest \
+    :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease \
+    :sample-module-101:assembleRelease :sample-module-102:assembleRelease \
+    --no-daemon --console=plain                                                   -> rc=0，80 tests，0 failure，双 AAR/APK
+javap -public -cp <hook-dsl jar> <each public class>                               -> work/hook/api_dump_hook-dsl.txt，major=52
+# 本机无 apkanalyzer，使用 build-tools 37.0.0 dexdump 对 DEX 定义和引用分别复核
+# 初版定义检查误匹配类型引用；按 Class descriptor 行修正后全部通过
 ```
 
 日志：`work/evidence/logs/`。首次失败记录（wrapper 下载超时、Kotlin DSL 扩展、ThreadDeath lint、
@@ -63,7 +73,8 @@ apkanalyzer dex packages [--defined-only] <101/102 release APK>                 
 
 ## 4. 差异与未决
 
-- JDK 20 vs BIL CI 27：字节码目标（api/core=8，Android=17）已固定，但 JDK 27 的编译/R8 一致性未验证。
+- JDK 20（前两轮）/ JDK 17（第三轮）vs BIL CI 27：字节码目标（api/core/dsl=8，Android=17）
+  已固定，但 JDK 27 的编译/R8 一致性未验证。
 - AGP 内建 Kotlin 默认注入 `kotlin-stdlib` 与 `kotlin/**` 元数据：本 Java-only 切片用
   `android.builtInKotlin=false` + packaging excludes 消除，已复查依赖图与 APK 条目。
 - 第二轮纠正：真实 101 源码同样是 Hooker/Chain，不新增 classic SPI；101 不使用 102 的 setId/replaceHook。

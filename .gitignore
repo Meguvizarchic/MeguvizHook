@@ -19,3 +19,4 @@ secrets.properties
 *.key
 *.p12
 *.pfx
+.ai-memory/*/

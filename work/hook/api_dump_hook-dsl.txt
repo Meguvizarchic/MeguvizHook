@@ -1,0 +1,35 @@
+Compiled from "HookDsl.kt"
+public final class io.github.jichuo1.meguviz.hook.dsl.DescriptorTargetDsl {
+  public io.github.jichuo1.meguviz.hook.dsl.DescriptorTargetDsl(io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget$Builder);
+  public final void parameters(java.lang.String...);
+  public final void returning(java.lang.String);
+  public final void initializeClass(boolean);
+  public final void match(io.github.jichuo1.meguviz.hook.api.MatchPolicy);
+  public final io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget build$io_github_jichuo1_meguviz_hook_hook_dsl();
+}
+Compiled from "HookDsl.kt"
+public interface io.github.jichuo1.meguviz.hook.dsl.HookDsl extends java.lang.annotation.Annotation {
+}
+Compiled from "HookDsl.kt"
+public final class io.github.jichuo1.meguviz.hook.dsl.HookDslKt {
+  public static final io.github.jichuo1.meguviz.hook.api.TargetSpec$MemberTarget member(java.lang.reflect.Executable);
+  public static final io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget method(java.lang.String, java.lang.String, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.DescriptorTargetDsl, kotlin.Unit>);
+  public static io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget method$default(java.lang.String, java.lang.String, kotlin.jvm.functions.Function1, int, java.lang.Object);
+  public static final io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget constructor(java.lang.String, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.DescriptorTargetDsl, kotlin.Unit>);
+  public static io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget constructor$default(java.lang.String, kotlin.jvm.functions.Function1, int, java.lang.Object);
+  public static final io.github.jichuo1.meguviz.hook.api.HookSpec hook(java.lang.String, java.lang.String, io.github.jichuo1.meguviz.hook.api.TargetSpec, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl, kotlin.Unit>);
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt install(io.github.jichuo1.meguviz.hook.core.HookEnvironment, java.lang.String, java.lang.String, io.github.jichuo1.meguviz.hook.api.TargetSpec, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl, kotlin.Unit>);
+}
+Compiled from "HookDsl.kt"
+public final class io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl {
+  public io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl(io.github.jichuo1.meguviz.hook.api.HookSpec$Builder);
+  public final void access(io.github.jichuo1.meguviz.hook.api.ParameterAccess);
+  public final void before(io.github.jichuo1.meguviz.hook.api.BeforeCallback);
+  public final void after(io.github.jichuo1.meguviz.hook.api.AfterCallback);
+  public final void around(io.github.jichuo1.meguviz.hook.api.AroundCallback);
+  public final void errorPolicy(io.github.jichuo1.meguviz.hook.api.ErrorPolicy);
+  public final void require(io.github.jichuo1.meguviz.hook.api.Capability);
+  public final void processes(io.github.jichuo1.meguviz.hook.api.ProcessFilter);
+  public final void priority(int);
+  public final io.github.jichuo1.meguviz.hook.api.HookSpec build$io_github_jichuo1_meguviz_hook_hook_dsl();
+}

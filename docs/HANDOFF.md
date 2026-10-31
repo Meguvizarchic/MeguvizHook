@@ -1,7 +1,33 @@
-# MeguvizHook 第二轮移交（双 backend + MatchPolicy.ALL）
+# MeguvizHook 移交（第三轮：可选 Kotlin DSL）
 
 日期：2026-10-31。范围仅 MeguvizHook 仓库；未修改 BIL 或其他 Meguviz 仓库。
 任务状态以 `work/progress.json` 为准；task done ≠ release qualified（当前仍为 false）。
+
+## 第三轮结果（INT-004）
+
+- `INT-004` 已完成：新增独立可选 `hook-dsl`，Kotlin 2.4.21 / JVM 1.8；所有构建器与安装扩展只委托
+  既有 `TargetSpec`、`HookSpec.Builder`、`HookEnvironment`，无第二套 resolver、dispatcher 或反射 cache。
+- 12 项 DSL 测试与 Java 共用 `Fixtures`/`FakeBackend`，覆盖同 fixture 对照、描述符边界、回执/关闭、
+  before/after/around、无 outcome、二次 proceed 和回调身份；全量回归为 **80 tests / 0 failures**。
+- `work/hook/api_dump_hook-dsl.txt` 来自实际 JAR 的 `javap -public`；无 public inline/PublishedApi，
+  字节码 major=52，JAR 无 testing 类。独立 Kotlin consumer 尚未建立，属于下一项 HOOK-007。
+- 第三轮在 JDK 17 完成双 backend/双 sample release 回归。`work/hook/round3_artifact_recheck.json`
+  使用 build-tools 37.0.0 `dexdump` 复核：Java-only release 无 DSL/Kotlin 依赖、框架类定义或另一代 backend。
+  初版检查曾把类型引用误作类定义，已按 `Class descriptor` 行修正并保留引用审计，未放宽检查。
+- 证据：`work/hook/dsl_contract_results.json`、`work/evidence/logs/round3-final-verification.log`、
+  `round3-sample-*-release-runtime-deps.log`、`round3-sample-*-dex-*.log`。
+- 回退：对第三轮提交执行 `git revert`，上一基线为 `d434212`；禁止覆盖历史的强推。
+
+### 下一批 ready 任务（按 DAG）
+
+1. **HOOK-007**：建立独立 Java/Kotlin consumer 并联调入口，复用同一 core，不建第二套反射 cache。
+2. **INT-005 剩余**：独立 Android consumer、Java API101 与 Kotlin API102 最小 module 的默认关闭项核查。
+3. **INT-011**：BIL 只读消费夹具与 A0/A1/A2 对照设计；不创建 BIL 开发任务。
+4. **INT-009/VAL-001/VAL-002**：真实 101/102 设备 cell（需要设备）。
+5. **GATE-002**：A/A 后才允许冻结阈值和 A/B。
+6. 远端：仅发布源码、文档和脱敏证据；本机 SDK 配置、构建缓存、签名材料与开发包不上传。
+
+## 第二轮历史记录
 
 ## 1. 本轮实际完成
 

@@ -15,7 +15,9 @@ hook-api  ←  hook-core  ←  backend-libxposed-101  ←  sample-module-101
 
 - 编译依赖单向；运行时 backend 通过 `core.spi.HookBackend` 反向被 `HookEnvironment` 调用，
   不构成编译环。`hook-core` 不依赖任何 backend，`hook-testing` 不进 consumer APK。
-- 未创建的模块（dsl/service/codegen/doctor/native/bridge）不进入 settings，不留空壳。
+- `hook-dsl` 独立可选，只依赖 api+core；现有 Java/backend/sample 不依赖它，Kotlin 运行时不得渗入
+  Java-only consumer variant。
+- 未创建的模块（service/codegen/doctor/native/bridge）不进入 settings，不留空壳。
   后续添加时各自独立可选，不被 BOM 或默认装配强拉。
 
 ## 2. 互斥装配

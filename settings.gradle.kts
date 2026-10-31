@@ -21,6 +21,7 @@ rootProject.name = "MeguvizHook"
 // Only modules with real content in this slice. No empty service/dsl/native modules are created up front.
 include(":hook-api")
 include(":hook-core")
+include(":hook-dsl")
 include(":hook-testing")
 include(":sample-java-contracts")
 include(":backend-libxposed-101")
