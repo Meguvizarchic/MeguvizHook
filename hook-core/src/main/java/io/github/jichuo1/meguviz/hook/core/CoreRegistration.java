@@ -6,6 +6,7 @@ import io.github.jichuo1.meguviz.hook.api.HookRegistration;
 import io.github.jichuo1.meguviz.hook.api.RegistrationState;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendCloseReport;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
+import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 
 import java.util.ArrayList;
@@ -53,6 +54,36 @@ final class CoreRegistration implements HookRegistration {
         handles.put(plan, backendHandle);
     }
 
+    /** Serializes replacement with direct close() and transfers handle ownership only after commit. */
+    synchronized void replaceWith(BoundPlan plan, CoreRegistration replacement) throws BackendInstallException {
+        if (state != RegistrationState.INSTALLED) {
+            throw new IllegalStateException("registration is not installed");
+        }
+        BoundPlan previous = plan();
+        BackendHandle previousHandle = handles.get(previous);
+        if (previousHandle == null) {
+            throw new IllegalStateException("installed registration has no backend handle");
+        }
+        final BackendHandle replacementHandle;
+        try {
+            replacementHandle = previousHandle.replace(plan, replacement.channel(plan));
+        } catch (BackendInstallException failure) {
+            throw failure;
+        } catch (RuntimeException failure) {
+            throw new BackendInstallException("backend replacement failed", failure);
+        }
+        if (replacementHandle == null) {
+            throw new AssertionError("backend returned a null handle after replacement commit");
+        }
+        replacement.bind(plan, replacementHandle);
+        handles.remove(previous);
+        state = RegistrationState.CLOSED;
+        lastCloseReport = new CloseReport(state, true, CloseReport.EntryRestoration.NOT_RESTORED,
+                inFlight.get(), CloseReport.PhysicalRelease.NOT_CLAIMED,
+                "superseded by generation " + plan.generation() + "; backend handle ownership transferred");
+        closeOnce.set(true);
+    }
+
     List<BoundPlan> plans() {
         return plans;
     }
@@ -81,7 +112,7 @@ final class CoreRegistration implements HookRegistration {
     }
 
     @Override
-    public CloseReport close() {
+    public synchronized CloseReport close() {
         if (!closeOnce.compareAndSet(false, true)) {
             return lastCloseReport;
         }

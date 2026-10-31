@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "task": "HOOK-006",
+  "observed_at": "2026-10-31",
+  "verification_level": "JVM fake-cell and API102 proxy mapping tests; Java/Kotlin consumers; apiCheck/lint/release; DEX reference isolation. No real device replacement.",
+  "suites": [
+    {
+      "name": "io.github.jichuo1.meguviz.hook.testing.conformance.BoundedDiagnosticsTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "io.github.jichuo1.meguviz.hook.testing.conformance.CallbackStateMachineTest",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "io.github.jichuo1.meguviz.hook.testing.conformance.InstallContractTest",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "io.github.jichuo1.meguviz.hook.testing.conformance.ParameterShapeTest",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "io.github.jichuo1.meguviz.hook.testing.conformance.ReentryAndLifetimeTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "io.github.jichuo1.meguviz.hook.testing.conformance.ReplacementContractTest",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "io.github.jichuo1.meguviz.hook.dsl.HookDslContractTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "io.github.jichuo1.meguviz.hook.backend.libxposed101.LibXposed101BackendTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "io.github.jichuo1.meguviz.hook.backend.libxposed102.LibXposed102BackendTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "total": {
+    "tests": 90,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "new_tests": {
+    "replacement_core": 8,
+    "backend_102_replacement": 1,
+    "kotlin_dsl_replacement": 1
+  },
+  "consumer_outputs": {
+    "java": "SAMPLE_OK backend=fake-chain close=CLOSED",
+    "kotlin": "KOTLIN_SAMPLE_OK backend=fake-chain close=CLOSED",
+    "replacement_generation": "2 -> 3",
+    "old_close_preserves_replacement": true
+  },
+  "invariants": {
+    "single_target_only": true,
+    "no_close_install_simulation": true,
+    "failure_preserves_old_registration": true,
+    "superseded_close_idempotent": true,
+    "inflight_old_plan_completes": true,
+    "close_replace_serialized": true,
+    "api101_atomic_replace_unsupported": true
+  },
+  "dex_reference_checks": {
+    "sample-module-101": {
+      "no_other_backend_reference": true,
+      "no_testing_reference": true,
+      "no_replaceHook_reference": true
+    },
+    "sample-module-102": {
+      "no_other_backend_reference": true,
+      "no_testing_reference": true,
+      "no_replaceHook_reference": true
+    },
+    "sample-module-kotlin-102": {
+      "no_other_backend_reference": true,
+      "no_testing_reference": true,
+      "no_replaceHook_reference": true
+    }
+  },
+  "api_surface": {
+    "hook_core": "HookEnvironment.replace(HookSpec), BackendHandle.replace default",
+    "hook_dsl": "HookEnvironment.replace extension",
+    "api_check": "passed"
+  },
+  "review": {
+    "p0_p1": "none",
+    "p2_fixed": "old.close overwrote superseded report; closeOnce now set at replacement commit; regression assertions added"
+  },
+  "build_log": "work/evidence/logs/round9-hook006.log",
+  "not_verified": [
+    "real API102 framework replacement",
+    "device snapshot/in-flight behavior",
+    "multi-target atomic replacement",
+    "hot reload"
+  ]
+}

@@ -1,0 +1,504 @@
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+Reusing configuration cache.
+> Task :backend-libxposed-101:generateReleaseAssets UP-TO-DATE
+> Task :sample-kotlin-contracts:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :hook-dsl:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :sample-module-101:preBuild UP-TO-DATE
+> Task :sample-module-kotlin-102:preBuild UP-TO-DATE
+> Task :backend-libxposed-102:generateReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-101:preBuild UP-TO-DATE
+> Task :sample-module-101:generateReleaseAssets UP-TO-DATE
+> Task :sample-module-102:generateReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugAssets UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugAssets UP-TO-DATE
+> Task :sample-module-102:preBuild UP-TO-DATE
+> Task :backend-libxposed-102:preBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugBuild UP-TO-DATE
+> Task :sample-module-101:preDebugAndroidTestBuild SKIPPED
+> Task :sample-module-101:preDebugUnitTestBuild UP-TO-DATE
+> Task :sample-module-101:preDebugBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugAndroidTestBuild UP-TO-DATE
+> Task :backend-libxposed-102:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-102:preDebugBuild UP-TO-DATE
+> Task :hook-dsl:processResources NO-SOURCE
+> Task :hook-dsl:processTestResources NO-SOURCE
+> Task :sample-java-contracts:processResources NO-SOURCE
+> Task :hook-core:processResources NO-SOURCE
+> Task :hook-testing:processTestResources NO-SOURCE
+> Task :hook-api:processResources NO-SOURCE
+> Task :hook-testing:processResources NO-SOURCE
+> Task :sample-kotlin-contracts:processResources NO-SOURCE
+> Task :backend-libxposed-102:prepareLintJarForPublish UP-TO-DATE
+> Task :backend-libxposed-102:prepareDebugArtProfile UP-TO-DATE
+> Task :backend-libxposed-101:prepareLintJarForPublish UP-TO-DATE
+> Task :backend-libxposed-101:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :backend-libxposed-101:prepareDebugArtProfile UP-TO-DATE
+> Task :backend-libxposed-102:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :backend-libxposed-102:preDebugAndroidTestBuild UP-TO-DATE
+> Task :backend-libxposed-101:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :backend-libxposed-102:javaPreCompileDebug UP-TO-DATE
+> Task :backend-libxposed-101:processDebugNavigationResources UP-TO-DATE
+> Task :backend-libxposed-102:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :backend-libxposed-101:checkDebugAarMetadata UP-TO-DATE
+> Task :backend-libxposed-101:writeDebugLintModelMetadata UP-TO-DATE
+> Task :backend-libxposed-101:javaPreCompileDebug UP-TO-DATE
+> Task :sample-module-101:extractProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:extractProguardFiles UP-TO-DATE
+> Task :backend-libxposed-102:processDebugNavigationResources UP-TO-DATE
+> Task :backend-libxposed-101:mergeDebugAssets UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugResources UP-TO-DATE
+> Task :backend-libxposed-101:writeDebugAarMetadata UP-TO-DATE
+> Task :backend-libxposed-102:checkDebugAarMetadata UP-TO-DATE
+> Task :backend-libxposed-102:mergeDebugAssets UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugResources UP-TO-DATE
+> Task :backend-libxposed-101:processDebugManifest UP-TO-DATE
+> Task :hook-api:compileJava UP-TO-DATE
+> Task :sample-module-102:preDebugBuild UP-TO-DATE
+> Task :backend-libxposed-102:writeDebugAarMetadata UP-TO-DATE
+> Task :backend-libxposed-102:writeDebugLintModelMetadata UP-TO-DATE
+> Task :sample-module-101:javaPreCompileDebug UP-TO-DATE
+> Task :backend-libxposed-102:extractProguardFiles UP-TO-DATE
+> Task :hook-api:classes UP-TO-DATE
+> Task :sample-module-102:preDebugAndroidTestBuild SKIPPED
+> Task :sample-module-kotlin-102:preDebugBuild UP-TO-DATE
+> Task :backend-libxposed-101:mapDebugSourceSetPaths UP-TO-DATE
+> Task :sample-module-kotlin-102:preDebugAndroidTestBuild SKIPPED
+> Task :sample-module-101:mapDebugSourceSetPaths UP-TO-DATE
+> Task :sample-module-101:processDebugNavigationResources UP-TO-DATE
+> Task :sample-module-101:generateDebugResources UP-TO-DATE
+> Task :backend-libxposed-102:processDebugManifest UP-TO-DATE
+> Task :sample-module-102:extractProguardFiles UP-TO-DATE
+> Task :sample-module-kotlin-102:extractProguardFiles UP-TO-DATE
+> Task :sample-module-101:extractDeepLinksDebug UP-TO-DATE
+> Task :sample-module-102:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-101:extractDeepLinksDebug UP-TO-DATE
+> Task :sample-module-102:javaPreCompileDebug UP-TO-DATE
+> Task :backend-libxposed-102:mapDebugSourceSetPaths UP-TO-DATE
+> Task :backend-libxposed-102:extractDeepLinksDebug UP-TO-DATE
+> Task :sample-module-102:mapDebugSourceSetPaths UP-TO-DATE
+> Task :sample-module-102:processDebugNavigationResources UP-TO-DATE
+> Task :sample-module-102:extractDeepLinksDebug UP-TO-DATE
+> Task :sample-module-kotlin-102:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-101:preReleaseBuild UP-TO-DATE
+> Task :sample-module-102:generateDebugResources UP-TO-DATE
+> Task :sample-module-kotlin-102:javaPreCompileDebug UP-TO-DATE
+> Task :sample-module-kotlin-102:generateDebugResources UP-TO-DATE
+> Task :sample-module-kotlin-102:extractDeepLinksDebug UP-TO-DATE
+> Task :sample-module-kotlin-102:mapDebugSourceSetPaths UP-TO-DATE
+> Task :sample-module-kotlin-102:processDebugNavigationResources UP-TO-DATE
+> Task :sample-module-102:compileDebugNavigationResources UP-TO-DATE
+> Task :backend-libxposed-101:checkReleaseAarMetadata UP-TO-DATE
+> Task :sample-module-101:compileDebugNavigationResources UP-TO-DATE
+> Task :backend-libxposed-101:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :sample-module-kotlin-102:compileDebugNavigationResources UP-TO-DATE
+> Task :backend-libxposed-101:processReleaseNavigationResources UP-TO-DATE
+> Task :backend-libxposed-101:generateReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-101:javaPreCompileRelease UP-TO-DATE
+> Task :sample-module-102:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :backend-libxposed-102:preReleaseBuild UP-TO-DATE
+> Task :sample-module-101:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :backend-libxposed-101:prepareReleaseArtProfile UP-TO-DATE
+> Task :sample-module-kotlin-102:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :backend-libxposed-101:writeReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-101:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :backend-libxposed-102:processReleaseNavigationResources UP-TO-DATE
+> Task :backend-libxposed-102:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :backend-libxposed-102:checkReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-102:generateReleaseResources UP-TO-DATE
+> Task :backend-libxposed-102:javaPreCompileRelease UP-TO-DATE
+> Task :backend-libxposed-101:processReleaseManifest UP-TO-DATE
+> Task :hook-core:compileJava UP-TO-DATE
+> Task :sample-module-kotlin-102:checkDebugAarMetadata UP-TO-DATE
+> Task :sample-module-101:checkDebugAarMetadata UP-TO-DATE
+> Task :sample-module-102:checkDebugAarMetadata UP-TO-DATE
+> Task :hook-core:classes UP-TO-DATE
+> Task :sample-module-101:preReleaseBuild UP-TO-DATE
+> Task :sample-module-101:processDebugMainManifest UP-TO-DATE
+> Task :sample-module-102:processDebugMainManifest UP-TO-DATE
+> Task :backend-libxposed-102:prepareReleaseArtProfile UP-TO-DATE
+> Task :sample-module-kotlin-102:processDebugMainManifest UP-TO-DATE
+> Task :backend-libxposed-102:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :backend-libxposed-102:writeReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseNativeLibs NO-SOURCE
+> Task :backend-libxposed-102:mergeReleaseNativeLibs NO-SOURCE
+> Task :sample-module-101:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :sample-module-101:javaPreCompileRelease UP-TO-DATE
+> Task :backend-libxposed-102:processReleaseManifest UP-TO-DATE
+> Task :sample-module-101:processReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-101:generateReleaseResources UP-TO-DATE
+> Task :sample-module-101:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :backend-libxposed-102:stripReleaseDebugSymbols NO-SOURCE
+> Task :backend-libxposed-101:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-kotlin-102:processDebugManifest UP-TO-DATE
+> Task :sample-module-102:processDebugManifest UP-TO-DATE
+> Task :sample-module-101:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :sample-module-101:checkReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-101:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :sample-module-101:mergeReleaseArtProfile UP-TO-DATE
+> Task :sample-module-101:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :sample-module-101:extractDeepLinksRelease UP-TO-DATE
+> Task :sample-module-101:processDebugManifest UP-TO-DATE
+> Task :backend-libxposed-101:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :backend-libxposed-101:extractDeepLinksRelease UP-TO-DATE
+> Task :backend-libxposed-102:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :sample-module-101:mergeReleaseStartupProfile UP-TO-DATE
+> Task :sample-module-kotlin-102:processDebugManifestForPackage UP-TO-DATE
+> Task :sample-module-102:preReleaseBuild UP-TO-DATE
+> Task :sample-module-102:processDebugManifestForPackage UP-TO-DATE
+> Task :backend-libxposed-101:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :sample-module-101:writeReleaseSigningConfigVersions UP-TO-DATE
+> Task :sample-module-101:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :sample-module-101:mergeReleaseAssets UP-TO-DATE
+> Task :sample-module-101:processDebugManifestForPackage UP-TO-DATE
+> Task :backend-libxposed-102:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :sample-module-101:processReleaseMainManifest UP-TO-DATE
+> Task :hook-api:jar UP-TO-DATE
+> Task :hook-core:jar UP-TO-DATE
+> Task :sample-module-101:writeReleaseAppMetadata UP-TO-DATE
+> Task :sample-module-102:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :sample-module-101:compressReleaseAssets UP-TO-DATE
+> Task :sample-module-102:generateReleaseResources UP-TO-DATE
+> Task :sample-module-102:javaPreCompileRelease UP-TO-DATE
+> Task :sample-module-102:processReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-102:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :sample-module-101:processReleaseManifest UP-TO-DATE
+> Task :sample-module-102:mergeReleaseArtProfile UP-TO-DATE
+> Task :sample-module-102:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :sample-module-102:checkReleaseAarMetadata UP-TO-DATE
+> Task :hook-api:apiDumpForCheck UP-TO-DATE
+> Task :hook-testing:compileJava UP-TO-DATE
+> Task :hook-testing:classes UP-TO-DATE
+> Task :hook-testing:jar UP-TO-DATE
+> Task :sample-module-101:collectReleaseDependencies UP-TO-DATE
+> Task :backend-libxposed-101:packageDebugResources UP-TO-DATE
+> Task :backend-libxposed-102:packageDebugResources UP-TO-DATE
+> Task :backend-libxposed-102:packageReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:packageReleaseResources UP-TO-DATE
+> Task :sample-module-101:packageDebugResources UP-TO-DATE
+> Task :sample-module-102:packageDebugResources UP-TO-DATE
+> Task :sample-module-kotlin-102:packageDebugResources UP-TO-DATE
+> Task :hook-core:apiDumpForCheck UP-TO-DATE
+> Task :sample-java-contracts:compileJava UP-TO-DATE
+> Task :hook-testing:compileTestJava UP-TO-DATE
+> Task :sample-java-contracts:classes UP-TO-DATE
+> Task :hook-testing:testClasses UP-TO-DATE
+> Task :hook-testing:test UP-TO-DATE
+> Task :hook-api:apiCheck
+> Task :backend-libxposed-101:compileDebugLibraryResources UP-TO-DATE
+> Task :backend-libxposed-102:compileDebugLibraryResources UP-TO-DATE
+> Task :hook-core:apiCheck
+> Task :sample-module-101:mergeDebugResources UP-TO-DATE
+> Task :sample-module-kotlin-102:mergeDebugResources UP-TO-DATE
+> Task :sample-module-102:mergeDebugResources UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:parseDebugLocalResources UP-TO-DATE
+> Task :sample-module-101:parseDebugLocalResources UP-TO-DATE
+> Task :backend-libxposed-101:parseReleaseLocalResources UP-TO-DATE
+> Task :backend-libxposed-102:parseDebugLocalResources UP-TO-DATE
+> Task :backend-libxposed-102:parseReleaseLocalResources UP-TO-DATE
+> Task :sample-module-102:parseDebugLocalResources UP-TO-DATE
+> Task :sample-module-kotlin-102:parseDebugLocalResources UP-TO-DATE
+> Task :hook-dsl:compileKotlin UP-TO-DATE
+> Task :backend-libxposed-101:generateReleaseRFile UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugRFile UP-TO-DATE
+> Task :sample-module-101:generateDebugRFile UP-TO-DATE
+> Task :sample-module-kotlin-102:generateDebugRFile UP-TO-DATE
+> Task :sample-module-102:generateDebugRFile UP-TO-DATE
+> Task :hook-dsl:compileJava NO-SOURCE
+> Task :hook-dsl:classes UP-TO-DATE
+> Task :backend-libxposed-102:generateReleaseRFile UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugRFile UP-TO-DATE
+> Task :backend-libxposed-101:compileReleaseLibraryResources UP-TO-DATE
+> Task :sample-module-101:packageReleaseResources UP-TO-DATE
+> Task :sample-module-101:compileReleaseNavigationResources UP-TO-DATE
+> Task :hook-dsl:jar UP-TO-DATE
+> Task :sample-module-101:processReleaseManifestForPackage UP-TO-DATE
+> Task :sample-module-101:parseReleaseLocalResources UP-TO-DATE
+> Task :hook-dsl:apiDumpForCheck UP-TO-DATE
+> Task :sample-module-101:mergeReleaseResources UP-TO-DATE
+> Task :hook-dsl:apiCheck
+> Task :sample-module-101:sdkReleaseDependencyData UP-TO-DATE
+> Task :sample-module-101:generateReleaseRFile UP-TO-DATE
+> Task :apiCheck
+> Task :sample-module-102:packageReleaseResources UP-TO-DATE
+> Task :sample-module-102:parseReleaseLocalResources UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :sample-module-102:generateReleaseRFile UP-TO-DATE
+> Task :backend-libxposed-102:compileReleaseLibraryResources UP-TO-DATE
+> Task :sample-module-102:compileReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-102:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :sample-kotlin-contracts:compileKotlin UP-TO-DATE
+> Task :backend-libxposed-102:extractDeepLinksRelease UP-TO-DATE
+> Task :sample-module-102:extractDeepLinksRelease UP-TO-DATE
+> Task :hook-dsl:compileTestKotlin UP-TO-DATE
+> Task :sample-module-102:mergeReleaseStartupProfile UP-TO-DATE
+> Task :sample-kotlin-contracts:compileJava NO-SOURCE
+> Task :sample-kotlin-contracts:classes UP-TO-DATE
+> Task :hook-dsl:compileTestJava NO-SOURCE
+> Task :hook-dsl:testClasses UP-TO-DATE
+> Task :sample-module-102:processReleaseMainManifest UP-TO-DATE
+> Task :sample-module-102:mergeReleaseAssets UP-TO-DATE
+> Task :sample-module-102:processReleaseManifest UP-TO-DATE
+> Task :sample-module-102:compressReleaseAssets UP-TO-DATE
+> Task :sample-module-102:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :sample-module-102:processReleaseManifestForPackage UP-TO-DATE
+> Task :backend-libxposed-102:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :hook-dsl:test UP-TO-DATE
+> Task :sample-module-102:collectReleaseDependencies UP-TO-DATE
+> Task :sample-module-102:writeReleaseAppMetadata UP-TO-DATE
+> Task :sample-module-102:writeReleaseSigningConfigVersions UP-TO-DATE
+> Task :sample-module-102:sdkReleaseDependencyData UP-TO-DATE
+> Task :sample-module-kotlin-102:preReleaseBuild UP-TO-DATE
+> Task :sample-module-kotlin-102:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :sample-module-102:mergeReleaseResources UP-TO-DATE
+> Task :sample-module-kotlin-102:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :backend-libxposed-101:compileReleaseKotlin NO-SOURCE
+> Task :backend-libxposed-101:compileDebugKotlin NO-SOURCE
+> Task :backend-libxposed-102:compileDebugKotlin NO-SOURCE
+> Task :backend-libxposed-102:compileReleaseKotlin NO-SOURCE
+> Task :backend-libxposed-101:processReleaseJavaRes NO-SOURCE
+> Task :backend-libxposed-101:processDebugJavaRes NO-SOURCE
+> Task :backend-libxposed-102:processDebugJavaRes NO-SOURCE
+> Task :backend-libxposed-101:mergeDebugJavaResource UP-TO-DATE
+> Task :backend-libxposed-102:mergeDebugJavaResource UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseJavaResource UP-TO-DATE
+> Task :backend-libxposed-102:processReleaseJavaRes NO-SOURCE
+> Task :backend-libxposed-102:mergeReleaseJavaResource UP-TO-DATE
+> Task :sample-module-kotlin-102:generateReleaseResources UP-TO-DATE
+> Task :sample-module-kotlin-102:packageReleaseResources UP-TO-DATE
+> Task :sample-module-kotlin-102:processReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-kotlin-102:parseReleaseLocalResources UP-TO-DATE
+> Task :sample-module-kotlin-102:generateReleaseRFile UP-TO-DATE
+> Task :sample-module-kotlin-102:javaPreCompileRelease UP-TO-DATE
+> Task :sample-module-kotlin-102:mergeReleaseArtProfile UP-TO-DATE
+> Task :sample-module-kotlin-102:checkReleaseAarMetadata UP-TO-DATE
+> Task :sample-module-kotlin-102:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :sample-module-kotlin-102:compileReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-kotlin-102:mergeReleaseResources UP-TO-DATE
+> Task :sample-module-kotlin-102:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :sample-module-kotlin-102:extractDeepLinksRelease UP-TO-DATE
+> Task :sample-module-kotlin-102:processReleaseMainManifest UP-TO-DATE
+> Task :sample-module-kotlin-102:processReleaseManifest UP-TO-DATE
+> Task :sample-module-kotlin-102:processReleaseManifestForPackage UP-TO-DATE
+> Task :backend-libxposed-101:compileDebugJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:compileDebugJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-101:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :backend-libxposed-102:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:createFullJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :backend-libxposed-102:extractReleaseAnnotations UP-TO-DATE
+> Task :backend-libxposed-101:extractReleaseAnnotations UP-TO-DATE
+> Task :backend-libxposed-102:extractDebugAnnotations UP-TO-DATE
+> Task :backend-libxposed-101:extractDebugAnnotations UP-TO-DATE
+> Task :backend-libxposed-101:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-102:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :backend-libxposed-102:createFullJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:syncDebugLibJars UP-TO-DATE
+> Task :backend-libxposed-102:syncDebugLibJars UP-TO-DATE
+> Task :backend-libxposed-102:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:bundleDebugLocalLintAar UP-TO-DATE
+> Task :backend-libxposed-102:bundleDebugLocalLintAar UP-TO-DATE
+> Task :backend-libxposed-102:compileDebugUnitTestKotlin NO-SOURCE
+> Task :backend-libxposed-101:compileDebugUnitTestKotlin NO-SOURCE
+> Task :backend-libxposed-101:processDebugUnitTestJavaRes NO-SOURCE
+> Task :backend-libxposed-101:compileDebugUnitTestJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:compileDebugUnitTestJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:processDebugUnitTestJavaRes NO-SOURCE
+
+> Task :sample-java-contracts:run
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+install mutable: RegistrationReceipt[sample.java.mutable INSTALLED backend=fake-chain generation=1 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+install early: RegistrationReceipt[sample.java.early INSTALLED backend=fake-chain generation=2 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+replace early: RegistrationReceipt[sample.java.early INSTALLED backend=fake-chain generation=3 atomically replaced 1 target targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+SAMPLE_OK backend=fake-chain close=CLOSED
+
+> Task :sample-module-101:compileDebugKotlin NO-SOURCE
+
+> Task :sample-kotlin-contracts:run
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+install mutable: RegistrationReceipt[sample.kotlin.mutable INSTALLED backend=fake-chain generation=1 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+install early: RegistrationReceipt[sample.kotlin.early INSTALLED backend=fake-chain generation=2 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+replace early: RegistrationReceipt[sample.kotlin.early INSTALLED backend=fake-chain generation=3 atomically replaced 1 target targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+KOTLIN_SAMPLE_OK backend=fake-chain close=CLOSED
+
+> Task :sample-module-101:compileDebugJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugUnitTestLintModel
+> Task :backend-libxposed-102:generateDebugLintModel
+> Task :backend-libxposed-102:generateDebugLintReportModel
+> Task :backend-libxposed-101:generateDebugLintReportModel
+> Task :backend-libxposed-102:generateDebugUnitTestLintModel
+> Task :backend-libxposed-101:generateDebugAndroidTestLintModel
+> Task :backend-libxposed-102:generateDebugAndroidTestLintModel
+> Task :backend-libxposed-101:generateDebugLintModel
+> Task :backend-libxposed-102:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :backend-libxposed-102:syncReleaseLibJars UP-TO-DATE
+> Task :backend-libxposed-101:syncReleaseLibJars UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :backend-libxposed-101:bundleReleaseAar UP-TO-DATE
+> Task :backend-libxposed-102:bundleReleaseAar UP-TO-DATE
+> Task :backend-libxposed-101:createFullJarRelease UP-TO-DATE
+> Task :backend-libxposed-101:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :sample-module-101:generateDebugLintReportModel
+> Task :sample-module-102:compileDebugKotlin NO-SOURCE
+> Task :sample-module-102:mergeReleaseNativeLibs NO-SOURCE
+> Task :sample-module-101:mergeReleaseNativeLibs NO-SOURCE
+> Task :backend-libxposed-102:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :sample-module-102:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-101:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-101:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :sample-module-102:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :sample-module-101:compileReleaseKotlin NO-SOURCE
+> Task :backend-libxposed-102:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :sample-module-101:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :sample-module-102:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :backend-libxposed-102:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :sample-module-101:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :sample-module-102:compileDebugJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:createFullJarRelease UP-TO-DATE
+> Task :sample-module-101:processReleaseJavaRes UP-TO-DATE
+> Task :sample-module-102:compileReleaseKotlin NO-SOURCE
+> Task :backend-libxposed-101:generateReleaseLintModel
+> Task :backend-libxposed-102:generateReleaseLintVitalModel
+> Task :backend-libxposed-101:generateReleaseLintVitalModel
+> Task :backend-libxposed-102:generateReleaseLintModel
+> Task :sample-module-102:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :sample-module-102:processReleaseJavaRes UP-TO-DATE
+> Task :sample-module-kotlin-102:mergeReleaseNativeLibs NO-SOURCE
+> Task :sample-module-kotlin-102:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-kotlin-102:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :sample-module-102:generateDebugLintReportModel
+> Task :sample-module-kotlin-102:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :sample-module-kotlin-102:generateReleaseAssets UP-TO-DATE
+> Task :sample-module-kotlin-102:mergeReleaseStartupProfile UP-TO-DATE
+> Task :sample-module-101:generateReleaseLintVitalReportModel
+> Task :sample-module-kotlin-102:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :sample-module-kotlin-102:mergeReleaseAssets UP-TO-DATE
+> Task :sample-module-kotlin-102:writeReleaseAppMetadata UP-TO-DATE
+> Task :sample-module-kotlin-102:compressReleaseAssets UP-TO-DATE
+> Task :sample-module-102:generateReleaseLintVitalReportModel
+> Task :sample-module-kotlin-102:collectReleaseDependencies UP-TO-DATE
+> Task :sample-module-kotlin-102:writeReleaseSigningConfigVersions UP-TO-DATE
+> Task :sample-module-kotlin-102:sdkReleaseDependencyData UP-TO-DATE
+> Task :backend-libxposed-101:verifyReleaseResources UP-TO-DATE
+> Task :backend-libxposed-102:verifyReleaseResources UP-TO-DATE
+> Task :backend-libxposed-102:assembleRelease UP-TO-DATE
+> Task :backend-libxposed-101:assembleRelease UP-TO-DATE
+> Task :sample-module-102:processDebugResources UP-TO-DATE
+> Task :sample-module-kotlin-102:processDebugResources UP-TO-DATE
+> Task :sample-module-101:processDebugResources UP-TO-DATE
+> Task :sample-module-102:processReleaseResources UP-TO-DATE
+> Task :sample-module-101:processReleaseResources UP-TO-DATE
+> Task :sample-module-kotlin-102:processReleaseResources UP-TO-DATE
+> Task :sample-module-102:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :sample-module-101:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :sample-module-102:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :sample-module-101:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :sample-module-kotlin-102:optimizeReleaseResources UP-TO-DATE
+> Task :sample-module-102:optimizeReleaseResources UP-TO-DATE
+> Task :sample-module-101:optimizeReleaseResources UP-TO-DATE
+> Task :sample-module-102:expandReleaseArtProfileWildcards
+> Task :sample-module-101:expandReleaseArtProfileWildcards
+> Task :sample-module-101:generateDebugAndroidTestLintModel
+> Task :sample-module-102:generateDebugAndroidTestLintModel
+> Task :sample-module-102:generateDebugUnitTestLintModel
+> Task :sample-module-101:generateDebugUnitTestLintModel
+> Task :sample-module-101:mergeReleaseJavaResource
+> Task :sample-module-102:mergeReleaseJavaResource
+> Task :sample-module-kotlin-102:compileDebugKotlin UP-TO-DATE
+> Task :sample-module-kotlin-102:compileReleaseKotlin UP-TO-DATE
+> Task :sample-module-kotlin-102:compileDebugJavaWithJavac NO-SOURCE
+> Task :sample-module-kotlin-102:compileReleaseJavaWithJavac NO-SOURCE
+> Task :sample-module-kotlin-102:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :sample-module-kotlin-102:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :sample-module-kotlin-102:processReleaseJavaRes UP-TO-DATE
+> Task :sample-module-kotlin-102:expandReleaseArtProfileWildcards
+> Task :sample-module-kotlin-102:generateDebugLintReportModel
+> Task :sample-module-kotlin-102:generateDebugAndroidTestLintModel
+> Task :sample-module-kotlin-102:generateReleaseLintVitalReportModel
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+> Task :sample-module-kotlin-102:generateDebugUnitTestLintModel
+
+> Task :backend-libxposed-101:testDebugUnitTest
+
+> Task :sample-module-kotlin-102:mergeReleaseJavaResource
+
+> Task :backend-libxposed-102:testDebugUnitTest
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+
+> Task :sample-module-102:minifyReleaseWithR8
+> Task :sample-module-102:compileReleaseArtProfile
+> Task :sample-module-101:minifyReleaseWithR8
+> Task :sample-module-101:compileReleaseArtProfile
+> Task :sample-module-kotlin-102:minifyReleaseWithR8
+> Task :sample-module-kotlin-102:compileReleaseArtProfile
+> Task :backend-libxposed-102:lintAnalyzeDebugAndroidTest
+> Task :backend-libxposed-101:lintAnalyzeDebugAndroidTest
+> Task :sample-module-101:lintAnalyzeDebugUnitTest
+> Task :sample-module-101:lintAnalyzeDebugAndroidTest
+> Task :sample-module-102:lintAnalyzeDebugUnitTest
+> Task :sample-module-102:lintAnalyzeDebugAndroidTest
+> Task :sample-module-kotlin-102:lintAnalyzeDebugAndroidTest
+> Task :sample-module-kotlin-102:lintAnalyzeDebugUnitTest
+> Task :backend-libxposed-101:lintAnalyzeDebugUnitTest
+> Task :backend-libxposed-102:lintAnalyzeDebugUnitTest
+> Task :backend-libxposed-101:lintVitalAnalyzeRelease
+> Task :backend-libxposed-102:lintVitalAnalyzeRelease
+> Task :backend-libxposed-101:lintAnalyzeDebug
+> Task :backend-libxposed-102:lintAnalyzeDebug
+> Task :backend-libxposed-101:lintReportDebug UP-TO-DATE
+> Task :backend-libxposed-102:lintReportDebug UP-TO-DATE
+> Task :backend-libxposed-101:lintDebug
+> Task :backend-libxposed-102:lintDebug
+> Task :backend-libxposed-101:lint
+> Task :backend-libxposed-102:lint
+> Task :sample-module-101:lintVitalAnalyzeRelease
+> Task :sample-module-102:lintVitalAnalyzeRelease
+> Task :sample-module-102:lintVitalReportRelease SKIPPED
+> Task :sample-module-101:lintVitalReportRelease SKIPPED
+> Task :sample-module-102:lintVitalRelease SKIPPED
+> Task :sample-module-101:lintVitalRelease SKIPPED
+> Task :sample-module-101:lintAnalyzeDebug
+> Task :sample-module-102:lintAnalyzeDebug
+> Task :sample-module-101:lintReportDebug UP-TO-DATE
+> Task :sample-module-102:lintReportDebug UP-TO-DATE
+> Task :sample-module-101:lintDebug
+> Task :sample-module-101:lint
+> Task :sample-module-102:lintDebug
+> Task :sample-module-102:lint
+> Task :sample-module-102:packageRelease
+> Task :sample-module-101:packageRelease
+> Task :sample-module-102:assembleRelease
+> Task :sample-module-101:assembleRelease
+> Task :sample-module-102:createReleaseApkListingFileRedirect UP-TO-DATE
+> Task :sample-module-101:createReleaseApkListingFileRedirect UP-TO-DATE
+> Task :sample-module-kotlin-102:lintVitalAnalyzeRelease
+> Task :sample-module-kotlin-102:lintVitalReportRelease SKIPPED
+> Task :sample-module-kotlin-102:lintVitalRelease SKIPPED
+> Task :sample-module-kotlin-102:packageRelease
+> Task :sample-module-kotlin-102:assembleRelease
+> Task :sample-module-kotlin-102:createReleaseApkListingFileRedirect UP-TO-DATE
+> Task :sample-module-kotlin-102:lintAnalyzeDebug
+> Task :sample-module-kotlin-102:lintReportDebug UP-TO-DATE
+> Task :sample-module-kotlin-102:lintDebug
+> Task :sample-module-kotlin-102:lint
+
+BUILD SUCCESSFUL in 34s
+374 actionable tasks: 71 executed, 303 up-to-date
+Configuration cache entry reused.

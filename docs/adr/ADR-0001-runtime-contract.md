@@ -82,6 +82,20 @@ callback 失败分别分类；本切片无 native 路径。
   SDK lease 归零不证明机器码返回地址已离开；本切片无 native，故不引入 dlclose 议题。
 - `HookRegistration` 不实现 `AutoCloseable`：`close()` 需要返回报告，与 void 签名不兼容。
 
+### 单目标原子替换（HOOK-006）
+
+- `HookEnvironment.replace(HookSpec)` 只替换当前同 `HookId` 的完整单目标注册；不隐式 install，
+  不接受 partial、`MatchPolicy.ALL`、不同 owner/priority/resolved executable，也不允许跨 loader/epoch。
+- 后端必须声明 `ATOMIC_REPLACE=SUPPORTED_IN_DECLARED_CELL`。101 保持不支持；UNKNOWN 不得视为支持。
+- `BackendHandle.replace` 的返回点是提交点：返回新 handle 后旧 handle 失效，卸载所有权转移到新
+  generation；异常必须表示未提交且旧 hook 继续有效。禁止 close+install 或 install+close 模拟。
+- replace 与 registration.close 使用同一 registration monitor 串行化，与 environment 操作使用固定
+  environment→registration 锁序。旧 close 幂等返回 superseded 报告，不得删除新 handle。
+- 旧 in-flight snapshot 继续使用不可变旧 plan 完成，替换不等待业务回调；未进入旧 channel 的旧
+  snapshot 按 PASSTHROUGH 处理。新 generation 使用新 plan/channel，不继承旧 in-flight 计数。
+- 后端成功后不再执行可能返回普通失败的检查；epoch/loader 验证必须在提交前完成。回滚不假装能
+  通过卸载新 hook 恢复旧 hook。真实 102 框架替换仍需要独立设备资格。
+
 ## 6. 线程与热路径预算
 
 热路径只读 `BoundPlan` 冻结字段、执行业务回调与必要类型/寿命检查。不做：声明重解析、manager

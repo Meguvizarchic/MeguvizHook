@@ -6,6 +6,7 @@ import io.github.jichuo1.meguviz.hook.core.HookEnvironment
 import io.github.jichuo1.meguviz.hook.dsl.install
 import io.github.jichuo1.meguviz.hook.dsl.member
 import io.github.jichuo1.meguviz.hook.dsl.method
+import io.github.jichuo1.meguviz.hook.dsl.replace
 import io.github.jichuo1.meguviz.hook.testing.FakeBackend
 import io.github.jichuo1.meguviz.hook.testing.Fixtures
 
@@ -43,7 +44,18 @@ fun main() {
         check(backend.call(add, null, 5, 6) == 99) { "early return must replace the result" }
         check(backend.originalCallCount(add) == 1) { "early return must not execute the original" }
 
-        val closeReport = early.registration().close()
+        val replaced = environment.replace("sample.kotlin.early", "kotlin-sample", member(add)) {
+            before { invocation -> invocation.setEarlyResult(100) }
+        }
+        println("replace early: $replaced")
+        check(replaced.isInstalled) { "replacement failed: $replaced" }
+        check(backend.call(add, null, 5, 6) == 100) { "replacement must swap the callback" }
+        check(backend.originalCallCount(add) == 1) { "replacement must not execute the original" }
+        val superseded = early.registration().close()
+        check(superseded.newCallbacksRejected()) { "superseded close must reject callbacks" }
+        check(backend.call(add, null, 5, 6) == 100) { "old close must not uninstall replacement" }
+
+        val closeReport = replaced.registration().close()
         check(closeReport.newCallbacksRejected()) { "close must reject new callbacks" }
         println("KOTLIN_SAMPLE_OK backend=${backend.id()} close=${closeReport.state()}")
     }

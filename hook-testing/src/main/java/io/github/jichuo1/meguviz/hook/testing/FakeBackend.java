@@ -42,9 +42,11 @@ public final class FakeBackend implements HookBackend {
     private final Map<Executable, AtomicInteger> originalCalls = new java.util.concurrent.ConcurrentHashMap<Executable, AtomicInteger>();
     private final AtomicInteger argumentMaterializations = new AtomicInteger();
     private final AtomicInteger installCount = new AtomicInteger();
+    private final AtomicInteger replaceCount = new AtomicInteger();
     private boolean residentOnClose;
     private boolean failNextInstall;
     private boolean failAllInstalls;
+    private boolean failNextReplace;
     private boolean bumpEpochOnNextInstall;
 
     private FakeBackend(String backendId, BackendCapabilities capabilities, FakeContext context) {
@@ -65,7 +67,9 @@ public final class FakeBackend implements HookBackend {
                 .declare(Capability.MODULE_LOCAL_CHAIN, CapabilityResult.of(
                         CapabilityResult.Status.SUPPORTED_IN_DECLARED_CELL, backendId, "fake-1", "jvm-fake", "core composed"))
                 .declare(Capability.CLASSIC_CALLBACKS, CapabilityResult.unsupported(backendId, "no classic callbacks in the fake"))
-                .declare(Capability.ATOMIC_REPLACE, CapabilityResult.unsupported(backendId, "replacement is not modelled"))
+                .declare(Capability.ATOMIC_REPLACE, CapabilityResult.of(
+                        CapabilityResult.Status.SUPPORTED_IN_DECLARED_CELL, backendId, "fake-1", "jvm-fake",
+                        "atomic compare-and-swap replacement; not a device cell"))
                 .declare(Capability.HOT_RELOAD, CapabilityResult.unsupported(backendId, "hot reload is not modelled"))
                 .build();
         return new FakeBackend(backendId, capabilities, new FakeContext());
@@ -95,6 +99,11 @@ public final class FakeBackend implements HookBackend {
 
     public FakeBackend withFailingAllInstalls() {
         this.failAllInstalls = true;
+        return this;
+    }
+
+    public FakeBackend withFailingNextReplace() {
+        this.failNextReplace = true;
         return this;
     }
 
@@ -131,6 +140,10 @@ public final class FakeBackend implements HookBackend {
 
     public int installCount() {
         return installCount.get();
+    }
+
+    public int replaceCount() {
+        return replaceCount.get();
     }
 
     public boolean isHooked(Executable target) {
@@ -189,12 +202,39 @@ public final class FakeBackend implements HookBackend {
             bumpEpochOnNextInstall = false;
             context.epoch++;
         }
-        return () -> {
-            hooks.remove(plan.target());
+        return new FakeHandle(plan.target(), hook);
+    }
+
+    private final class FakeHandle implements BackendHandle {
+        private final Executable target;
+        private final FakeHook hook;
+
+        private FakeHandle(Executable target, FakeHook hook) {
+            this.target = target;
+            this.hook = hook;
+        }
+
+        @Override
+        public BackendCloseReport uninstall() {
+            hooks.remove(target, hook);
             return new BackendCloseReport(CloseReport.EntryRestoration.RESTORED,
                     CloseReport.PhysicalRelease.NOT_CLAIMED, residentOnClose,
                     residentOnClose ? "fake stays resident" : "fake entry removed; no physical release claim");
-        };
+        }
+
+        @Override
+        public BackendHandle replace(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
+            replaceCount.incrementAndGet();
+            if (failNextReplace) {
+                failNextReplace = false;
+                throw new BackendInstallException("fake replacement failure requested by the test");
+            }
+            FakeHook replacement = new FakeHook(channel);
+            if (!hooks.replace(plan.target(), hook, replacement)) {
+                throw new BackendInstallException("old fake hook is no longer current");
+            }
+            return new FakeHandle(plan.target(), replacement);
+        }
     }
 
     private static final class FakeHook {

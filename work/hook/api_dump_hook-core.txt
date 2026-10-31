@@ -23,7 +23,7 @@ final class io.github.jichuo1.meguviz.hook.core.CoreRegistration implements io.g
   public io.github.jichuo1.meguviz.hook.api.HookId id();
   public long generation();
   public io.github.jichuo1.meguviz.hook.api.RegistrationState state();
-  public io.github.jichuo1.meguviz.hook.api.CloseReport close();
+  public synchronized io.github.jichuo1.meguviz.hook.api.CloseReport close();
 }
 Compiled from "CoreRegistration.java"
 class io.github.jichuo1.meguviz.hook.core.CoreRegistration$1 {
@@ -88,6 +88,7 @@ public final class io.github.jichuo1.meguviz.hook.core.HookEnvironment implement
   public static io.github.jichuo1.meguviz.hook.core.HookEnvironment create(io.github.jichuo1.meguviz.hook.core.spi.HookBackend, io.github.jichuo1.meguviz.hook.core.spi.MemberResolver, io.github.jichuo1.meguviz.hook.core.DiagnosticsSink);
   public io.github.jichuo1.meguviz.hook.api.BackendCapabilities capabilities();
   public synchronized io.github.jichuo1.meguviz.hook.api.RegistrationReceipt install(io.github.jichuo1.meguviz.hook.api.HookSpec);
+  public synchronized io.github.jichuo1.meguviz.hook.api.RegistrationReceipt replace(io.github.jichuo1.meguviz.hook.api.HookSpec);
   public synchronized int activeRegistrationCount();
   public synchronized void close();
 }
@@ -150,6 +151,7 @@ public interface io.github.jichuo1.meguviz.hook.core.spi.BackendContext {
 Compiled from "BackendHandle.java"
 public interface io.github.jichuo1.meguviz.hook.core.spi.BackendHandle {
   public abstract io.github.jichuo1.meguviz.hook.core.spi.BackendCloseReport uninstall();
+  public default io.github.jichuo1.meguviz.hook.core.spi.BackendHandle replace(io.github.jichuo1.meguviz.hook.core.BoundPlan, io.github.jichuo1.meguviz.hook.core.DispatchChannel) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 }
 Compiled from "BackendInstallException.java"
 public class io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException extends java.lang.Exception {

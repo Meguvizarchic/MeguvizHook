@@ -118,6 +118,36 @@ public class LibXposed102BackendTest {
         assertEquals("unhook stays idempotent", 1, framework.unhookCalls.get());
     }
 
+    @Test
+    public void replacementSwapsHookerAndTransfersHandleWithoutReinstall() throws Throwable {
+        HookSpec original = new HookSpec.Builder(HookId.of("adapter.replace"), HookOwner.of("adapter-test"),
+                        TargetSpec.ofMember(sampleTarget()))
+                .priority(73)
+                .before(invocation -> invocation.setEarlyResult(10))
+                .build();
+        HookRegistration old = TestSupport.install(environment, original);
+        assertEquals(10, framework.invokeHook(sampleTarget(), null, 1, 2));
+
+        HookSpec replacement = new HookSpec.Builder(HookId.of("adapter.replace"), HookOwner.of("adapter-test"),
+                        TargetSpec.ofMember(sampleTarget()))
+                .priority(73)
+                .before(invocation -> invocation.setEarlyResult(20))
+                .build();
+        RegistrationReceipt replaced = environment.replace(replacement);
+
+        assertTrue(replaced.toString(), replaced.isInstalled());
+        assertTrue(replaced.generation() > old.generation());
+        assertEquals(20, framework.invokeHook(sampleTarget(), null, 1, 2));
+        assertEquals(1, framework.installCalls.get());
+        assertEquals(1, framework.replaceCalls.get());
+        assertEquals(73, framework.priority);
+        assertEquals(XposedInterface.ExceptionMode.PASSTHROUGH, framework.exceptionMode);
+        old.close();
+        assertEquals("superseded close must not unhook the new handle", 0, framework.unhookCalls.get());
+        replaced.registration().close();
+        assertEquals(1, framework.unhookCalls.get());
+    }
+
     /** Small fixture holder: target methods live outside the framework stub. */
     public static final class SampleTargets {
         private SampleTargets() {
@@ -137,6 +167,8 @@ public class LibXposed102BackendTest {
         private Object proceedResult;
         private final AtomicInteger proceedCalls = new AtomicInteger();
         private final AtomicInteger unhookCalls = new AtomicInteger();
+        private final AtomicInteger installCalls = new AtomicInteger();
+        private final AtomicInteger replaceCalls = new AtomicInteger();
 
         XposedInterface api() {
             return (XposedInterface) Proxy.newProxyInstance(getClass().getClassLoader(),
@@ -196,6 +228,7 @@ public class LibXposed102BackendTest {
                                 hookId = (String) args[0];
                                 return proxy;
                             case "intercept":
+                                installCalls.incrementAndGet();
                                 hooker = (XposedInterface.Hooker) args[0];
                                 return handleProxy();
                             default:
@@ -211,6 +244,10 @@ public class LibXposed102BackendTest {
                             case "unhook":
                                 unhookCalls.incrementAndGet();
                                 return null;
+                            case "replaceHook":
+                                replaceCalls.incrementAndGet();
+                                hooker = (XposedInterface.Hooker) args[0];
+                                return handleProxy();
                             case "getId":
                                 return hookId;
                             default:

@@ -1,7 +1,21 @@
-# MeguvizHook 移交（第八轮：质量门禁与 JDK 27 CI）
+# MeguvizHook 移交（第九轮：单目标原子替换）
 
 日期：2026-10-31。范围仅 MeguvizHook 仓库；BIL 仅作只读上游参考，未修改其源码。
 任务状态以 `work/progress.json` 为准；task done ≠ release qualified（当前仍为 false）。
+
+## 第九轮结果（HOOK-006）
+
+- 新增 `HookEnvironment.replace(HookSpec)` 与 `BackendHandle.replace` 默认 SPI；只接受同 id/owner/
+  priority/resolved executable/loader/epoch 的完整单目标注册，拒绝 partial、ALL、101 和 UNKNOWN。
+- API102 `Handle102` 复用 install 的 Hooker 映射并调用真实 `replaceHook`：保留 priority、PASSTHROUGH、
+  id 和 executable，返回新 handle；不是 close+install。fake 使用原子 CAS 和按代际 remove 建模。
+- replace/close 串行化；成功后旧代返回幂等 superseded 报告且不能卸载新代，失败保留旧代，旧 in-flight
+  plan 继续完成。审查发现 old.close 覆盖报告的问题，已通过 `closeOnce` 修复并补回执/in-flight 断言。
+- 新增 8 个 core/fake、1 个 API102、1 个 Kotlin DSL 测试；Java/Kotlin consumer 均实际替换 generation
+  2→3。全量 **90 tests / 0 failures**，apiCheck、完整 lint、全部 release 和 DEX 隔离通过。
+- 证据：`work/hook/replacement_contract_results.json`、`work/evidence/logs/round9-hook006.log`、
+  更新后的 core/dsl API dump。真实 API102 框架替换、设备 snapshot、多目标原子替换和热重载未验证。
+- 回退：对第九轮提交执行 `git revert`，上一基线为 `04cd2fa`；禁止强推。
 
 ## 第八轮结果（QUAL-001）
 

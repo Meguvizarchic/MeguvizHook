@@ -231,6 +231,29 @@ class HookDslContractTest {
     }
 
     @Test
+    fun replaceExtensionAtomicallySwapsTheCallback() {
+        val backend = backendWithAdd()
+        HookEnvironment.create(backend).use { environment ->
+            val original = environment.install("sample.kotlin.replace", "kotlin-sample", member(add)) {
+                before { invocation -> invocation.setEarlyResult(99) }
+            }
+            val replaced = environment.replace("sample.kotlin.replace", "kotlin-sample", member(add)) {
+                before { invocation -> invocation.setEarlyResult(100) }
+            }
+
+            assertTrue(replaced.isInstalled)
+            assertTrue(replaced.generation() > original.generation())
+            assertEquals(1, backend.installCount())
+            assertEquals(1, backend.replaceCount())
+            assertEquals(Integer.valueOf(100), backend.call(add, null, 1, 2))
+            original.registration().close()
+            assertTrue(backend.isHooked(add))
+            replaced.registration().close()
+            assertTrue(!backend.isHooked(add))
+        }
+    }
+
+    @Test
     fun javaBuilderValidationStillRejectsAnEmptyHook() {
         val failure = assertThrows(IllegalArgumentException::class.java) {
             hook("sample.empty", "kotlin-test", member(add)) { }

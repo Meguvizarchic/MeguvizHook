@@ -8,7 +8,7 @@ cell：`jvm-fake`、`libxposed-101-stub`、`libxposed-102-stub`；真实设备 c
 | FRAMEWORK_CHAIN | SUPPORTED（jvm-fake） | SUPPORTED_IN_DECLARED_CELL（真实 101 Hooker/Chain 源码 + stub） | SUPPORTED_IN_DECLARED_CELL（102 Hooker/Chain + stub） | not_run |
 | MODULE_LOCAL_CHAIN | SUPPORTED | SUPPORTED（同一 core） | SUPPORTED（同一 core） | not_run |
 | CLASSIC_CALLBACKS | UNSUPPORTED | UNSUPPORTED（101 也是链模型） | UNSUPPORTED | not_run |
-| ATOMIC_REPLACE | UNSUPPORTED | UNSUPPORTED（无 setId/replaceHook） | 源码提供；core 替换流程未实现 | not_run |
+| ATOMIC_REPLACE | SUPPORTED（jvm-fake 原子 CAS） | UNSUPPORTED（无 setId/replaceHook） | 单目标 replaceHook + core 生命周期已实现，stub 通过 | not_run |
 | HOT_RELOAD | UNSUPPORTED | UNSUPPORTED（无 102 热重载入口） | UNKNOWN（本切片未实现） | not_run |
 | MatchPolicy.FIRST / UNIQUE | 已实现 | 同 core | 同 core | not_run |
 | MatchPolicy.ALL | 已实现：逐项回执、部分成功、全失败、epoch 回滚 | 同 core | 同 core | not_run |

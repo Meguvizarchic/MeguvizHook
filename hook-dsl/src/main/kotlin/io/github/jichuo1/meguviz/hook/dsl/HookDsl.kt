@@ -82,6 +82,13 @@ public fun HookEnvironment.install(
     configure: HookSpecDsl.() -> Unit,
 ): RegistrationReceipt = install(hook(id, owner, target, configure))
 
+public fun HookEnvironment.replace(
+    id: String,
+    owner: String,
+    target: TargetSpec,
+    configure: HookSpecDsl.() -> Unit,
+): RegistrationReceipt = replace(hook(id, owner, target, configure))
+
 @HookDsl
 public class HookSpecDsl internal constructor(
     private val delegate: HookSpec.Builder,

@@ -80,6 +80,17 @@
       ],
       "notes": "FIRST/UNIQUE/ALL, per-target partial receipts, close/retry and epoch rollback tested; no resolution cache exists; replacement belongs to lifecycle work"
     },
+    "HOOK-006": {
+      "status": "done",
+      "evidence": [
+        "hook-core/src/main/java/io/github/jichuo1/meguviz/hook/core/HookEnvironment.java",
+        "hook-core/src/main/java/io/github/jichuo1/meguviz/hook/core/CoreRegistration.java",
+        "backend-libxposed-102/src/main/java/io/github/jichuo1/meguviz/hook/backend/libxposed102/LibXposed102Backend.java",
+        "work/hook/replacement_contract_results.json",
+        "work/evidence/logs/round9-hook006.log"
+      ],
+      "notes": "single-target atomic replacement implemented across core/fake/API102 and Java/Kotlin consumers; 90 JVM/stub tests pass; 101 remains unsupported; real framework replacement, multi-target atomicity and hot reload not verified"
+    },
     "HOOK-003": {
       "status": "done",
       "evidence": [
@@ -95,9 +106,10 @@
       "status": "partial",
       "evidence": [
         "hook-core/src/main/java/io/github/jichuo1/meguviz/hook/core/CoreRegistration.java",
-        "work/hook/install_epoch_fixtures.json"
+        "work/hook/install_epoch_fixtures.json",
+        "work/hook/replacement_contract_results.json"
       ],
-      "notes": "default close/in-flight/generation retirement implemented and tested, now across multi-target registrations; no hot reload"
+      "notes": "close/in-flight/generation retirement and single-target replacement tested, including superseded close and replace/close races; no hot reload"
     },
     "INT-001": {
       "status": "done",
@@ -145,9 +157,10 @@
       "status": "partial",
       "evidence": [
         "work/hook/dispatch_conformance_results.json",
-        "work/hook/dsl_contract_results.json"
+        "work/hook/dsl_contract_results.json",
+        "work/hook/replacement_contract_results.json"
       ],
-      "notes": "80 JVM/stub tests pass (59 fake/core + 12 DSL + 5 adapter-101 + 4 adapter-102); real backend cells not run"
+      "notes": "90 JVM/stub tests pass (67 fake/core + 13 DSL + 5 adapter-101 + 5 adapter-102); real backend cells not run"
     },
     "INT-009": {
       "status": "partial",
@@ -246,5 +259,5 @@
       "notes": "optional service track; not started"
     }
   },
-  "current_slice": "round8: deterministic API checks, full lint and JDK 27 CI pass across all consumers/releases; device cells, A/A, performance and old-consumer binary link compatibility remain open; release_qualified remains false"
+  "current_slice": "round9: single-target atomic replacement implemented across core/fake/API102 and Java/Kotlin consumers; 90 tests, apiCheck, lint, releases and DEX isolation pass; real framework replacement and device gates remain open; release_qualified remains false"
 }

@@ -3,10 +3,10 @@
 独立的 Android Hook SDK：自有 Java API、JVM 执行核心、互斥的 libxposed 后端适配制品与手工入口样例。
 真实的方法拦截始终由所选运行框架提供——本项目**不**替代管理器、注入器或 ART。
 
-当前状态：**第八轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
-独立 Java/Kotlin JVM 与 Android consumer、101/102 双 backend、`MatchPolicy.ALL`、可选 Kotlin DSL、
-JVM 合同和静态 release 隔离已验证；API surface、完整 lint 和 JDK 27 CI 质量门禁通过。
-真实框架/设备资格和性能测量全部未执行。
+当前状态：**第九轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
+新增单目标 atomic replacement：core/fake、API102 `replaceHook`、Java/Kotlin consumer 均已联调，
+101 继续明确不支持。90 项 JVM/stub 测试、API surface、完整 lint、全部 release 和 DEX 隔离通过；
+真实框架替换、其他设备资格和性能测量仍未执行。
 
 ## 模块
 
@@ -56,7 +56,7 @@ cd MeguvizHook
 ./gradlew tasks --all
 ```
 
-当前真实结果：**80 tests / 0 failures**（59 fake/core + 12 DSL + 5 adapter-101 + 4 adapter-102），
+当前真实结果：**90 tests / 0 failures**（67 fake/core + 13 DSL + 5 adapter-101 + 5 adapter-102），
 Java/Kotlin 样例分别输出 `SAMPLE_OK` 与 `KOTLIN_SAMPLE_OK`。证据由 JUnit XML 和实际入口输出生成，
 原始日志在 `work/evidence/logs/`。
 
@@ -68,6 +68,8 @@ Java/Kotlin 样例分别输出 `SAMPLE_OK` 与 `KOTLIN_SAMPLE_OK`。证据由 JU
   after 失败绝不重放原方法；around 每次调用至多一次 proceed；致命 VM 错误不被吞。
 - `MatchPolicy.ALL`：一个逻辑注册对应多个独立计划。逐项目标回执区分 `INSTALLED / FAILED /
   ROLLED_BACK`；部分成功返回 `PARTIALLY_INSTALLED`，不承诺跨目标原子性；epoch 变化会回滚未发布项。
+- 单目标替换：同 id/owner/priority/target/loader/epoch 才可原子替换；102 使用 `replaceHook`，
+  失败保留旧代，旧 close 不卸载新代，in-flight 旧 plan 完成；101 不支持，ALL 不承诺原子替换。
 - 注册/关闭：logicalId 冲突不静默覆盖；部分注册须 close 后重试；close 拒绝新回调并逐项卸载，
   不承诺物理卸载，不撤销 raw Member。
 - 普通回调路径本 SDK 新增 JNI=0、IPC=0；未选 native 新增 so=0；无默认 service/线程池/热重载。
@@ -83,8 +85,8 @@ Java/Kotlin 样例分别输出 `SAMPLE_OK` 与 `KOTLIN_SAMPLE_OK`。证据由 JU
 - Java-only release 无 libxposed、kotlin-stdlib、hook-dsl 或另一代 backend；Kotlin102 显式选择 DSL/stdlib；
 - 三个 APK 均无框架类定义、testing、service、native 或热重载引用；101 无 102 专有 API 引用。
 
-**仍未验证**：旧 consumer 二进制链接兼容、真实 101/102 装载与执行、R8 后设备可达性、
-真实类加载与跨模块优先级、service、热重载、native、任何性能阈值。
+**仍未验证**：旧 consumer 二进制链接兼容、真实 101/102 装载与执行、真实 API102 替换、
+R8 后设备可达性、真实类加载与跨模块优先级、多目标原子替换、service、热重载、native、性能阈值。
 task done ≠ release qualified。
 
 文档导航：`docs/HANDOFF.md`（本轮移交与下一批任务）、`work/`（机器可读证据与原始日志）。

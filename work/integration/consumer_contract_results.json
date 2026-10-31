@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "task": "HOOK-007",
+  "task": "HOOK-007 / HOOK-006",
   "observed_at": "2026-10-31",
   "fixture": "io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int)",
   "backend": "fake-chain (JVM contract only; not a real framework/device)",
@@ -24,19 +24,22 @@
   "shared_behavior": {
     "mutable_rewrite": 12,
     "early_return": 99,
-    "original_calls_after_both": 1,
+    "replacement_early_return": 100,
+    "replacement_generation": "2 -> 3",
+    "old_close_preserves_replacement": true,
+    "original_calls_after_mutable_and_early": 1,
     "close_state": "CLOSED",
     "same_core": true,
     "second_reflection_cache": false
   },
   "regression": {
-    "tests": 80,
+    "tests": 90,
     "failures": 0,
     "release_build": "BUILD SUCCESSFUL",
-    "log": "work/evidence/logs/round5-hook007.log"
+    "log": "work/evidence/logs/round9-hook006.log"
   },
   "not_verified": [
     "real framework/device entry loading",
-    "independent Android consumer (INT-005)"
+    "real API102 framework replacement"
   ]
 }

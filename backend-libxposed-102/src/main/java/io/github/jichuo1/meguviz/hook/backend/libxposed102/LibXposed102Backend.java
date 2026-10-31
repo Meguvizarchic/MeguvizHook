@@ -107,23 +107,27 @@ public final class LibXposed102Backend implements HookBackend {
                 // PROPAGATE cannot be implemented on top of PROTECTIVE; never inherit module.prop here.
                 .setExceptionMode(XposedInterface.ExceptionMode.PASSTHROUGH)
                 .setId(plan.id().value())
-                .intercept(new XposedInterface.Hooker() {
-                    @Override
-                    public Object intercept(XposedInterface.Chain chain) throws Throwable {
-                        DispatchResult result = channel.dispatch(new Chain102Invocation(plan.target(), chain));
-                        switch (result.kind()) {
-                            case RETURNED:
-                                return result.value();
-                            case THREW:
-                                throw result.throwable();
-                            case PASSTHROUGH:
-                            default:
-                                // Registration retired: run the original once, no SDK callbacks.
-                                return chain.proceed();
-                        }
-                    }
-                });
+                .intercept(hooker(plan, channel));
         return new Handle102(handle);
+    }
+
+    private static XposedInterface.Hooker hooker(BoundPlan plan, DispatchChannel channel) {
+        return new XposedInterface.Hooker() {
+            @Override
+            public Object intercept(XposedInterface.Chain chain) throws Throwable {
+                DispatchResult result = channel.dispatch(new Chain102Invocation(plan.target(), chain));
+                switch (result.kind()) {
+                    case RETURNED:
+                        return result.value();
+                    case THREW:
+                        throw result.throwable();
+                    case PASSTHROUGH:
+                    default:
+                        // Registration retired: run the original once, no SDK callbacks.
+                        return chain.proceed();
+                }
+            }
+        };
     }
 
     private static final class Handle102 implements BackendHandle {
@@ -131,6 +135,15 @@ public final class LibXposed102Backend implements HookBackend {
 
         private Handle102(XposedInterface.HookHandle handle) {
             this.handle = handle;
+        }
+
+        @Override
+        public BackendHandle replace(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
+            if (plan.spec().errorPolicy() != ErrorPolicy.PROPAGATE) {
+                throw new BackendInstallException("unsupported error policy " + plan.spec().errorPolicy());
+            }
+            // API102 preserves executable, priority, exception mode and id while swapping the hooker.
+            return new Handle102(handle.replaceHook(hooker(plan, channel)));
         }
 
         @Override

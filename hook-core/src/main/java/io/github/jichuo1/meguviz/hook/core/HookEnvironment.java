@@ -183,6 +183,122 @@ public final class HookEnvironment implements AutoCloseable {
                 registration, targetReceipts);
     }
 
+    /**
+     * Atomically replaces one complete single-target registration with the same logical id.
+     * Owner, priority, resolved executable, loader and code epoch must match. MatchPolicy.ALL,
+     * partial registrations and implicit close+install are deliberately not supported.
+     */
+    public synchronized RegistrationReceipt replace(HookSpec spec) {
+        Objects.requireNonNull(spec, "spec");
+        HookId id = spec.id();
+        String backendId = backend.id();
+        if (closed) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+                    backendId, -1L, "environment is closed");
+        }
+        CapabilityResult replacementCapability = backend.capabilities().lookup(Capability.ATOMIC_REPLACE);
+        if (!replacementCapability.isSupportedInDeclaredCell()) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY,
+                    backendId, -1L, "ATOMIC_REPLACE is not supported: " + replacementCapability);
+        }
+        if (!spec.processFilter().matches(backend.context().processName())) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.FILTERED,
+                    backendId, -1L, "process " + backend.context().processName() + " pruned before replacement");
+        }
+        for (Capability capability : spec.requiredCapabilities()) {
+            CapabilityResult result = backend.capabilities().lookup(capability);
+            if (!result.isSupportedInDeclaredCell()) {
+                return RegistrationReceipt.of(id, RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY,
+                        backendId, -1L, "required " + capability + ": " + result);
+            }
+        }
+        if (backend.capabilities().chainSemantics() != ChainSemantics.FRAMEWORK_CHAIN) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY,
+                    backendId, -1L, "replacement requires a framework-chain backend");
+        }
+
+        CoreRegistration existing = registrations.get(id);
+        if (existing == null) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.CONFLICT,
+                    backendId, -1L, "no installed registration with this logical id");
+        }
+        if (existing.state() == RegistrationState.RETIRING) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+                    backendId, existing.generation(), "previous generation is still retiring");
+        }
+        if (existing.state() != RegistrationState.INSTALLED || !existing.isComplete() || existing.plans().size() != 1) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.CONFLICT,
+                    backendId, existing.generation(), "only a complete single-target registration can be replaced");
+        }
+        BoundPlan previous = existing.plan();
+        if (previous.spec().target().matchPolicy() == MatchPolicy.ALL || spec.target().matchPolicy() == MatchPolicy.ALL) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.CONFLICT,
+                    backendId, existing.generation(), "MatchPolicy.ALL is not an atomic single-target replacement");
+        }
+        if (!previous.spec().owner().equals(spec.owner()) || previous.spec().priority() != spec.priority()) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.CONFLICT,
+                    backendId, existing.generation(), "owner and priority must be preserved by replacement");
+        }
+        if (previous.loader() != backend.context().classLoader()
+                || previous.codeEpoch() != backend.context().codeEpoch()) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.STALE_IDENTITY,
+                    backendId, existing.generation(), "loader or code epoch changed before replacement");
+        }
+
+        final List<Executable> candidates;
+        if (spec.target() instanceof TargetSpec.MemberTarget) {
+            candidates = Collections.singletonList(((TargetSpec.MemberTarget) spec.target()).executable());
+        } else {
+            try {
+                candidates = resolver.resolve((TargetSpec.DescriptorTarget) spec.target(), backend.context().classLoader());
+            } catch (BackendInstallException failure) {
+                return RegistrationReceipt.of(id, RegistrationReceipt.Status.TARGET_MISSING,
+                        backendId, existing.generation(), "target resolution failed: " + failure.getMessage());
+            }
+        }
+        if (candidates.isEmpty()) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.TARGET_MISSING,
+                    backendId, existing.generation(), "no target matched " + spec.target());
+        }
+        if (candidates.size() > 1 && spec.target().matchPolicy() == MatchPolicy.UNIQUE) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.AMBIGUOUS_TARGET,
+                    backendId, existing.generation(), candidates.size() + " targets matched under UNIQUE");
+        }
+        Executable target = candidates.get(0);
+        if (!previous.target().equals(target)) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.CONFLICT,
+                    backendId, existing.generation(), "replacement must keep the resolved executable");
+        }
+        if (previous.loader() != backend.context().classLoader()
+                || previous.codeEpoch() != backend.context().codeEpoch()) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.STALE_IDENTITY,
+                    backendId, existing.generation(), "loader or code epoch changed during resolution");
+        }
+        if (previous.spec().hasSameSemantics(spec)) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.ALREADY_INSTALLED,
+                    backendId, existing.generation(), "identical replacement registration already installed");
+        }
+
+        long generation = generations.getAndIncrement();
+        BoundPlan plan = new BoundPlan(spec, target, generation, backend.context().classLoader(), previous.codeEpoch());
+        CoreRegistration registration = new CoreRegistration(plan, diagnostics);
+        try {
+            existing.replaceWith(plan, registration);
+        } catch (IllegalStateException unavailable) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+                    backendId, existing.generation(), unavailable.getMessage());
+        } catch (BackendInstallException failure) {
+            registration.close();
+            return RegistrationReceipt.withTargets(id, RegistrationReceipt.Status.FAILED,
+                    backendId, existing.generation(), "backend replacement failed: " + failure.getMessage(), null,
+                    Collections.singletonList(TargetInstallReceipt.failed(target, failure.getMessage())));
+        }
+        registrations.put(id, registration);
+        return RegistrationReceipt.withTargets(id, RegistrationReceipt.Status.INSTALLED,
+                backendId, generation, "atomically replaced 1 target", registration,
+                Collections.singletonList(TargetInstallReceipt.installed(target)));
+    }
+
     private static boolean sameTargets(CoreRegistration registration, List<Executable> targets) {
         if (registration.plans().size() != targets.size()) {
             return false;

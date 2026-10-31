@@ -43,7 +43,16 @@ public final class JavaContractsSample {
         require(Integer.valueOf(99).equals(skipped), "early return must replace the result", skipped);
         require(backend.originalCallCount(add) == 1, "early return must not execute the original", backend.originalCallCount(add));
 
-        CloseReport closeReport = early.close();
+        RegistrationReceipt replaced = replaceEarlyReturn(environment, add);
+        Object replacedValue = backend.call(add, null, 5, 6);
+        require(Integer.valueOf(100).equals(replacedValue), "replacement must swap the callback", replacedValue);
+        require(backend.originalCallCount(add) == 1, "replacement must not execute the original", backend.originalCallCount(add));
+        CloseReport superseded = early.close();
+        require(superseded.newCallbacksRejected(), "superseded close must reject callbacks", superseded);
+        Object afterOldClose = backend.call(add, null, 5, 6);
+        require(Integer.valueOf(100).equals(afterOldClose), "old close must not uninstall replacement", afterOldClose);
+
+        CloseReport closeReport = replaced.registration().close();
         require(closeReport.newCallbacksRejected(), "close must reject new callbacks", closeReport);
         environment.close();
         System.out.println("SAMPLE_OK backend=" + backend.id() + " close=" + closeReport.state());
@@ -70,6 +79,17 @@ public final class JavaContractsSample {
         System.out.println("install early: " + receipt);
         require(receipt.isInstalled(), "early install failed", receipt);
         return receipt.registration();
+    }
+
+    private static RegistrationReceipt replaceEarlyReturn(HookEnvironment environment, Method add) {
+        HookSpec spec = new HookSpec.Builder(HookId.of("sample.java.early"), HookOwner.of("java-sample"),
+                TargetSpec.ofMember(add))
+                .before(invocation -> invocation.setEarlyResult(100))
+                .build();
+        RegistrationReceipt receipt = environment.replace(spec);
+        System.out.println("replace early: " + receipt);
+        require(receipt.isInstalled(), "replacement failed", receipt);
+        return receipt;
     }
 
     private static void require(boolean condition, String message, Object detail) {
