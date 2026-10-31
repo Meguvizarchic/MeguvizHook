@@ -1,7 +1,18 @@
-# MeguvizHook 移交（第四轮：BIL 依赖对齐）
+# MeguvizHook 移交（第五轮：独立 Java/Kotlin consumer）
 
 日期：2026-10-31。范围仅 MeguvizHook 仓库；BIL 仅作只读上游参考，未修改其源码。
 任务状态以 `work/progress.json` 为准；task done ≠ release qualified（当前仍为 false）。
+
+## 第五轮结果（HOOK-007）
+
+- 新增纯 JVM `sample-kotlin-contracts`，只直接依赖 `hook-dsl` 与 `hook-testing`，没有直接 api/core
+  依赖，实证 DSL 对 api/core 的公开传递暴露；复用同一 `HookEnvironment`、reflection resolver 和 fixture。
+- Java/Kotlin 入口均完成 descriptor/member 安装、MUTABLE_ARGS、early return 和 close：Java 输出
+  `SAMPLE_OK`，Kotlin 输出 `KOTLIN_SAMPLE_OK`，两者 original 次数、返回值和 CLOSED 状态一致。
+- 全量回归：80 tests / 0 failures、双 JVM consumer、双 backend/双 sample release BUILD SUCCESSFUL。
+  证据：`work/integration/consumer_contract_results.json`、`work/evidence/logs/round5-hook007.log`。
+- 该结果仅证明 JVM/fake backend 合同，不是真实框架或设备装载资格；独立 Android consumer 属于 INT-005。
+- 回退：对第五轮提交执行 `git revert`，上一基线为 `ba034b3`；禁止强推。
 
 ## 第四轮结果（INIT-002 增量）
 
@@ -33,12 +44,11 @@
 
 ### 下一批 ready 任务（按 DAG）
 
-1. **HOOK-007**：建立独立 Java/Kotlin consumer 并联调入口，复用同一 core，不建第二套反射 cache。
-2. **INT-005 剩余**：独立 Android consumer、Java API101 与 Kotlin API102 最小 module 的默认关闭项核查。
-3. **INT-011**：BIL 只读消费夹具与 A0/A1/A2 对照设计；不创建 BIL 开发任务。
-4. **INT-009/VAL-001/VAL-002**：真实 101/102 设备 cell（需要设备）。
-5. **GATE-002**：A/A 后才允许冻结阈值和 A/B。
-6. 远端：仅发布源码、文档和脱敏证据；本机 SDK 配置、构建缓存、签名材料与开发包不上传。
+1. **INT-005 剩余**：独立 Android consumer、Java API101 与 Kotlin API102 最小 module 的默认关闭项核查。
+2. **INT-011**：BIL 只读消费夹具与 A0/A1/A2 对照设计；不创建 BIL 开发任务。
+3. **INT-009/VAL-001/VAL-002**：真实 101/102 设备 cell（需要设备）。
+4. **GATE-002**：A/A 后才允许冻结阈值和 A/B。
+5. 远端：仅发布源码、文档和脱敏证据；本机 SDK 配置、构建缓存、签名材料与开发包不上传。
 
 ## 第二轮历史记录
 

@@ -3,9 +3,9 @@
 独立的 Android Hook SDK：自有 Java API、JVM 执行核心、互斥的 libxposed 后端适配制品与手工入口样例。
 真实的方法拦截始终由所选运行框架提供——本项目**不**替代管理器、注入器或 ART。
 
-当前状态：**第四轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
-101/102 双 backend、`MatchPolicy.ALL`、可选 Kotlin DSL、JVM 合同和静态 release 隔离已验证；
-真实框架/设备资格全部未执行。
+当前状态：**第五轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
+独立 Java/Kotlin consumer、101/102 双 backend、`MatchPolicy.ALL`、可选 Kotlin DSL、JVM 合同和
+静态 release 隔离已验证；真实框架/设备资格全部未执行。
 
 ## 模块
 
@@ -18,6 +18,7 @@
 | `backend-libxposed-102` | libxposed API 102 适配（独立 AAR，框架 API 为 `compileOnly`） |
 | `hook-testing` | fake backend、独立语义 oracle、反射 fixtures（非真实后端） |
 | `sample-java-contracts` | 纯 JVM 的 Java 消费样例 |
+| `sample-kotlin-contracts` | 独立 Kotlin consumer；仅直接依赖 dsl+testing，复用同一 core/fixture |
 | `sample-module-101` | 手工 Java 入口的 101 模块 APK（R8 release） |
 | `sample-module-102` | 手工 Java 入口的 102 模块 APK（R8 release） |
 
@@ -40,8 +41,8 @@ Android 切片仍为纯 Java：`android.builtInKotlin=false`，不依赖 `hook-d
 ```bash
 git clone https://github.com/jichuo1/MeguvizHook.git
 cd MeguvizHook
-# 环境：JDK 17+（第三/四轮实际用 JDK 17）、Android SDK platform android-37.2 + build-tools 37.0.0
-./gradlew :hook-dsl:test :hook-testing:test :sample-java-contracts:run
+# 环境：JDK 17+（第三至五轮实际用 JDK 17）、Android SDK platform android-37.2 + build-tools 37.0.0
+./gradlew :hook-dsl:test :hook-testing:test :sample-java-contracts:run :sample-kotlin-contracts:run
 ./gradlew :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest
 ./gradlew :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease
 ./gradlew :sample-module-101:assembleRelease :sample-module-102:assembleRelease
@@ -50,8 +51,9 @@ cd MeguvizHook
 ./gradlew tasks --all
 ```
 
-当前真实结果：**80 tests / 0 failures**（59 fake/core + 12 DSL + 5 adapter-101 + 4 adapter-102），样例输出
-`SAMPLE_OK`。证据由 JUnit XML 生成，原始日志在 `work/evidence/logs/`。
+当前真实结果：**80 tests / 0 failures**（59 fake/core + 12 DSL + 5 adapter-101 + 4 adapter-102），
+Java/Kotlin 样例分别输出 `SAMPLE_OK` 与 `KOTLIN_SAMPLE_OK`。证据由 JUnit XML 和实际入口输出生成，
+原始日志在 `work/evidence/logs/`。
 
 ## 语义要点（CONTRACT-001）
 
@@ -76,7 +78,7 @@ cd MeguvizHook
 - DEX/AAR 无框架类定义，releaseRuntimeClasspath 无 libxposed、kotlin-stdlib、hook-dsl 或另一代 backend；
 - 101 DEX 无 `setId/replaceHook`、热重载或 `libxposed102` 引用；无 testing 类、`.so`、Kotlin metadata。
 
-**仍未验证**：独立 Kotlin consumer（HOOK-007）、真实 101/102 装载与执行、R8 后设备可达性、
+**仍未验证**：独立 Android consumer（INT-005）、真实 101/102 装载与执行、R8 后设备可达性、
 真实类加载与跨模块优先级、service、热重载、native、任何性能阈值、JDK 27 一致性。
 task done ≠ release qualified。
 

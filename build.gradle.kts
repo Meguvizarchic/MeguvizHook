@@ -11,7 +11,7 @@ subprojects {
 
 // Shared configuration for the pure JVM modules. No Android, framework, Binder, JNI or Rust types
 // are allowed on these compile classpaths; the backend adapters depend on them, never the reverse.
-configure(listOf(project(":hook-api"), project(":hook-core"), project(":hook-dsl"), project(":hook-testing"), project(":sample-java-contracts"))) {
+configure(listOf(project(":hook-api"), project(":hook-core"), project(":hook-dsl"), project(":hook-testing"), project(":sample-java-contracts"), project(":sample-kotlin-contracts"))) {
     apply(plugin = "java-library")
 
     extensions.configure<JavaPluginExtension> {

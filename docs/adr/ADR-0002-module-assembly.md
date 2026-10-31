@@ -15,8 +15,8 @@ hook-api  ←  hook-core  ←  backend-libxposed-101  ←  sample-module-101
 
 - 编译依赖单向；运行时 backend 通过 `core.spi.HookBackend` 反向被 `HookEnvironment` 调用，
   不构成编译环。`hook-core` 不依赖任何 backend，`hook-testing` 不进 consumer APK。
-- `hook-dsl` 独立可选，只依赖 api+core；现有 Java/backend/sample 不依赖它，Kotlin 运行时不得渗入
-  Java-only consumer variant。
+- `hook-dsl` 独立可选，只依赖 api+core；`sample-kotlin-contracts` 仅直接选择 dsl+testing，
+  证明公开传递依赖。现有 Java/backend/Android sample 不依赖它，Kotlin 运行时不得渗入 Java-only variant。
 - 未创建的模块（service/codegen/doctor/native/bridge）不进入 settings，不留空壳。
   后续添加时各自独立可选，不被 BOM 或默认装配强拉。
 
@@ -43,9 +43,10 @@ hook-api  ←  hook-core  ←  backend-libxposed-101  ←  sample-module-101
 
 这些是结构约束。实证项（APK 内容检查）见审计 JSON；性能数值一律不在本切片声明。
 
-## 4. Java 稳定消费边界
+## 4. Java/Kotlin 稳定消费边界
 
 - `hook-api`/`hook-core` 为 Java 8 字节码，纯 JVM 可消费（`sample-java-contracts` 证明）。
+- `hook-dsl` 的 api/core 公开传递依赖由独立 `sample-kotlin-contracts` 编译与运行证明。
 - Android 模块使用 Java 17 语言级，与 BIL 一致；不改变 api/core 的字节码目标。
 - Kotlin DSL、KSP、协程不是 Java 消费的前置。
 - 回退：任何新公开面若需收缩，在 0.x 阶段以 ADR 撤回并保留旧制品；不在运行中切换 backend

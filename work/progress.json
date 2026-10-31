@@ -152,7 +152,13 @@
       "status": "planned"
     },
     "HOOK-007": {
-      "status": "planned"
+      "status": "done",
+      "evidence": [
+        "sample-kotlin-contracts/",
+        "work/integration/consumer_contract_results.json",
+        "work/evidence/logs/round5-hook007.log"
+      ],
+      "notes": "independent Java/Kotlin JVM consumers share the same core and fixtures; Kotlin has no direct api/core dependency; real Android/device entries remain unverified"
     },
     "HOOK-009": {
       "status": "planned"
@@ -214,5 +220,5 @@
       "notes": "optional service track; not started"
     }
   },
-  "current_slice": "round4: shared dependencies aligned with BIL dba9ed9; 80 JVM/stub tests and dual-backend release regression pass; release_qualified remains false"
+  "current_slice": "round5: independent Java/Kotlin consumers plus BIL-aligned toolchain; 80 JVM/stub tests and all release builds pass; release_qualified remains false"
 }
