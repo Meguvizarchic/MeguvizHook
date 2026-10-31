@@ -1,23 +1,21 @@
-# 能力矩阵（HOOK-001）
+# 能力矩阵（HOOK-001 / HOOK-003 / HOOK-005）
 
 层级说明：源码/编译期事实 ≠ 设备功能 ≠ 设备性能。UNKNOWN 不视为支持。
-cell 命名：`jvm-fake`（JVM fake backend）、`libxposed-102-stub`（接口 stub 映射夹具）、
-`libxposed-102-device`（真实运行环境，本切片 unavailable）。
+cell：`jvm-fake`、`libxposed-101-stub`、`libxposed-102-stub`；真实设备 cell 均 unavailable。
 
-| 能力 | fake backend | backend-libxposed-102 | 设备 cell |
-|---|---|---|---|
-| FRAMEWORK_CHAIN | SUPPORTED_IN_DECLARED_CELL（jvm-fake） | SUPPORTED_IN_DECLARED_CELL（102 Hooker/Chain） | not_run |
-| MODULE_LOCAL_CHAIN（core 组合 before/after） | SUPPORTED_IN_DECLARED_CELL | SUPPORTED_IN_DECLARED_CELL | not_run |
-| CLASSIC_CALLBACKS | UNSUPPORTED | UNSUPPORTED（102 无独立 classic 回调） | not_run |
-| ATOMIC_REPLACE | UNSUPPORTED | SUPPORTED_IN_DECLARED_CELL（102 setId/replaceHook；未实现调用） | not_run |
-| HOT_RELOAD | UNSUPPORTED | UNKNOWN（本切片未实现） | not_run |
-| MatchPolicy.FIRST / UNIQUE | 已实现（稳定签名序/歧义拒绝） | 同 core | not_run |
-| MatchPolicy.ALL | UNSUPPORTED（明确拒绝，后续任务） | 同 core | not_run |
-| 非 FRAMEWORK_CHAIN backend dispatch | UNSUPPORTED（明确拒绝） | — | not_run |
-| service / 配置 snapshot / owned FD | 未创建模块 | 未创建模块 | unavailable |
-| native / Rust / JNI 边缘 | 未创建模块（新增 so=0） | 未创建模块（新增 so=0） | unavailable |
-| R8 release 构建 | — | 已执行（见 release_artifact_audit.json） | 构建证据，非运行时 |
-| API101 adapter | 未实现 | 未实现（下一批 HOOK-003 剩余部分） | not_run |
+| 能力 | fake backend | backend-101 | backend-102 | 设备 cell |
+|---|---|---|---|---|
+| FRAMEWORK_CHAIN | SUPPORTED（jvm-fake） | SUPPORTED_IN_DECLARED_CELL（真实 101 Hooker/Chain 源码 + stub） | SUPPORTED_IN_DECLARED_CELL（102 Hooker/Chain + stub） | not_run |
+| MODULE_LOCAL_CHAIN | SUPPORTED | SUPPORTED（同一 core） | SUPPORTED（同一 core） | not_run |
+| CLASSIC_CALLBACKS | UNSUPPORTED | UNSUPPORTED（101 也是链模型） | UNSUPPORTED | not_run |
+| ATOMIC_REPLACE | UNSUPPORTED | UNSUPPORTED（无 setId/replaceHook） | 源码提供；core 替换流程未实现 | not_run |
+| HOT_RELOAD | UNSUPPORTED | UNSUPPORTED（无 102 热重载入口） | UNKNOWN（本切片未实现） | not_run |
+| MatchPolicy.FIRST / UNIQUE | 已实现 | 同 core | 同 core | not_run |
+| MatchPolicy.ALL | 已实现：逐项回执、部分成功、全失败、epoch 回滚 | 同 core | 同 core | not_run |
+| 非 FRAMEWORK_CHAIN dispatch | 明确拒绝 | — | — | not_run |
+| service / 配置 snapshot / owned FD | 未创建模块 | 未创建模块 | 未创建模块 | unavailable |
+| native / Rust / JNI 边缘 | 未创建模块 | 未创建模块 | 未创建模块 | unavailable |
+| R8 release + DEX 定义审计 | — | 已执行 | 已执行 | 构建证据，非运行时 |
 
-结论：本切片只声明 JVM 级合同与 102 适配的**源码/构建级**能力；任何“真机可用/性能达标”
-结论都需要对应 device cell 证据，当前一律为空。
+结论：本轮具备 JVM 合同、101/102 源码适配与独立 release 构建证据；任何“真机可用/性能达标”
+结论仍需要对应 device cell，当前为空。

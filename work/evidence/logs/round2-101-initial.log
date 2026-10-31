@@ -1,0 +1,146 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: :backend-libxposed-101:testDebugUnitTest :backend-libxposed-101:assembleRelease :sample-module-101:assembleRelease
+
+> Configure project :backend-libxposed-101
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+
+> Task :sample-module-101:generateReleaseAssets UP-TO-DATE
+> Task :sample-module-101:preBuild UP-TO-DATE
+> Task :backend-libxposed-101:generateReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-101:preBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-101:preReleaseBuild UP-TO-DATE
+> Task :sample-module-101:preReleaseBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugBuild UP-TO-DATE
+> Task :backend-libxposed-101:processDebugJavaRes NO-SOURCE
+> Task :hook-api:processResources NO-SOURCE
+> Task :backend-libxposed-101:processReleaseJavaRes NO-SOURCE
+> Task :hook-core:processResources NO-SOURCE
+> Task :hook-testing:processResources NO-SOURCE
+> Task :backend-libxposed-101:processDebugUnitTestJavaRes NO-SOURCE
+> Task :hook-api:compileJava UP-TO-DATE
+> Task :hook-core:compileJava UP-TO-DATE
+> Task :hook-testing:compileJava UP-TO-DATE
+> Task :hook-testing:classes UP-TO-DATE
+> Task :sample-module-101:processReleaseJavaRes
+> Task :hook-core:classes UP-TO-DATE
+> Task :hook-testing:jar UP-TO-DATE
+> Task :hook-core:jar UP-TO-DATE
+> Task :sample-module-101:mergeReleaseStartupProfile
+> Task :backend-libxposed-101:prepareReleaseArtProfile
+> Task :backend-libxposed-101:writeReleaseLintModelMetadata
+> Task :backend-libxposed-101:extractDeepLinksForAarRelease
+> Task :sample-module-101:createReleaseCompatibleScreenManifests
+> Task :hook-api:classes UP-TO-DATE
+> Task :backend-libxposed-101:generateReleaseResources
+> Task :sample-module-101:extractProguardFiles
+> Task :backend-libxposed-101:extractProguardFiles
+> Task :backend-libxposed-101:processDebugNavigationResources
+> Task :backend-libxposed-101:generateDebugResources
+> Task :backend-libxposed-101:processReleaseNavigationResources
+> Task :backend-libxposed-101:extractDeepLinksRelease
+> Task :sample-module-101:generateReleaseResources
+> Task :sample-module-101:extractDeepLinksRelease
+> Task :sample-module-101:mapReleaseSourceSetPaths
+> Task :backend-libxposed-101:mapReleaseSourceSetPaths
+> Task :hook-api:jar UP-TO-DATE
+> Task :sample-module-101:writeReleaseAppMetadata
+> Task :sample-module-101:processReleaseNavigationResources
+> Task :backend-libxposed-101:checkReleaseAarMetadata
+> Task :backend-libxposed-101:prepareLintJarForPublish
+> Task :sample-module-101:checkReleaseDuplicateClasses
+> Task :backend-libxposed-101:writeReleaseAarMetadata
+> Task :backend-libxposed-101:javaPreCompileDebug
+> Task :backend-libxposed-101:javaPreCompileDebugUnitTest
+> Task :backend-libxposed-101:javaPreCompileRelease
+> Task :sample-module-101:javaPreCompileRelease
+> Task :sample-module-101:mergeReleaseArtProfile
+> Task :backend-libxposed-101:mergeReleaseAssets
+> Task :sample-module-101:mergeReleaseJniLibFolders
+> Task :backend-libxposed-101:mergeReleaseJniLibFolders
+> Task :sample-module-101:checkReleaseAarMetadata
+> Task :backend-libxposed-101:mergeReleaseNativeLibs NO-SOURCE
+> Task :backend-libxposed-101:stripReleaseDebugSymbols NO-SOURCE
+> Task :backend-libxposed-101:copyReleaseJniLibsProjectAndLocalJars
+> Task :backend-libxposed-101:copyReleaseJniLibsProjectOnly
+> Task :sample-module-101:mergeReleaseAssets
+> Task :sample-module-101:collectReleaseDependencies
+> Task :sample-module-101:mergeReleaseNativeLibs NO-SOURCE
+> Task :sample-module-101:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-101:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :sample-module-101:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :sample-module-101:compressReleaseAssets
+> Task :backend-libxposed-101:packageReleaseResources
+> Task :sample-module-101:packageReleaseResources
+> Task :backend-libxposed-101:packageDebugResources
+> Task :sample-module-101:writeReleaseSigningConfigVersions
+> Task :backend-libxposed-101:mergeReleaseResources
+> Task :sample-module-101:mergeReleaseResources
+> Task :sample-module-101:compileReleaseNavigationResources
+> Task :backend-libxposed-101:compileReleaseLibraryResources
+> Task :backend-libxposed-101:processReleaseManifest
+> Task :backend-libxposed-101:mergeReleaseJavaResource
+> Task :sample-module-101:extractReleaseVersionControlInfo
+> Task :sample-module-101:processReleaseMainManifest
+> Task :sample-module-101:sdkReleaseDependencyData
+> Task :sample-module-101:mergeReleaseJavaResource
+> Task :sample-module-101:processReleaseManifest
+> Task :sample-module-101:processReleaseManifestForPackage
+> Task :backend-libxposed-101:parseReleaseLocalResources
+> Task :sample-module-101:parseReleaseLocalResources
+> Task :backend-libxposed-101:parseDebugLocalResources
+> Task :backend-libxposed-101:generateDebugRFile
+> Task :backend-libxposed-101:generateReleaseRFile
+> Task :sample-module-101:generateReleaseRFile
+> Task :backend-libxposed-101:generateDebugUnitTestStubRFile
+> Task :backend-libxposed-101:extractReleaseAnnotations
+> Task :backend-libxposed-101:compileReleaseJavaWithJavac
+> Task :backend-libxposed-101:compileDebugJavaWithJavac
+> Task :backend-libxposed-101:mergeReleaseGeneratedProguardFiles
+> Task :backend-libxposed-101:mergeReleaseConsumerProguardFiles
+> Task :backend-libxposed-101:exportReleaseConsumerProguardFiles
+> Task :backend-libxposed-101:bundleLibRuntimeToJarRelease
+> Task :backend-libxposed-101:bundleLibRuntimeToJarDebug
+> Task :backend-libxposed-101:bundleLibCompileToJarRelease
+> Task :backend-libxposed-101:bundleLibCompileToJarDebug
+> Task :backend-libxposed-101:syncReleaseLibJars
+> Task :backend-libxposed-101:createFullJarRelease
+> Task :backend-libxposed-101:bundleReleaseAar
+> Task :backend-libxposed-101:bundleReleaseLocalLintAar
+> Task :sample-module-101:compileReleaseJavaWithJavac
+> Task :backend-libxposed-101:compileDebugUnitTestJavaWithJavac
+> Task :backend-libxposed-101:verifyReleaseResources
+> Task :backend-libxposed-101:assembleRelease
+> Task :sample-module-101:processReleaseResources
+> Task :sample-module-101:mergeReleaseGeneratedProguardFiles
+> Task :sample-module-101:expandReleaseArtProfileWildcards
+> Task :sample-module-101:optimizeReleaseResources
+> Task :backend-libxposed-101:generateReleaseLintVitalModel
+> Task :backend-libxposed-101:generateReleaseLintModel
+> Task :sample-module-101:generateReleaseLintVitalReportModel
+> Task :backend-libxposed-101:testDebugUnitTest
+> Task :sample-module-101:minifyReleaseWithR8
+> Task :sample-module-101:compileReleaseArtProfile
+> Task :backend-libxposed-101:lintVitalAnalyzeRelease
+> Task :sample-module-101:lintVitalAnalyzeRelease
+> Task :sample-module-101:lintVitalReportRelease
+> Task :sample-module-101:lintVitalRelease
+> Task :sample-module-101:packageRelease
+> Task :sample-module-101:assembleRelease
+> Task :sample-module-101:createReleaseApkListingFileRedirect
+
+[Incubating] Problems report is available at: <repository>/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 49s
+99 actionable tasks: 93 executed, 6 up-to-date
+Configuration cache entry stored.

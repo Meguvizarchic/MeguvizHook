@@ -6,7 +6,7 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 Third-party components and references
 =====================================
 
-1. libxposed API (io.github.libxposed:api:102.0.0)
+1. libxposed API (io.github.libxposed:api:101.0.0 and 102.0.0)
    - License: Apache License 2.0 (https://github.com/libxposed/api)
    - Usage: compileOnly for the backend adapter and testImplementation for JVM stub fixtures.
      No libxposed class is bundled into MeguvizHook artifacts or the sample APK.

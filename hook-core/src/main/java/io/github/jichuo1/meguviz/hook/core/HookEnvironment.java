@@ -8,6 +8,8 @@ import io.github.jichuo1.meguviz.hook.api.HookId;
 import io.github.jichuo1.meguviz.hook.api.HookSpec;
 import io.github.jichuo1.meguviz.hook.api.MatchPolicy;
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
+import io.github.jichuo1.meguviz.hook.api.RegistrationState;
+import io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
@@ -15,6 +17,7 @@ import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 import io.github.jichuo1.meguviz.hook.core.spi.MemberResolver;
 
 import java.lang.reflect.Executable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,16 +28,14 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Consumer entry point. Install order is fixed: validate descriptor, prune by process, check
  * capabilities, bind against the actual loader, apply match policy and static return checks, build
- * the immutable plan, install, then publish the receipt. Resolution, pruning and capability checks
+ * immutable plans, install, then publish the receipt. Resolution, pruning and capability checks
  * never run inside a hot callback.
  *
- * <p>Known limits of this slice, reported as explicit refusals instead of silent degradation:
- * <ul>
- *   <li>only framework-chain backends are dispatched; classic-callback and local-only adapters are
- *       rejected with {@link RegistrationReceipt.Status#UNSUPPORTED_CAPABILITY};</li>
- *   <li>{@link MatchPolicy#ALL} is not implemented yet and is refused the same way;</li>
- *   <li>no resolution cache exists, so no stale negative lookup can be reused.</li>
- * </ul>
+ * <p>{@link MatchPolicy#ALL} creates one logical registration with one plan and receipt per target.
+ * Ordinary per-target failure does not roll back successful siblings: the result is explicitly
+ * PARTIALLY_INSTALLED and no cross-target atomicity is claimed. An epoch change is different: every
+ * entry installed by the unpublished attempt is closed and no stale registration is published.
+ * There is no resolution cache, so no stale negative lookup can be reused.
  */
 public final class HookEnvironment implements AutoCloseable {
     private final HookBackend backend;
@@ -86,10 +87,6 @@ public final class HookEnvironment implements AutoCloseable {
                     backendId, -1L, "this slice dispatches framework chains only; backend declares "
                             + backend.capabilities().chainSemantics());
         }
-        if (spec.target().matchPolicy() == MatchPolicy.ALL) {
-            return RegistrationReceipt.of(id, RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY,
-                    backendId, -1L, "MatchPolicy.ALL is not implemented in this slice");
-        }
 
         long epochBefore = backend.context().codeEpoch();
         List<Executable> candidates;
@@ -110,36 +107,92 @@ public final class HookEnvironment implements AutoCloseable {
             return RegistrationReceipt.of(id, RegistrationReceipt.Status.AMBIGUOUS_TARGET,
                     backendId, -1L, candidates.size() + " targets matched " + spec.target() + " under UNIQUE");
         }
-        Executable target = candidates.get(0);
+        List<Executable> targets = spec.target().matchPolicy() == MatchPolicy.ALL
+                ? candidates : Collections.singletonList(candidates.get(0));
 
         CoreRegistration existing = registrations.get(id);
+        if (existing != null && existing.state() == RegistrationState.RETIRING) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+                    backendId, existing.generation(), "previous generation is still retiring; retry after close completes");
+        }
+        if (existing != null && existing.state() != RegistrationState.INSTALLED) {
+            // A fully closed generation must not block a fresh logical registration forever. The old
+            // immutable plan may still be draining in flight, but it never receives new SDK work.
+            registrations.remove(id);
+            existing = null;
+        }
         if (existing != null) {
-            if (existing.plan().target().equals(target) && existing.plan().spec().hasSameSemantics(spec)) {
+            if (sameTargets(existing, targets) && existing.plan().spec().hasSameSemantics(spec)
+                    && existing.isComplete()) {
                 return RegistrationReceipt.of(id, RegistrationReceipt.Status.ALREADY_INSTALLED,
                         backendId, existing.generation(), "identical registration already installed");
             }
             return RegistrationReceipt.of(id, RegistrationReceipt.Status.CONFLICT,
-                    backendId, existing.generation(), "logical id is already used with different semantics; not overwritten");
+                    backendId, existing.generation(), "logical id is already used; close a partial/old registration before retry");
         }
 
         if (backend.context().codeEpoch() != epochBefore) {
-            // Never publish a plan bound to an outdated epoch.
             return RegistrationReceipt.of(id, RegistrationReceipt.Status.STALE_IDENTITY,
-                    backendId, -1L, "code epoch changed during install; plan discarded");
+                    backendId, -1L, "code epoch changed during resolution; plan discarded");
         }
 
-        BoundPlan plan = new BoundPlan(spec, target, generations.getAndIncrement(), backend.context().classLoader(), epochBefore);
-        CoreRegistration registration = new CoreRegistration(plan, diagnostics);
-        try {
-            BackendHandle handle = backend.install(plan, registration);
-            registration.bind(handle);
-        } catch (BackendInstallException failure) {
-            return RegistrationReceipt.of(id, RegistrationReceipt.Status.FAILED, backendId, -1L, failure.getMessage());
-        } catch (RuntimeException failure) {
-            return RegistrationReceipt.of(id, RegistrationReceipt.Status.FAILED, backendId, -1L, failure.toString());
+        long generation = generations.getAndIncrement();
+        List<BoundPlan> plans = new ArrayList<BoundPlan>(targets.size());
+        for (Executable target : targets) {
+            plans.add(new BoundPlan(spec, target, generation, backend.context().classLoader(), epochBefore));
         }
+        CoreRegistration registration = new CoreRegistration(plans, diagnostics);
+        List<TargetInstallReceipt> targetReceipts = new ArrayList<TargetInstallReceipt>(plans.size());
+        int installed = 0;
+        for (BoundPlan plan : plans) {
+            try {
+                BackendHandle handle = backend.install(plan, registration.channel(plan));
+                registration.bind(plan, handle);
+                targetReceipts.add(TargetInstallReceipt.installed(plan.target()));
+                installed++;
+            } catch (BackendInstallException failure) {
+                targetReceipts.add(TargetInstallReceipt.failed(plan.target(), failure.getMessage()));
+            } catch (RuntimeException failure) {
+                targetReceipts.add(TargetInstallReceipt.failed(plan.target(), failure.toString()));
+            }
+        }
+
+        if (backend.context().codeEpoch() != epochBefore) {
+            registration.close();
+            List<TargetInstallReceipt> rolledBack = new ArrayList<TargetInstallReceipt>(targetReceipts.size());
+            for (TargetInstallReceipt targetReceipt : targetReceipts) {
+                rolledBack.add(targetReceipt.status() == TargetInstallReceipt.Status.INSTALLED
+                        ? TargetInstallReceipt.rolledBack(targetReceipt.target(), "code epoch changed before publication")
+                        : targetReceipt);
+            }
+            return RegistrationReceipt.withTargets(id, RegistrationReceipt.Status.STALE_IDENTITY,
+                    backendId, generation, "code epoch changed during install; installed entries closed", null, rolledBack);
+        }
+        if (installed == 0) {
+            return RegistrationReceipt.withTargets(id, RegistrationReceipt.Status.FAILED,
+                    backendId, generation, "no target could be installed", null, targetReceipts);
+        }
+
         registrations.put(id, registration);
-        return RegistrationReceipt.installed(registration, backendId, "installed on " + target);
+        RegistrationReceipt.Status status = installed == plans.size()
+                ? RegistrationReceipt.Status.INSTALLED : RegistrationReceipt.Status.PARTIALLY_INSTALLED;
+        String message = "installed " + installed + "/" + plans.size() + " targets"
+                + (status == RegistrationReceipt.Status.PARTIALLY_INSTALLED
+                        ? "; successful entries remain registered; no cross-target atomicity" : "");
+        return RegistrationReceipt.withTargets(id, status, backendId, generation, message,
+                registration, targetReceipts);
+    }
+
+    private static boolean sameTargets(CoreRegistration registration, List<Executable> targets) {
+        if (registration.plans().size() != targets.size()) {
+            return false;
+        }
+        for (int i = 0; i < targets.size(); i++) {
+            if (!registration.plans().get(i).target().equals(targets.get(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public synchronized int activeRegistrationCount() {

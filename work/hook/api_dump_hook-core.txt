@@ -19,8 +19,14 @@ public final class io.github.jichuo1.meguviz.hook.core.BoundedDiagnosticsSink im
   public synchronized long droppedCount();
 }
 Compiled from "CoreRegistration.java"
-final class io.github.jichuo1.meguviz.hook.core.CoreRegistration implements io.github.jichuo1.meguviz.hook.api.HookRegistration,io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+class io.github.jichuo1.meguviz.hook.core.CoreRegistration$1 {
+}
+Compiled from "CoreRegistration.java"
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$PlanChannel implements io.github.jichuo1.meguviz.hook.core.DispatchChannel {
   public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
+}
+Compiled from "CoreRegistration.java"
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration implements io.github.jichuo1.meguviz.hook.api.HookRegistration {
   public io.github.jichuo1.meguviz.hook.api.HookId id();
   public long generation();
   public io.github.jichuo1.meguviz.hook.api.RegistrationState state();

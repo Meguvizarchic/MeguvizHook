@@ -34,17 +34,39 @@
       "type": "jar",
       "sha256": "8e495b634469d64fb8acfa3495a065cbacc8a0fff55ce1e31007be4c16dc57d3",
       "scope": "testImplementation"
+    },
+    {
+      "coordinate": "io.github.libxposed:api:101.0.0",
+      "type": "aar",
+      "sha256": "99679197215606606667844b1a73575746e919d921f1042744da7a42b4fd93c4",
+      "scope": "compileOnly (101 main), testImplementation (101 stub fixtures)"
+    },
+    {
+      "coordinate": "io.github.libxposed:api:101.0.0:sources",
+      "type": "jar",
+      "sha256": "9ba0481353ca2dce31168ebcfb4c12068bf0f6ef6617bb6f8bdd5aa4d9d82902",
+      "scope": "source-level behaviour evidence only"
     }
   ],
-  "actual_gradle_tasks_log": "work/evidence/logs/gradle-tasks-all.log",
-  "selected_backend_artifacts": ["backend-libxposed-102"],
-  "selected_features": ["hook-api", "hook-core", "hook-testing", "sample-java-contracts", "sample-module-102"],
+  "actual_gradle_tasks_log": "work/evidence/logs/round2-gradle-tasks-all.log",
+  "selected_backend_artifacts": [
+    "backend-libxposed-101",
+    "backend-libxposed-102"
+  ],
+  "selected_features": [
+    "hook-api",
+    "hook-core",
+    "hook-testing",
+    "sample-java-contracts",
+    "sample-module-101",
+    "sample-module-102"
+  ],
   "device_cells": [],
   "unverified": [
+    "real libxposed 101 runtime loading and hook execution",
     "real libxposed 102 runtime loading and hook execution",
     "R8 entry reachability on a device",
     "real classloader and cross-module priority interleaving",
-    "API 101 adapter (not implemented)",
     "service / hot reload / native / performance thresholds",
     "JDK 27 toolchain parity with BIL CI"
   ],

@@ -3,14 +3,22 @@ package io.github.jichuo1.meguviz.hook.testing.conformance;
 import io.github.jichuo1.meguviz.hook.api.Capability;
 import io.github.jichuo1.meguviz.hook.api.CapabilityResult;
 import io.github.jichuo1.meguviz.hook.api.ChainSemantics;
+import io.github.jichuo1.meguviz.hook.api.HookRegistration;
 import io.github.jichuo1.meguviz.hook.api.HookSpec;
 import io.github.jichuo1.meguviz.hook.api.MatchPolicy;
 import io.github.jichuo1.meguviz.hook.api.ProcessFilter;
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
+import io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetKind;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
+import io.github.jichuo1.meguviz.hook.core.BoundPlan;
+import io.github.jichuo1.meguviz.hook.core.DispatchChannel;
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment;
 import io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver;
+import io.github.jichuo1.meguviz.hook.core.spi.BackendContext;
+import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
+import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 import io.github.jichuo1.meguviz.hook.testing.FakeBackend;
 import io.github.jichuo1.meguviz.hook.testing.Fixtures;
 
@@ -23,8 +31,13 @@ import java.io.InputStream;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertTrue;
@@ -175,22 +188,106 @@ public class InstallContractTest {
                 .build());
         assertTrue(receipt.toString(), receipt.isInstalled());
         // 'int' sorts before 'java.lang.String' in the resolver's stable signature key.
-        assertTrue(receipt.message().contains("overloaded"));
+        assertEquals(TestSupport.method("overloaded", int.class), receipt.targets().get(0).target());
     }
 
     @Test
-    public void matchAllIsExplicitlyRefusedInThisSlice() {
-        TargetSpec.DescriptorTarget descriptor = TargetSpec.descriptor(TargetKind.METHOD, Fixtures.class.getName(), "overloaded")
+    public void matchAllInstallsEveryOverloadAndClosesEveryEntry() throws Throwable {
+        Executable intTarget = TestSupport.method("overloaded", int.class);
+        Executable stringTarget = TestSupport.method("overloaded", String.class);
+        backend.onTarget(intTarget, (thisObject, args) -> ((Integer) args[0]) + 1);
+        backend.onTarget(stringTarget, (thisObject, args) -> "original:" + args[0]);
+        AtomicInteger callbacks = new AtomicInteger();
+        HookSpec spec = allOverloads("target.all.success", callbacks);
+
+        RegistrationReceipt receipt = environment.install(spec);
+        assertTrue(receipt.toString(), receipt.isInstalled());
+        assertEquals(2, receipt.targets().size());
+        assertEquals(2, backend.installCount());
+        assertTrue(backend.isHooked(intTarget));
+        assertTrue(backend.isHooked(stringTarget));
+        assertEquals(8, backend.call(intTarget, null, 7));
+        assertEquals("original:x", backend.call(stringTarget, null, "x"));
+        assertEquals(2, callbacks.get());
+
+        HookRegistration registration = receipt.registration();
+        registration.close();
+        assertFalse(backend.isHooked(intTarget));
+        assertFalse(backend.isHooked(stringTarget));
+        assertEquals(8, backend.call(intTarget, null, 7));
+        assertEquals("original:x", backend.call(stringTarget, null, "x"));
+        assertEquals("close must reject callbacks on every target", 2, callbacks.get());
+    }
+
+    @Test
+    public void matchAllPartialFailureHasPerTargetReceiptsAndKeepsSuccessfulEntry() {
+        backend.withFailingNextInstall();
+        HookSpec spec = allOverloads("target.all.partial", new AtomicInteger());
+        RegistrationReceipt receipt = environment.install(spec);
+
+        assertEquals(RegistrationReceipt.Status.PARTIALLY_INSTALLED, receipt.status());
+        assertFalse("partial success must not look like full success", receipt.isInstalled());
+        assertTrue(receipt.isPartiallyInstalled());
+        assertEquals(2, receipt.targets().size());
+        assertEquals(TargetInstallReceipt.Status.FAILED, receipt.targets().get(0).status());
+        assertEquals(TargetInstallReceipt.Status.INSTALLED, receipt.targets().get(1).status());
+        assertEquals(1, backend.installCount());
+        assertEquals(1, environment.activeRegistrationCount());
+
+        RegistrationReceipt retry = environment.install(spec);
+        assertEquals("a partial registration cannot hide missing targets behind ALREADY_INSTALLED",
+                RegistrationReceipt.Status.CONFLICT, retry.status());
+        assertEquals(1, backend.installCount());
+        receipt.registration().close();
+        assertFalse(backend.isHooked(TestSupport.method("overloaded", String.class)));
+
+        RegistrationReceipt retried = environment.install(spec);
+        assertTrue(retried.toString(), retried.isInstalled());
+        assertEquals("closing the partial generation permits a complete fresh install",
+                3, backend.installCount());
+        retried.registration().close();
+    }
+
+    @Test
+    public void matchAllTotalFailurePublishesNoRegistration() {
+        backend.withFailingAllInstalls();
+        RegistrationReceipt receipt = environment.install(allOverloads("target.all.failed", new AtomicInteger()));
+
+        assertEquals(RegistrationReceipt.Status.FAILED, receipt.status());
+        assertNull(receipt.registration());
+        assertEquals(2, receipt.targets().size());
+        for (TargetInstallReceipt target : receipt.targets()) {
+            assertEquals(TargetInstallReceipt.Status.FAILED, target.status());
+        }
+        assertEquals(0, backend.installCount());
+        assertEquals(0, environment.activeRegistrationCount());
+    }
+
+    @Test
+    public void matchAllEpochChangeRollsBackUnpublishedEntries() {
+        backend.withEpochBumpOnNextInstall();
+        RegistrationReceipt receipt = environment.install(allOverloads("target.all.stale", new AtomicInteger()));
+
+        assertEquals(RegistrationReceipt.Status.STALE_IDENTITY, receipt.status());
+        assertNull(receipt.registration());
+        assertEquals(2, receipt.targets().size());
+        for (TargetInstallReceipt target : receipt.targets()) {
+            assertEquals(TargetInstallReceipt.Status.ROLLED_BACK, target.status());
+            assertFalse(backend.isHooked(target.target()));
+        }
+        assertEquals(2, backend.installCount());
+        assertEquals(0, environment.activeRegistrationCount());
+    }
+
+    private static HookSpec allOverloads(String id, AtomicInteger callbacks) {
+        TargetSpec.DescriptorTarget descriptor = TargetSpec.descriptor(
+                        TargetKind.METHOD, Fixtures.class.getName(), "overloaded")
                 .match(MatchPolicy.ALL)
                 .build();
-        RegistrationReceipt receipt = environment.install(new HookSpec.Builder(
-                        io.github.jichuo1.meguviz.hook.api.HookId.of("target.all"),
-                        io.github.jichuo1.meguviz.hook.api.HookOwner.of("conformance"), descriptor)
-                .before(invocation -> {
-                })
-                .build());
-        assertEquals(RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY, receipt.status());
-        assertEquals(0, backend.installCount());
+        return new HookSpec.Builder(io.github.jichuo1.meguviz.hook.api.HookId.of(id),
+                io.github.jichuo1.meguviz.hook.api.HookOwner.of("conformance"), descriptor)
+                .before(invocation -> callbacks.incrementAndGet())
+                .build();
     }
 
     @Test
@@ -263,6 +360,65 @@ public class InstallContractTest {
                 .build());
         assertEquals(RegistrationReceipt.Status.FAILED, receipt.status());
         assertEquals(0, environment.activeRegistrationCount());
+    }
+
+    @Test
+    public void retiringGenerationRejectsReplacementUntilCloseCompletes() throws Exception {
+        FakeBackend delegate = FakeBackend.create();
+        CountDownLatch uninstallEntered = new CountDownLatch(1);
+        CountDownLatch allowUninstall = new CountDownLatch(1);
+        HookBackend gated = new HookBackend() {
+            @Override
+            public String id() {
+                return delegate.id();
+            }
+
+            @Override
+            public io.github.jichuo1.meguviz.hook.api.BackendCapabilities capabilities() {
+                return delegate.capabilities();
+            }
+
+            @Override
+            public BackendContext context() {
+                return delegate.context();
+            }
+
+            @Override
+            public BackendHandle install(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
+                BackendHandle handle = delegate.install(plan, channel);
+                return () -> {
+                    uninstallEntered.countDown();
+                    try {
+                        if (!allowUninstall.await(5, TimeUnit.SECONDS)) {
+                            throw new AssertionError("timed out waiting to finish test uninstall");
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(interrupted);
+                    }
+                    return handle.uninstall();
+                };
+            }
+        };
+        HookEnvironment gatedEnvironment = HookEnvironment.create(gated);
+        HookSpec spec = TestSupport.spec("registration.retiring", ADD).before(invocation -> {
+        }).build();
+        HookRegistration first = TestSupport.installOrFail(gatedEnvironment, spec);
+        Thread closing = new Thread(first::close);
+        closing.start();
+        assertTrue(uninstallEntered.await(5, TimeUnit.SECONDS));
+
+        RegistrationReceipt duringClose = gatedEnvironment.install(spec);
+        assertEquals(RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE, duringClose.status());
+        assertEquals(1, delegate.installCount());
+
+        allowUninstall.countDown();
+        closing.join(5000L);
+        assertFalse(closing.isAlive());
+        RegistrationReceipt afterClose = gatedEnvironment.install(spec);
+        assertTrue(afterClose.toString(), afterClose.isInstalled());
+        assertEquals(2, delegate.installCount());
+        afterClose.registration().close();
     }
 
     @Test

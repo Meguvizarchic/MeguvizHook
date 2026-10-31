@@ -1,0 +1,185 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Reusing configuration cache.
+> Task :backend-libxposed-102:preBuild UP-TO-DATE
+> Task :backend-libxposed-101:preBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-102:preDebugBuild UP-TO-DATE
+> Task :backend-libxposed-102:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugBuild UP-TO-DATE
+> Task :hook-core:processResources NO-SOURCE
+> Task :backend-libxposed-102:processDebugJavaRes NO-SOURCE
+> Task :backend-libxposed-102:processDebugUnitTestJavaRes NO-SOURCE
+> Task :hook-testing:processResources NO-SOURCE
+> Task :sample-java-contracts:processResources NO-SOURCE
+> Task :backend-libxposed-101:processDebugJavaRes NO-SOURCE
+> Task :hook-api:processResources NO-SOURCE
+> Task :hook-testing:processTestResources NO-SOURCE
+> Task :backend-libxposed-101:processDebugUnitTestJavaRes NO-SOURCE
+> Task :backend-libxposed-102:javaPreCompileDebug UP-TO-DATE
+> Task :backend-libxposed-101:javaPreCompileDebug UP-TO-DATE
+> Task :backend-libxposed-101:processDebugNavigationResources UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugResources UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugResources UP-TO-DATE
+> Task :backend-libxposed-102:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :backend-libxposed-101:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :backend-libxposed-102:processDebugNavigationResources UP-TO-DATE
+> Task :hook-api:compileJava UP-TO-DATE
+> Task :hook-api:classes UP-TO-DATE
+> Task :hook-api:jar UP-TO-DATE
+> Task :hook-core:compileJava UP-TO-DATE
+> Task :hook-core:classes UP-TO-DATE
+> Task :backend-libxposed-101:packageDebugResources UP-TO-DATE
+> Task :backend-libxposed-102:packageDebugResources UP-TO-DATE
+> Task :hook-core:jar UP-TO-DATE
+> Task :hook-testing:compileJava UP-TO-DATE
+> Task :hook-testing:classes UP-TO-DATE
+> Task :hook-testing:jar UP-TO-DATE
+> Task :sample-java-contracts:compileJava UP-TO-DATE
+> Task :sample-java-contracts:classes UP-TO-DATE
+> Task :backend-libxposed-102:parseDebugLocalResources UP-TO-DATE
+> Task :backend-libxposed-101:parseDebugLocalResources UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugRFile UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugRFile UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :backend-libxposed-102:compileDebugJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-101:compileDebugJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :backend-libxposed-102:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:compileDebugUnitTestJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:compileDebugUnitTestJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:testDebugUnitTest UP-TO-DATE
+> Task :backend-libxposed-101:testDebugUnitTest UP-TO-DATE
+
+> Task :sample-java-contracts:run
+install mutable: RegistrationReceipt[sample.java.mutable INSTALLED backend=fake-chain generation=1 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+install early: RegistrationReceipt[sample.java.early INSTALLED backend=fake-chain generation=2 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+SAMPLE_OK backend=fake-chain close=CLOSED
+
+> Task :hook-testing:compileTestJava
+> Task :hook-testing:testClasses
+
+> Task :hook-testing:test
+
+InstallContractTest > unsupportedRequiredCapabilityRefusesBeforeInstall PASSED
+
+InstallContractTest > undeclaredCapabilityAnswersUnknown PASSED
+
+InstallContractTest > wrongReturnTypeMakesTargetMissing PASSED
+
+InstallContractTest > matchAllInstallsEveryOverloadAndClosesEveryEntry PASSED
+
+InstallContractTest > processPruningHappensBeforeInstall PASSED
+
+InstallContractTest > firstPolicyUsesStableSignatureOrder PASSED
+
+InstallContractTest > sameClassNameInDifferentLoadersBindsDifferentMembers PASSED
+
+InstallContractTest > ambiguousOverloadIsRejectedUnderUnique PASSED
+
+InstallContractTest > staticReturnCheckNarrowsOverloads PASSED
+
+InstallContractTest > matchAllPartialFailureHasPerTargetReceiptsAndKeepsSuccessfulEntry PASSED
+
+InstallContractTest > missingTargetIsReported PASSED
+
+InstallContractTest > resolverExcludesBridgeMethods PASSED
+
+InstallContractTest > matchAllTotalFailurePublishesNoRegistration PASSED
+
+InstallContractTest > closedEnvironmentRefusesNewInstalls PASSED
+
+InstallContractTest > classicOnlyBackendIsRefusedInsteadOfPretendingEquivalence PASSED
+
+InstallContractTest > unknownCapabilityIsNeverTreatedAsSupported PASSED
+
+InstallContractTest > duplicateIdIsIdempotentOnlyForIdenticalSemantics PASSED
+
+InstallContractTest > backendInstallFailureIsNotReportedAsInstalled PASSED
+
+InstallContractTest > epochChangeDuringInstallDiscardsPlan PASSED
+
+InstallContractTest > matchAllEpochChangeRollsBackUnpublishedEntries PASSED
+
+BoundedDiagnosticsTest > capacityIsEnforcedAndOverflowCounted PASSED
+
+CallbackStateMachineTest > originalThrowableWinsWhenBothFail PASSED
+
+CallbackStateMachineTest > fatalAfterFailureWinsOverOriginalThrowable PASSED
+
+CallbackStateMachineTest > aroundFailureAfterProceedDoesNotReplayOriginal PASSED
+
+CallbackStateMachineTest > originalThrowableIdentityIsPreserved PASSED
+
+CallbackStateMachineTest > aroundObservesDownstreamThrowableWithoutSwallowingIt PASSED
+
+CallbackStateMachineTest > earlyReturnMatchesOracleAndAfterObservesOutcome PASSED
+
+CallbackStateMachineTest > aroundProceedsOnceAndReturnsDownstreamValue PASSED
+
+CallbackStateMachineTest > aroundCanSkipOriginalWithExplicitOutcome PASSED
+
+CallbackStateMachineTest > aroundWithoutOutcomeNeverCallsOriginalImplicitly PASSED
+
+CallbackStateMachineTest > secondProceedIsContractViolationWithoutReplay PASSED
+
+CallbackStateMachineTest > beforeRunsInOrderAndAfterInReverseOrder PASSED
+
+CallbackStateMachineTest > originalResultFlowsToAfterAndCanBeReplaced PASSED
+
+CallbackStateMachineTest > beforeThrowsMatchesOracle PASSED
+
+CallbackStateMachineTest > fatalBeforeFailureIsNotConvertedIntoOrdinaryOutcome PASSED
+
+CallbackStateMachineTest > callbackInterfacesStayJavaOnly PASSED
+
+CallbackStateMachineTest > afterFailureAfterSuccessPropagatesWithoutReplay PASSED
+
+ParameterShapeTest > entrySnapshotShapeIsRequiredForSnapshotAccess PASSED
+
+ParameterShapeTest > argumentWritesAreTypeCheckedBeforeDownstreamRuns PASSED
+
+ParameterShapeTest > nullableReferenceResultIsAllowed PASSED
+
+ParameterShapeTest > mutableArgsWriteReachesDownstream PASSED
+
+ParameterShapeTest > entrySnapshotKeepsEntrySlotsButSharesObjects PASSED
+
+ParameterShapeTest > noArgsNeverMaterializesArguments PASSED
+
+ParameterShapeTest > noArgsRejectsArgumentReads PASSED
+
+ParameterShapeTest > aroundSupportsArgumentRewriteThroughContinuation PASSED
+
+ParameterShapeTest > primitiveResultSlotRejectsNull PASSED
+
+ParameterShapeTest > voidTargetOnlyAcceptsNullResult PASSED
+
+ParameterShapeTest > readArgsExposesSlotsAndTypes PASSED
+
+ParameterShapeTest > nullIsRejectedForPrimitiveArgument PASSED
+
+ParameterShapeTest > wrongResultTypeIsRejectedByAfter PASSED
+
+ParameterShapeTest > constructorTargetProceedsWithNullResult PASSED
+
+ReentryAndLifetimeTest > reentrantCallsOwnIndependentFrames PASSED
+
+ReentryAndLifetimeTest > closeDuringInflightCallReportsLeaseAndCompletesOnOldPlan PASSED
+
+ReentryAndLifetimeTest > concurrentCallsAndCloseNeverReplayOriginal PASSED
+
+ReentryAndLifetimeTest > invocationExpiresWhenCallbackReturns PASSED
+
+ReentryAndLifetimeTest > residentCloseIsReportedAsRetiredResident PASSED
+
+ReentryAndLifetimeTest > borrowedInvocationRejectsOtherThreads PASSED
+
+ReentryAndLifetimeTest > closeRejectsNewCallbacksButRunsOriginalOnce PASSED
+
+BUILD SUCCESSFUL in 5s
+36 actionable tasks: 3 executed, 33 up-to-date
+Configuration cache entry reused.

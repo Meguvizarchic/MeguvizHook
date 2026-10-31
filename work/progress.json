@@ -3,40 +3,205 @@
   "updated_at": "2026-10-31",
   "release_qualified": false,
   "tasks": {
-    "INIT-001": {"status": "done", "evidence": ["work/baseline.json", "work/evidence/logs/"], "notes": "local repository created; no pre-existing code; remote creation deferred to repository owner"},
-    "INIT-002": {"status": "done", "evidence": ["gradle/libs.versions.toml", "gradle/wrapper/gradle-wrapper.properties", "work/evidence/logs/gradle-tasks-all.log", "work/baseline.json"], "notes": "Gradle 9.8.2 sha256 verified; versions follow BIL; JDK 27 parity open"},
-    "INIT-003": {"status": "done", "evidence": ["LICENSE", "NOTICE"]},
-    "HOOK-001": {"status": "done", "evidence": ["work/hook/baseline_inventory.json", "work/hook/capability_matrix.md", "work/hook/upstream_behavior_inventory.md"]},
-    "CONTRACT-001": {"status": "done", "evidence": ["docs/adr/ADR-0001-runtime-contract.md", "hook-testing/src/main/java/io/github/jichuo1/meguviz/hook/testing/ContractOracle.java"]},
-    "GATE-001": {"status": "done", "evidence": ["work/performance/performance_profile.json", "work/performance/workloads.md", "work/performance/raw_schema.json", "work/evidence/logs/profile-draft-check.log"], "notes": "draft only; no thresholds, no measurements"},
-    "HOOK-002": {"status": "done", "evidence": ["hook-api/", "work/hook/api_dump_hook-api.txt", "docs/contracts/callback_contract.md", "work/integration/java_consumption_boundary.md"]},
-    "HOOK-004": {"status": "done", "evidence": ["hook-core/src/main/java/io/github/jichuo1/meguviz/hook/core/Dispatcher.java", "work/hook/dispatch_conformance_results.json"]},
-    "HOOK-005": {"status": "partial", "evidence": ["work/hook/install_epoch_fixtures.json"], "notes": "MatchPolicy.ALL refused explicitly; no resolution cache; replacement not implemented"},
-    "HOOK-003": {"status": "partial", "evidence": ["backend-libxposed-102/", "work/hook/release_artifact_audit.json"], "notes": "102 adapter + sample done; 101 adapter not started; no device cell"},
-    "HOOK-008": {"status": "partial", "evidence": ["hook-core/src/main/java/io/github/jichuo1/meguviz/hook/core/CoreRegistration.java", "work/hook/install_epoch_fixtures.json"], "notes": "default close/in-flight/generation retirement implemented and tested; no hot reload"},
-    "INT-001": {"status": "done", "evidence": ["work/integration/toolchain_matrix.md", "work/evidence/logs/"]},
-    "INT-002": {"status": "done", "evidence": ["docs/adr/ADR-0002-module-assembly.md", "work/integration/java_consumption_boundary.md", "work/evidence/logs/sample-release-runtime-deps.log"]},
-    "INT-003": {"status": "partial", "evidence": ["sample-module-102/src/main/", "sample-module-102/src/main/resources/META-INF/xposed/"], "notes": "manual Java entry + metadata built; not loaded by a real framework"},
-    "INT-005": {"status": "partial", "evidence": ["sample-java-contracts/"], "notes": "JVM minimal consumer exists; independent Android consumer module pending"},
-    "VAL-001": {"status": "partial", "evidence": ["work/hook/dispatch_conformance_results.json"], "notes": "59 JVM/stub tests pass; real backend cells not run"},
-    "INT-009": {"status": "partial", "evidence": ["work/hook/release_artifact_audit.json"], "notes": "compileOnly + R8 release build verified; no device verification"},
-    "HOOK-006": {"status": "planned"},
-    "HOOK-007": {"status": "planned"},
-    "HOOK-009": {"status": "planned"},
-    "HOOK-010": {"status": "planned"},
-    "HOOK-011": {"status": "planned"},
-    "INT-004": {"status": "planned"},
-    "INT-006": {"status": "planned"},
-    "INT-007": {"status": "planned"},
-    "INT-008": {"status": "planned"},
-    "INT-010": {"status": "planned"},
-    "INT-011": {"status": "planned"},
-    "INT-012": {"status": "planned"},
-    "GATE-002": {"status": "blocked", "reason": "requires A/A on real device cells"},
-    "VAL-002": {"status": "blocked", "reason": "requires real 101/102 cells"},
-    "REL-001": {"status": "planned"},
-    "REL-002": {"status": "planned"},
-    "NAT-001..010": {"status": "planned", "notes": "optional experimental track; not started, not blocking core"},
-    "SVC-001..006": {"status": "planned", "notes": "optional service track; not started"}
-  }
+    "INIT-001": {
+      "status": "done",
+      "evidence": [
+        "work/baseline.json",
+        "work/evidence/logs/"
+      ],
+      "notes": "local repository created; no pre-existing code; remote creation deferred to repository owner"
+    },
+    "INIT-002": {
+      "status": "done",
+      "evidence": [
+        "gradle/libs.versions.toml",
+        "gradle/wrapper/gradle-wrapper.properties",
+        "work/evidence/logs/gradle-tasks-all.log",
+        "work/baseline.json"
+      ],
+      "notes": "Gradle 9.8.2 sha256 verified; versions follow BIL; JDK 27 parity open"
+    },
+    "INIT-003": {
+      "status": "done",
+      "evidence": [
+        "LICENSE",
+        "NOTICE"
+      ]
+    },
+    "HOOK-001": {
+      "status": "done",
+      "evidence": [
+        "work/hook/baseline_inventory.json",
+        "work/hook/capability_matrix.md",
+        "work/hook/upstream_behavior_inventory.md"
+      ]
+    },
+    "CONTRACT-001": {
+      "status": "done",
+      "evidence": [
+        "docs/adr/ADR-0001-runtime-contract.md",
+        "hook-testing/src/main/java/io/github/jichuo1/meguviz/hook/testing/ContractOracle.java"
+      ]
+    },
+    "GATE-001": {
+      "status": "done",
+      "evidence": [
+        "work/performance/performance_profile.json",
+        "work/performance/workloads.md",
+        "work/performance/raw_schema.json",
+        "work/evidence/logs/profile-draft-check.log"
+      ],
+      "notes": "draft only; no thresholds, no measurements"
+    },
+    "HOOK-002": {
+      "status": "done",
+      "evidence": [
+        "hook-api/",
+        "work/hook/api_dump_hook-api.txt",
+        "docs/contracts/callback_contract.md",
+        "work/integration/java_consumption_boundary.md"
+      ]
+    },
+    "HOOK-004": {
+      "status": "done",
+      "evidence": [
+        "hook-core/src/main/java/io/github/jichuo1/meguviz/hook/core/Dispatcher.java",
+        "work/hook/dispatch_conformance_results.json"
+      ]
+    },
+    "HOOK-005": {
+      "status": "done",
+      "evidence": [
+        "hook-core/src/main/java/io/github/jichuo1/meguviz/hook/core/HookEnvironment.java",
+        "work/hook/install_epoch_fixtures.json"
+      ],
+      "notes": "FIRST/UNIQUE/ALL, per-target partial receipts, close/retry and epoch rollback tested; no resolution cache exists; replacement belongs to lifecycle work"
+    },
+    "HOOK-003": {
+      "status": "done",
+      "evidence": [
+        "backend-libxposed-101/",
+        "backend-libxposed-102/",
+        "sample-module-101/",
+        "sample-module-102/",
+        "work/hook/release_artifact_audit.json"
+      ],
+      "notes": "both adapters and independent R8 samples built and statically audited; no device cell"
+    },
+    "HOOK-008": {
+      "status": "partial",
+      "evidence": [
+        "hook-core/src/main/java/io/github/jichuo1/meguviz/hook/core/CoreRegistration.java",
+        "work/hook/install_epoch_fixtures.json"
+      ],
+      "notes": "default close/in-flight/generation retirement implemented and tested, now across multi-target registrations; no hot reload"
+    },
+    "INT-001": {
+      "status": "done",
+      "evidence": [
+        "work/integration/toolchain_matrix.md",
+        "work/evidence/logs/"
+      ]
+    },
+    "INT-002": {
+      "status": "done",
+      "evidence": [
+        "docs/adr/ADR-0002-module-assembly.md",
+        "work/integration/java_consumption_boundary.md",
+        "work/evidence/logs/sample-release-runtime-deps.log",
+        "work/evidence/logs/round2-sample-101-release-runtime-deps.log",
+        "work/evidence/logs/round2-sample-102-release-runtime-deps.log"
+      ]
+    },
+    "INT-003": {
+      "status": "partial",
+      "evidence": [
+        "sample-module-101/src/main/",
+        "sample-module-102/src/main/",
+        "sample-module-101/src/main/resources/META-INF/xposed/",
+        "sample-module-102/src/main/resources/META-INF/xposed/"
+      ],
+      "notes": "manual Java entries + metadata for 101 and 102 built; R8 DEX entry definitions verified statically; not loaded by a real framework"
+    },
+    "INT-005": {
+      "status": "partial",
+      "evidence": [
+        "sample-java-contracts/"
+      ],
+      "notes": "JVM minimal consumer exists; independent Android consumer module pending"
+    },
+    "VAL-001": {
+      "status": "partial",
+      "evidence": [
+        "work/hook/dispatch_conformance_results.json"
+      ],
+      "notes": "68 JVM/stub tests pass (59 fake/core + 5 adapter-101 + 4 adapter-102); real backend cells not run"
+    },
+    "INT-009": {
+      "status": "partial",
+      "evidence": [
+        "work/hook/release_artifact_audit.json"
+      ],
+      "notes": "dual compileOnly/R8/DEX/dependency audits pass; no device verification"
+    },
+    "HOOK-006": {
+      "status": "planned"
+    },
+    "HOOK-007": {
+      "status": "planned"
+    },
+    "HOOK-009": {
+      "status": "planned"
+    },
+    "HOOK-010": {
+      "status": "planned"
+    },
+    "HOOK-011": {
+      "status": "planned"
+    },
+    "INT-004": {
+      "status": "planned"
+    },
+    "INT-006": {
+      "status": "planned"
+    },
+    "INT-007": {
+      "status": "planned"
+    },
+    "INT-008": {
+      "status": "planned"
+    },
+    "INT-010": {
+      "status": "planned"
+    },
+    "INT-011": {
+      "status": "planned"
+    },
+    "INT-012": {
+      "status": "planned"
+    },
+    "GATE-002": {
+      "status": "blocked",
+      "reason": "requires A/A on real device cells"
+    },
+    "VAL-002": {
+      "status": "blocked",
+      "reason": "requires real 101/102 cells"
+    },
+    "REL-001": {
+      "status": "planned"
+    },
+    "REL-002": {
+      "status": "planned"
+    },
+    "NAT-001..010": {
+      "status": "planned",
+      "notes": "optional experimental track; not started, not blocking core"
+    },
+    "SVC-001..006": {
+      "status": "planned",
+      "notes": "optional service track; not started"
+    }
+  },
+  "current_slice": "round2: dual libxposed backends plus MatchPolicy.ALL; release_qualified remains false"
 }

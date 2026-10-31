@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Placeholder scope: replace com.example.host in scope.list before a device experiment. -->
+    <application
+        android:allowBackup="false"
+        android:label="MeguvizHook Sample 101"
+        android:supportsRtl="true" />
+</manifest>

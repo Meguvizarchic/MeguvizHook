@@ -1,19 +1,57 @@
 {
-  "schema_version": 1,
-  "task": "HOOK-004",
+  "schema_version": 2,
+  "tasks": [
+    "HOOK-004",
+    "HOOK-005",
+    "HOOK-003"
+  ],
   "observed_at": "2026-10-31",
-  "verification_level": "jvm_fake_backend_and_stub_adapter_mapping; no real framework/device execution",
+  "verification_level": "jvm_fake_backend_and_101_102_stub_adapter_mapping; no real framework/device execution",
   "oracle": "hook-testing ContractOracle, written from CONTRACT-001 independently of the dispatcher",
-  "command": "gradle -p . :hook-testing:test :sample-java-contracts:run :backend-libxposed-102:testDebugUnitTest :sample-module-102:assembleRelease --no-daemon --console=plain",
+  "command": "gradle -p . :hook-testing:test :sample-java-contracts:run :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease :sample-module-101:assembleRelease :sample-module-102:assembleRelease --no-daemon --console=plain",
   "return_code": 0,
-  "log": "work/evidence/logs/full-build.log",
+  "log": "work/evidence/logs/round2-final-verification.log",
   "totals": {
-    "tests": 59,
+    "tests": 68,
     "failures": 0,
     "skipped": 0
   },
   "sample_java_run": "SAMPLE_OK backend=fake-chain close=CLOSED",
   "suites": [
+    {
+      "suite": "io.github.jichuo1.meguviz.hook.backend.libxposed101.LibXposed101BackendTest",
+      "module": "backend-libxposed-101",
+      "tests": 5,
+      "failures": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "api102OnlyCapabilitiesAreUnsupported",
+          "status": "passed",
+          "time_seconds": 0.007
+        },
+        {
+          "name": "closedRegistrationFallsBackToOriginalExactlyOnce",
+          "status": "passed",
+          "time_seconds": 0.008
+        },
+        {
+          "name": "callbackThrowablePropagatesWithoutRunningOriginal",
+          "status": "passed",
+          "time_seconds": 0.002
+        },
+        {
+          "name": "installForcesPassThroughAndPropagatesPriorityWithout102Id",
+          "status": "passed",
+          "time_seconds": 0.001
+        },
+        {
+          "name": "returnedValueFlowsThroughInterceptor",
+          "status": "passed",
+          "time_seconds": 0.001
+        }
+      ]
+    },
     {
       "suite": "io.github.jichuo1.meguviz.hook.backend.libxposed102.LibXposed102BackendTest",
       "module": "backend-libxposed-102",
@@ -24,7 +62,7 @@
         {
           "name": "closedRegistrationFallsBackToOriginalExactlyOnce",
           "status": "passed",
-          "time_seconds": 0.1
+          "time_seconds": 0.092
         },
         {
           "name": "installForcesPassThroughAndPropagatesIdAndPriority",
@@ -34,7 +72,7 @@
         {
           "name": "callbackThrowablePropagatesWithoutRunningOriginal",
           "status": "passed",
-          "time_seconds": 0.082
+          "time_seconds": 0.002
         },
         {
           "name": "returnedValueFlowsThroughInterceptor",
@@ -53,7 +91,7 @@
         {
           "name": "capacityIsEnforcedAndOverflowCounted",
           "status": "passed",
-          "time_seconds": 0.0
+          "time_seconds": 0.004
         }
       ]
     },
@@ -67,7 +105,7 @@
         {
           "name": "originalThrowableWinsWhenBothFail",
           "status": "passed",
-          "time_seconds": 0.005
+          "time_seconds": 0.01
         },
         {
           "name": "fatalAfterFailureWinsOverOriginalThrowable",
@@ -87,7 +125,7 @@
         {
           "name": "aroundObservesDownstreamThrowableWithoutSwallowingIt",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
           "name": "earlyReturnMatchesOracleAndAfterObservesOutcome",
@@ -102,12 +140,12 @@
         {
           "name": "aroundCanSkipOriginalWithExplicitOutcome",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
           "name": "aroundWithoutOutcomeNeverCallsOriginalImplicitly",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
           "name": "secondProceedIsContractViolationWithoutReplay",
@@ -117,27 +155,27 @@
         {
           "name": "beforeRunsInOrderAndAfterInReverseOrder",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.002
         },
         {
           "name": "originalResultFlowsToAfterAndCanBeReplaced",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
           "name": "beforeThrowsMatchesOracle",
           "status": "passed",
-          "time_seconds": 0.076
+          "time_seconds": 0.001
         },
         {
           "name": "fatalBeforeFailureIsNotConvertedIntoOrdinaryOutcome",
           "status": "passed",
-          "time_seconds": 0.002
+          "time_seconds": 0.07
         },
         {
           "name": "callbackInterfacesStayJavaOnly",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
           "name": "afterFailureAfterSuccessPropagatesWithoutReplay",
@@ -149,22 +187,27 @@
     {
       "suite": "io.github.jichuo1.meguviz.hook.testing.conformance.InstallContractTest",
       "module": "hook-testing",
-      "tests": 17,
+      "tests": 21,
       "failures": 0,
       "skipped": 0,
       "cases": [
         {
           "name": "unsupportedRequiredCapabilityRefusesBeforeInstall",
           "status": "passed",
-          "time_seconds": 0.006
+          "time_seconds": 0.001
         },
         {
           "name": "undeclaredCapabilityAnswersUnknown",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
           "name": "wrongReturnTypeMakesTargetMissing",
+          "status": "passed",
+          "time_seconds": 0.001
+        },
+        {
+          "name": "matchAllInstallsEveryOverloadAndClosesEveryEntry",
           "status": "passed",
           "time_seconds": 0.001
         },
@@ -176,7 +219,7 @@
         {
           "name": "firstPolicyUsesStableSignatureOrder",
           "status": "passed",
-          "time_seconds": 0.002
+          "time_seconds": 0.001
         },
         {
           "name": "sameClassNameInDifferentLoadersBindsDifferentMembers",
@@ -194,29 +237,39 @@
           "time_seconds": 0.001
         },
         {
-          "name": "missingTargetIsReported",
+          "name": "matchAllPartialFailureHasPerTargetReceiptsAndKeepsSuccessfulEntry",
           "status": "passed",
           "time_seconds": 0.0
+        },
+        {
+          "name": "missingTargetIsReported",
+          "status": "passed",
+          "time_seconds": 0.001
         },
         {
           "name": "resolverExcludesBridgeMethods",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
+        },
+        {
+          "name": "matchAllTotalFailurePublishesNoRegistration",
+          "status": "passed",
+          "time_seconds": 0.0
         },
         {
           "name": "closedEnvironmentRefusesNewInstalls",
           "status": "passed",
-          "time_seconds": 0.0
+          "time_seconds": 0.001
         },
         {
           "name": "classicOnlyBackendIsRefusedInsteadOfPretendingEquivalence",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
           "name": "unknownCapabilityIsNeverTreatedAsSupported",
           "status": "passed",
-          "time_seconds": 0.0
+          "time_seconds": 0.001
         },
         {
           "name": "duplicateIdIsIdempotentOnlyForIdenticalSemantics",
@@ -226,17 +279,22 @@
         {
           "name": "backendInstallFailureIsNotReportedAsInstalled",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
-          "name": "matchAllIsExplicitlyRefusedInThisSlice",
+          "name": "retiringGenerationRejectsReplacementUntilCloseCompletes",
           "status": "passed",
-          "time_seconds": 0.0
+          "time_seconds": 0.002
         },
         {
           "name": "epochChangeDuringInstallDiscardsPlan",
           "status": "passed",
           "time_seconds": 0.001
+        },
+        {
+          "name": "matchAllEpochChangeRollsBackUnpublishedEntries",
+          "status": "passed",
+          "time_seconds": 0.0
         }
       ]
     },
@@ -250,7 +308,7 @@
         {
           "name": "entrySnapshotShapeIsRequiredForSnapshotAccess",
           "status": "passed",
-          "time_seconds": 0.002
+          "time_seconds": 0.001
         },
         {
           "name": "argumentWritesAreTypeCheckedBeforeDownstreamRuns",
@@ -270,7 +328,7 @@
         {
           "name": "entrySnapshotKeepsEntrySlotsButSharesObjects",
           "status": "passed",
-          "time_seconds": 0.002
+          "time_seconds": 0.001
         },
         {
           "name": "noArgsNeverMaterializesArguments",
@@ -280,12 +338,12 @@
         {
           "name": "noArgsRejectsArgumentReads",
           "status": "passed",
-          "time_seconds": 0.087
+          "time_seconds": 0.073
         },
         {
           "name": "aroundSupportsArgumentRewriteThroughContinuation",
           "status": "passed",
-          "time_seconds": 0.002
+          "time_seconds": 0.0
         },
         {
           "name": "primitiveResultSlotRejectsNull",
@@ -305,7 +363,7 @@
         {
           "name": "nullIsRejectedForPrimitiveArgument",
           "status": "passed",
-          "time_seconds": 0.0
+          "time_seconds": 0.001
         },
         {
           "name": "wrongResultTypeIsRejectedByAfter",
@@ -315,7 +373,7 @@
         {
           "name": "constructorTargetProceedsWithNullResult",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         }
       ]
     },
@@ -339,17 +397,17 @@
         {
           "name": "concurrentCallsAndCloseNeverReplayOriginal",
           "status": "passed",
-          "time_seconds": 0.088
+          "time_seconds": 0.005
         },
         {
           "name": "invocationExpiresWhenCallbackReturns",
           "status": "passed",
-          "time_seconds": 0.002
+          "time_seconds": 0.001
         },
         {
           "name": "residentCloseIsReportedAsRetiredResident",
           "status": "passed",
-          "time_seconds": 0.001
+          "time_seconds": 0.0
         },
         {
           "name": "borrowedInvocationRejectsOtherThreads",
@@ -365,14 +423,14 @@
     }
   ],
   "not_run": [
+    "real libxposed 101 runtime cells",
     "real libxposed 102 runtime cells",
     "R8 entry loading on device",
     "cross-module priority interleaving",
-    "MatchPolicy.ALL",
     "classic callback backend dispatch",
     "service/native/hot reload",
     "performance A/B"
   ],
-  "final_verification_log": "work/evidence/logs/final-verification.log",
-  "final_verification": "BUILD SUCCESSFUL after packaging and builtInKotlin changes; 59 tests, 0 failures"
+  "final_verification_log": "work/evidence/logs/round2-final-verification.log",
+  "final_verification": "BUILD SUCCESSFUL including both release APK/AAR variants"
 }

@@ -44,6 +44,8 @@ public final class FakeBackend implements HookBackend {
     private final AtomicInteger installCount = new AtomicInteger();
     private boolean residentOnClose;
     private boolean failNextInstall;
+    private boolean failAllInstalls;
+    private boolean bumpEpochOnNextInstall;
 
     private FakeBackend(String backendId, BackendCapabilities capabilities, FakeContext context) {
         this.backendId = backendId;
@@ -88,6 +90,16 @@ public final class FakeBackend implements HookBackend {
 
     public FakeBackend withFailingNextInstall() {
         this.failNextInstall = true;
+        return this;
+    }
+
+    public FakeBackend withFailingAllInstalls() {
+        this.failAllInstalls = true;
+        return this;
+    }
+
+    public FakeBackend withEpochBumpOnNextInstall() {
+        this.bumpEpochOnNextInstall = true;
         return this;
     }
 
@@ -166,13 +178,17 @@ public final class FakeBackend implements HookBackend {
 
     @Override
     public BackendHandle install(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
-        if (failNextInstall) {
+        if (failAllInstalls || failNextInstall) {
             failNextInstall = false;
             throw new BackendInstallException("fake install failure requested by the test");
         }
         installCount.incrementAndGet();
         FakeHook hook = new FakeHook(channel);
         hooks.put(plan.target(), hook);
+        if (bumpEpochOnNextInstall) {
+            bumpEpochOnNextInstall = false;
+            context.epoch++;
+        }
         return () -> {
             hooks.remove(plan.target());
             return new BackendCloseReport(CloseReport.EntryRestoration.RESTORED,

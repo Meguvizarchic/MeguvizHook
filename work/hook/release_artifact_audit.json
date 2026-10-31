@@ -1,56 +1,146 @@
 {
-  "schema_version": 1,
-  "task": "HOOK-003 (102 half)",
+  "schema_version": 2,
+  "task": "HOOK-003",
   "observed_at": "2026-10-31",
+  "verification_level": "release_build_dependency_and_dex_definition_audit; no device execution",
+  "build_log": "work/evidence/logs/round2-android-release.log",
   "built_artifacts": {
-    "backend-libxposed-102-release.aar": {
-      "sha256": "dcb63246b5a0bf0a925124f820600d5238423bd95050382d2f438a132f13a8fb",
-      "built_by": ":backend-libxposed-102:assembleRelease",
-      "log": "work/evidence/logs/android-release.log"
+    "sample-module-101-release-unsigned.apk": {
+      "sha256": "575036673a2edb26926acffda08d662048951107f1175366d7820715d76b3205",
+      "bytes": 23409
+    },
+    "backend-libxposed-101-release.aar": {
+      "sha256": "77db265b45d84c91922be72e98cd8861cd884f1c703806181a17cceefa8999bb",
+      "bytes": 7541
     },
     "sample-module-102-release-unsigned.apk": {
-      "sha256": "12203dfea23ed8a1dd895294ffa617a97d6b63d54b12a06c64a6e4140f2b435c",
-      "built_by": ":sample-module-102:assembleRelease (minifyEnabled=true, R8)",
-      "log": "work/evidence/logs/android-release.log",
-      "signed": false
+      "sha256": "39672b91e2cf503939482ab52cfe7e4c755e69a5332e52d4a80276861dbd2b51",
+      "bytes": 23681
+    },
+    "backend-libxposed-102-release.aar": {
+      "sha256": "dcb63246b5a0bf0a925124f820600d5238423bd95050382d2f438a132f13a8fb",
+      "bytes": 7584
     }
   },
-  "apk_entry_audit": {
-    "entries": [
-      "META-INF/com/android/build/gradle/app-metadata.properties",
-      "META-INF/version-control-info.textproto",
-      "classes.dex",
-      "META-INF/xposed/java_init.list",
-      "META-INF/xposed/module.prop",
-      "META-INF/xposed/scope.list",
-      "AndroidManifest.xml",
-      "resources.arsc"
-    ],
-    "libxposed_class_files_present": false,
-    "native_libraries_present": false,
-    "kotlin_metadata_present_after_excludes": false,
-    "dex_references_xposedmodule_type": true,
-    "interpretation": "the framework type is referenced by module code but no framework class is packaged; compileOnly boundary holds for this artifact"
-  },
-  "dependency_audit": {
-    "configuration": "sample-module-102 releaseRuntimeClasspath",
-    "log": "work/evidence/logs/sample-release-runtime-deps.log",
-    "contains_libxposed": false,
-    "contains_kotlin_stdlib": false,
-    "contains_backend_101": false,
-    "note": "android.builtInKotlin=false removed the AGP-injected kotlin-stdlib from this Java-only variant"
-  },
-  "r8": {
-    "enabled_for_sample_release": true,
-    "entry_keep_rules": "sample-module-102/proguard-rules.pro",
-    "entry_class_present_in_dex": "verified indirectly by packaging and reference checks only; no dex-level reachability analysis tool was run",
-    "device_loading_verified": false
+  "generations": {
+    "101": {
+      "apk_entries": [
+        "META-INF/com/android/build/gradle/app-metadata.properties",
+        "META-INF/version-control-info.textproto",
+        "classes.dex",
+        "META-INF/xposed/java_init.list",
+        "META-INF/xposed/module.prop",
+        "META-INF/xposed/scope.list",
+        "AndroidManifest.xml",
+        "resources.arsc"
+      ],
+      "xposed_metadata": {
+        "module.prop": "minApiVersion=101\ntargetApiVersion=101\nstaticScope=true\nexceptionMode=passthrough",
+        "java_init.list": "io.github.jichuo1.meguviz.hook.sample101.SampleHookEntry",
+        "scope.list": "com.example.host"
+      },
+      "dependency_log": "work/evidence/logs/round2-sample-101-release-runtime-deps.log",
+      "dex_defined_log": "work/evidence/logs/round2-sample-101-dex-defined.log",
+      "defined_class_count": 70,
+      "framework_class_definitions": [],
+      "other_backend_class_definitions": [],
+      "testing_class_definitions": [],
+      "forbidden_102_reference_presence_in_101_dex": {
+        " setId(": false,
+        " replaceHook(": false,
+        "HotReloadingParam": false,
+        "HotReloadedParam": false,
+        "API_102": false,
+        "libxposed102": false
+      },
+      "backend_aar_entries": [
+        "R.txt",
+        "AndroidManifest.xml",
+        "classes.jar",
+        "META-INF/com/android/build/gradle/aar-metadata.properties"
+      ],
+      "backend_aar_framework_entries": [],
+      "checks": {
+        "entry_class_defined_in_dex": true,
+        "entry_metadata_matches_dex": true,
+        "module_prop_targets_own_generation": true,
+        "no_framework_class_definitions_in_dex": true,
+        "no_framework_classes_in_backend_aar": true,
+        "no_other_backend_generation_in_dex": true,
+        "only_selected_backend_in_release_runtime": true,
+        "no_libxposed_in_release_runtime": true,
+        "no_kotlin_stdlib_in_release_runtime": true,
+        "no_testing_classes_in_dex": true,
+        "no_native_libraries": true,
+        "no_kotlin_metadata": true,
+        "no_102_only_metadata_in_101": true,
+        "no_102_only_dex_references_in_101": true
+      },
+      "signed": false,
+      "device_loading_verified": false,
+      "dex_packages_log": "work/evidence/logs/round2-sample-101-dex-packages.log",
+      "reference_audit_note": "apkanalyzer class/method reference rows are authoritative; raw string bytes also contain the capability diagnostic text setId/replaceHook and are not API calls"
+    },
+    "102": {
+      "apk_entries": [
+        "META-INF/com/android/build/gradle/app-metadata.properties",
+        "META-INF/version-control-info.textproto",
+        "classes.dex",
+        "META-INF/xposed/java_init.list",
+        "META-INF/xposed/module.prop",
+        "META-INF/xposed/scope.list",
+        "AndroidManifest.xml",
+        "resources.arsc"
+      ],
+      "xposed_metadata": {
+        "module.prop": "minApiVersion=102\ntargetApiVersion=102\nstaticScope=true\nexceptionMode=passthrough\nautoHotReload=false",
+        "java_init.list": "io.github.jichuo1.meguviz.hook.sample102.SampleHookEntry",
+        "scope.list": "com.example.host"
+      },
+      "dependency_log": "work/evidence/logs/round2-sample-102-release-runtime-deps.log",
+      "dex_defined_log": "work/evidence/logs/round2-sample-102-dex-defined.log",
+      "defined_class_count": 71,
+      "framework_class_definitions": [],
+      "other_backend_class_definitions": [],
+      "testing_class_definitions": [],
+      "forbidden_102_reference_presence_in_101_dex": {},
+      "backend_aar_entries": [
+        "R.txt",
+        "AndroidManifest.xml",
+        "classes.jar",
+        "META-INF/com/android/build/gradle/aar-metadata.properties"
+      ],
+      "backend_aar_framework_entries": [],
+      "checks": {
+        "entry_class_defined_in_dex": true,
+        "entry_metadata_matches_dex": true,
+        "module_prop_targets_own_generation": true,
+        "no_framework_class_definitions_in_dex": true,
+        "no_framework_classes_in_backend_aar": true,
+        "no_other_backend_generation_in_dex": true,
+        "only_selected_backend_in_release_runtime": true,
+        "no_libxposed_in_release_runtime": true,
+        "no_kotlin_stdlib_in_release_runtime": true,
+        "no_testing_classes_in_dex": true,
+        "no_native_libraries": true,
+        "no_kotlin_metadata": true,
+        "no_102_only_metadata_in_101": true,
+        "no_102_only_dex_references_in_101": true
+      },
+      "signed": false,
+      "device_loading_verified": false,
+      "dex_packages_log": "work/evidence/logs/round2-sample-102-dex-packages.log"
+    }
   },
   "not_verified": [
-    "real 102 runtime loading of the sample module",
-    "backend-libxposed-101 artifact and its sample (not implemented)",
-    "dual-generation single-APK bootstrap (explicitly out of scope)",
+    "real 101 runtime loading and execution",
+    "real 102 runtime loading and execution",
+    "R8 entry loading on a device",
+    "real classloader and cross-module priority interleaving",
+    "dual-generation single-APK bootstrap (out of scope)",
     "signed release artifacts",
     "lint/instrumented device cells"
-  ]
+  ],
+  "static_checks_passed": true,
+  "final_verification_log": "work/evidence/logs/round2-final-verification.log"
 }

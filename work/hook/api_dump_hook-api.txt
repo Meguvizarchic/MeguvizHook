@@ -254,6 +254,7 @@ public interface io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation extends i
 Compiled from "RegistrationReceipt.java"
 public final class io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status> {
   public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status INSTALLED;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status PARTIALLY_INSTALLED;
   public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status ALREADY_INSTALLED;
   public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status CONFLICT;
   public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status UNSUPPORTED_CAPABILITY;
@@ -269,6 +270,7 @@ public final class io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status
 Compiled from "RegistrationReceipt.java"
 public final class io.github.jichuo1.meguviz.hook.api.RegistrationReceipt {
   public static io.github.jichuo1.meguviz.hook.api.RegistrationReceipt of(io.github.jichuo1.meguviz.hook.api.HookId, io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status, java.lang.String, long, java.lang.String);
+  public static io.github.jichuo1.meguviz.hook.api.RegistrationReceipt withTargets(io.github.jichuo1.meguviz.hook.api.HookId, io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status, java.lang.String, long, java.lang.String, io.github.jichuo1.meguviz.hook.api.HookRegistration, java.util.List<io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt>);
   public static io.github.jichuo1.meguviz.hook.api.RegistrationReceipt installed(io.github.jichuo1.meguviz.hook.api.HookRegistration, java.lang.String, java.lang.String);
   public io.github.jichuo1.meguviz.hook.api.HookId id();
   public io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status status();
@@ -276,7 +278,9 @@ public final class io.github.jichuo1.meguviz.hook.api.RegistrationReceipt {
   public long generation();
   public java.lang.String message();
   public io.github.jichuo1.meguviz.hook.api.HookRegistration registration();
+  public java.util.List<io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt> targets();
   public boolean isInstalled();
+  public boolean isPartiallyInstalled();
   public java.lang.String toString();
 }
 Compiled from "RegistrationState.java"
@@ -288,6 +292,24 @@ public final class io.github.jichuo1.meguviz.hook.api.RegistrationState extends 
   public static final io.github.jichuo1.meguviz.hook.api.RegistrationState RETIRED_RESIDENT;
   public static io.github.jichuo1.meguviz.hook.api.RegistrationState[] values();
   public static io.github.jichuo1.meguviz.hook.api.RegistrationState valueOf(java.lang.String);
+}
+Compiled from "TargetInstallReceipt.java"
+public final class io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt$Status extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt$Status> {
+  public static final io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt$Status INSTALLED;
+  public static final io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt$Status FAILED;
+  public static final io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt$Status ROLLED_BACK;
+  public static io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt$Status[] values();
+  public static io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt$Status valueOf(java.lang.String);
+}
+Compiled from "TargetInstallReceipt.java"
+public final class io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt {
+  public static io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt installed(java.lang.reflect.Executable);
+  public static io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt failed(java.lang.reflect.Executable, java.lang.String);
+  public static io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt rolledBack(java.lang.reflect.Executable, java.lang.String);
+  public java.lang.reflect.Executable target();
+  public io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt$Status status();
+  public java.lang.String message();
+  public java.lang.String toString();
 }
 Compiled from "TargetKind.java"
 public final class io.github.jichuo1.meguviz.hook.api.TargetKind extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.TargetKind> {

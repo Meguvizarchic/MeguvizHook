@@ -9,13 +9,15 @@
 |---|---|---|
 | `hook-api` | 公开合同类型 | 仅 JDK（Java 8 字节码） |
 | `hook-core` | `HookEnvironment`、安装期 planner、dispatcher、SPI | `hook-api` |
+| `backend-libxposed-101` | libxposed 101 适配（Android library） | api/core + `compileOnly io.github.libxposed:api:101.0.0` |
 | `backend-libxposed-102` | libxposed 102 适配（Android library） | api/core + `compileOnly io.github.libxposed:api:102.0.0` |
 | `hook-testing` | fake backend、独立 oracle、反射 fixtures | api/core |
 | `sample-java-contracts` | 纯 JVM Java 消费样例 | api/core/testing |
-| `sample-module-102` | 手工入口的 102 模块 APK | api/core/backend-102 |
+| `sample-module-101` | 手工 Java 入口的 101 模块 APK | api/core/backend-101 |
+| `sample-module-102` | 手工 Java 入口的 102 模块 APK | api/core/backend-102 |
 
 公开包名：`io.github.jichuo1.meguviz.hook.api`（+`.identity`）、`...core`（含`.spi`）、
-`...backend.libxposed102`、`...testing`。公开签名不出现 libxposed、Binder、JNI、Rust 或其他
+`...backend.libxposed101`、`...backend.libxposed102`、`...testing`。公开签名不出现 libxposed、Binder、JNI、Rust 或其他
 Meguviz 家族类型；框架类型仅存在于 backend 实现内部。
 
 ## 2. 最小 Java 用法
@@ -46,9 +48,15 @@ if (!receipt.isInstalled()) {
 
 ## 3. 结果与回执
 
-`RegistrationReceipt.Status`：`INSTALLED / ALREADY_INSTALLED / CONFLICT / UNSUPPORTED_CAPABILITY /
-AMBIGUOUS_TARGET / TARGET_MISSING / STALE_IDENTITY / FILTERED / TEMPORARILY_UNAVAILABLE / FAILED`。
-只有 `INSTALLED` 携带 `HookRegistration`。`FILTERED` 是进程裁剪的正常结果，不是失败。
+`RegistrationReceipt.Status`：`INSTALLED / PARTIALLY_INSTALLED / ALREADY_INSTALLED / CONFLICT /
+UNSUPPORTED_CAPABILITY / AMBIGUOUS_TARGET / TARGET_MISSING / STALE_IDENTITY / FILTERED /
+TEMPORARILY_UNAVAILABLE / FAILED`。`INSTALLED` 与 `PARTIALLY_INSTALLED` 携带 `HookRegistration`；
+`isInstalled()` 仅对全部目标成功返回 true，部分成功必须显式处理。`FILTERED` 是进程裁剪的正常结果。
+
+`MatchPolicy.ALL` 的 `targets()` 按稳定解析顺序给出每个 `TargetInstallReceipt`：`INSTALLED / FAILED /
+ROLLED_BACK`。普通单项失败保留已成功项并返回 `PARTIALLY_INSTALLED`，不承诺跨目标原子性；全部失败
+返回 `FAILED` 且不发布注册；发布前 epoch 改变会关闭本次已安装项并返回 `STALE_IDENTITY`。
+部分注册再次用同 ID 安装会冲突，须先 close；已关闭代次不会永久阻止新代次安装。
 
 `CloseReport`：状态（`CLOSED` 或 `RETIRED_RESIDENT`）、是否拒绝新回调、入口恢复、在途观察数、
 物理释放（默认 `NOT_CLAIMED`）。`close()` 幂等，不等待宿主调用，不撤销 raw Member。
@@ -70,8 +78,8 @@ AMBIGUOUS_TARGET / TARGET_MISSING / STALE_IDENTITY / FILTERED / TEMPORARILY_UNAV
 ## 6. 本切片明确拒绝的形状
 
 - `ChainSemantics` 非 `FRAMEWORK_CHAIN` 的 backend（classic/local-only）→ `UNSUPPORTED_CAPABILITY`。
-- `MatchPolicy.ALL` → `UNSUPPORTED_CAPABILITY`（后续任务实现逐项回执）。
 - 必需能力为 `UNSUPPORTED` 或 `UNKNOWN`（含未声明）→ `UNSUPPORTED_CAPABILITY`，UNKNOWN 不视为支持。
+- 101 backend 的 `ATOMIC_REPLACE` 与 `HOT_RELOAD` 明确为 UNSUPPORTED，不引用 102 专有 API。
 
 ## 7. API dump
 

@@ -1,0 +1,391 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as no cached configuration is available for tasks: :hook-testing:test :sample-java-contracts:run :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease :sample-module-101:assembleRelease :sample-module-102:assembleRelease
+
+> Configure project :backend-libxposed-101
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+
+> Task :sample-module-101:generateReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-102:preBuild UP-TO-DATE
+> Task :backend-libxposed-101:generateReleaseAssets UP-TO-DATE
+> Task :sample-module-101:preBuild UP-TO-DATE
+> Task :sample-module-102:generateReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-101:preBuild UP-TO-DATE
+> Task :sample-module-102:preBuild UP-TO-DATE
+> Task :backend-libxposed-102:generateReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-102:preReleaseBuild UP-TO-DATE
+> Task :backend-libxposed-102:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-102:preDebugBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugBuild UP-TO-DATE
+> Task :backend-libxposed-101:preReleaseBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugUnitTestBuild UP-TO-DATE
+> Task :sample-module-102:preReleaseBuild UP-TO-DATE
+> Task :backend-libxposed-102:processReleaseJavaRes NO-SOURCE
+> Task :backend-libxposed-101:processDebugJavaRes NO-SOURCE
+> Task :hook-api:processResources NO-SOURCE
+> Task :hook-testing:processResources NO-SOURCE
+> Task :backend-libxposed-101:processDebugUnitTestJavaRes NO-SOURCE
+> Task :hook-testing:processTestResources NO-SOURCE
+> Task :hook-core:processResources NO-SOURCE
+> Task :sample-java-contracts:processResources NO-SOURCE
+> Task :backend-libxposed-101:processReleaseJavaRes NO-SOURCE
+> Task :backend-libxposed-102:processDebugUnitTestJavaRes NO-SOURCE
+> Task :backend-libxposed-102:processDebugJavaRes NO-SOURCE
+> Task :backend-libxposed-102:prepareLintJarForPublish UP-TO-DATE
+> Task :backend-libxposed-102:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :backend-libxposed-101:prepareReleaseArtProfile UP-TO-DATE
+> Task :backend-libxposed-101:prepareLintJarForPublish UP-TO-DATE
+> Task :backend-libxposed-101:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :backend-libxposed-101:writeReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugResources UP-TO-DATE
+> Task :backend-libxposed-102:javaPreCompileDebug UP-TO-DATE
+> Task :backend-libxposed-102:processReleaseNavigationResources UP-TO-DATE
+> Task :backend-libxposed-102:processDebugNavigationResources UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugResources UP-TO-DATE
+> Task :backend-libxposed-101:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseAssets UP-TO-DATE
+> Task :sample-module-102:processReleaseJavaRes UP-TO-DATE
+> Task :backend-libxposed-102:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :backend-libxposed-102:generateReleaseResources UP-TO-DATE
+> Task :backend-libxposed-102:extractProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :backend-libxposed-101:generateReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:javaPreCompileRelease UP-TO-DATE
+> Task :backend-libxposed-101:checkReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-102:checkReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-101:javaPreCompileDebug UP-TO-DATE
+> Task :backend-libxposed-101:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseAssets UP-TO-DATE
+> Task :sample-module-101:processReleaseJavaRes UP-TO-DATE
+> Task :backend-libxposed-101:processReleaseNavigationResources UP-TO-DATE
+> Task :backend-libxposed-101:processDebugNavigationResources UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseJavaResource UP-TO-DATE
+> Task :backend-libxposed-101:processReleaseManifest UP-TO-DATE
+> Task :hook-api:compileJava UP-TO-DATE
+> Task :sample-module-101:preReleaseBuild UP-TO-DATE
+> Task :backend-libxposed-102:javaPreCompileRelease UP-TO-DATE
+> Task :backend-libxposed-102:prepareReleaseArtProfile UP-TO-DATE
+> Task :backend-libxposed-101:extractDeepLinksRelease UP-TO-DATE
+> Task :backend-libxposed-102:processReleaseManifest UP-TO-DATE
+> Task :sample-module-101:extractProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:extractProguardFiles UP-TO-DATE
+> Task :sample-module-102:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :sample-module-102:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :backend-libxposed-101:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :sample-module-102:extractProguardFiles UP-TO-DATE
+> Task :hook-api:classes UP-TO-DATE
+> Task :backend-libxposed-102:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :sample-module-102:generateReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseNativeLibs NO-SOURCE
+> Task :backend-libxposed-102:mergeReleaseNativeLibs NO-SOURCE
+> Task :backend-libxposed-101:mergeReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:packageReleaseResources UP-TO-DATE
+> Task :backend-libxposed-102:packageReleaseResources UP-TO-DATE
+> Task :sample-module-101:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :backend-libxposed-102:writeReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-102:packageDebugResources UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseJavaResource UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseResources UP-TO-DATE
+> Task :sample-module-101:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :sample-module-101:generateReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:packageDebugResources UP-TO-DATE
+> Task :sample-module-101:javaPreCompileRelease UP-TO-DATE
+> Task :sample-module-101:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :sample-module-101:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :sample-module-101:mergeReleaseStartupProfile UP-TO-DATE
+> Task :sample-module-101:mergeReleaseArtProfile UP-TO-DATE
+> Task :sample-module-101:checkReleaseAarMetadata UP-TO-DATE
+> Task :sample-module-101:processReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-102:javaPreCompileRelease UP-TO-DATE
+> Task :sample-module-102:processReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-101:writeReleaseSigningConfigVersions UP-TO-DATE
+> Task :sample-module-101:writeReleaseAppMetadata UP-TO-DATE
+> Task :sample-module-102:mergeReleaseArtProfile UP-TO-DATE
+> Task :sample-module-102:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :sample-module-102:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :backend-libxposed-101:compileReleaseLibraryResources UP-TO-DATE
+> Task :sample-module-102:packageReleaseResources UP-TO-DATE
+> Task :sample-module-101:extractDeepLinksRelease UP-TO-DATE
+> Task :backend-libxposed-102:extractDeepLinksRelease UP-TO-DATE
+> Task :backend-libxposed-102:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :sample-module-101:mergeReleaseAssets UP-TO-DATE
+> Task :sample-module-102:extractDeepLinksRelease UP-TO-DATE
+> Task :sample-module-101:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :backend-libxposed-102:compileReleaseLibraryResources UP-TO-DATE
+> Task :sample-module-101:collectReleaseDependencies UP-TO-DATE
+> Task :sample-module-101:compileReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-101:packageReleaseResources UP-TO-DATE
+> Task :backend-libxposed-101:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :backend-libxposed-101:stripReleaseDebugSymbols NO-SOURCE
+> Task :backend-libxposed-102:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-101:compressReleaseAssets UP-TO-DATE
+> Task :sample-module-102:mergeReleaseStartupProfile UP-TO-DATE
+> Task :sample-module-102:compileReleaseNavigationResources UP-TO-DATE
+> Task :sample-module-102:mergeReleaseAssets UP-TO-DATE
+> Task :sample-module-102:writeReleaseAppMetadata UP-TO-DATE
+> Task :hook-api:jar UP-TO-DATE
+> Task :sample-module-101:sdkReleaseDependencyData UP-TO-DATE
+> Task :sample-module-102:checkReleaseAarMetadata UP-TO-DATE
+> Task :backend-libxposed-102:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :backend-libxposed-101:parseDebugLocalResources UP-TO-DATE
+> Task :backend-libxposed-102:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :backend-libxposed-101:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :backend-libxposed-102:parseDebugLocalResources UP-TO-DATE
+> Task :backend-libxposed-101:parseReleaseLocalResources UP-TO-DATE
+> Task :sample-module-102:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :backend-libxposed-102:parseReleaseLocalResources UP-TO-DATE
+> Task :sample-module-101:mergeReleaseResources UP-TO-DATE
+> Task :sample-module-102:compressReleaseAssets UP-TO-DATE
+> Task :sample-module-102:writeReleaseSigningConfigVersions UP-TO-DATE
+> Task :sample-module-102:collectReleaseDependencies UP-TO-DATE
+> Task :sample-module-102:mergeReleaseResources UP-TO-DATE
+> Task :sample-module-101:processReleaseMainManifest UP-TO-DATE
+> Task :sample-module-102:parseReleaseLocalResources UP-TO-DATE
+> Task :sample-module-102:processReleaseMainManifest UP-TO-DATE
+> Task :sample-module-101:parseReleaseLocalResources UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugRFile UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugRFile UP-TO-DATE
+> Task :sample-module-101:processReleaseManifest UP-TO-DATE
+> Task :sample-module-102:sdkReleaseDependencyData UP-TO-DATE
+> Task :sample-module-102:processReleaseManifest UP-TO-DATE
+> Task :backend-libxposed-101:generateReleaseRFile UP-TO-DATE
+> Task :sample-module-102:generateReleaseRFile UP-TO-DATE
+> Task :backend-libxposed-102:verifyReleaseResources UP-TO-DATE
+> Task :backend-libxposed-102:generateReleaseRFile UP-TO-DATE
+> Task :backend-libxposed-101:verifyReleaseResources UP-TO-DATE
+> Task :sample-module-101:generateReleaseRFile UP-TO-DATE
+> Task :sample-module-101:processReleaseManifestForPackage UP-TO-DATE
+> Task :sample-module-102:processReleaseManifestForPackage UP-TO-DATE
+> Task :backend-libxposed-102:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :backend-libxposed-101:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :sample-module-102:processReleaseResources UP-TO-DATE
+> Task :sample-module-101:processReleaseResources UP-TO-DATE
+> Task :sample-module-101:optimizeReleaseResources UP-TO-DATE
+> Task :sample-module-102:optimizeReleaseResources UP-TO-DATE
+> Task :hook-core:compileJava
+> Task :hook-core:classes
+> Task :hook-testing:compileJava UP-TO-DATE
+> Task :hook-testing:classes UP-TO-DATE
+> Task :hook-testing:jar UP-TO-DATE
+> Task :sample-java-contracts:compileJava UP-TO-DATE
+> Task :sample-java-contracts:classes UP-TO-DATE
+> Task :hook-core:jar
+> Task :sample-module-102:mergeReleaseNativeLibs NO-SOURCE
+> Task :sample-module-101:mergeReleaseNativeLibs NO-SOURCE
+> Task :sample-module-101:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-102:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-102:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :sample-module-101:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :sample-module-102:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :sample-module-101:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :backend-libxposed-101:compileDebugJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-101:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:compileDebugJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :backend-libxposed-102:extractReleaseAnnotations UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:extractReleaseAnnotations UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :backend-libxposed-102:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :backend-libxposed-102:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :backend-libxposed-102:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :backend-libxposed-101:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :backend-libxposed-102:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-102:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :backend-libxposed-102:syncReleaseLibJars UP-TO-DATE
+> Task :backend-libxposed-102:createFullJarRelease UP-TO-DATE
+> Task :backend-libxposed-101:syncReleaseLibJars UP-TO-DATE
+> Task :backend-libxposed-101:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:createFullJarRelease UP-TO-DATE
+> Task :backend-libxposed-102:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :backend-libxposed-101:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :backend-libxposed-102:bundleReleaseAar UP-TO-DATE
+> Task :backend-libxposed-101:bundleReleaseAar UP-TO-DATE
+> Task :sample-module-102:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :backend-libxposed-101:assembleRelease UP-TO-DATE
+> Task :sample-module-101:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-101:compileDebugUnitTestJavaWithJavac UP-TO-DATE
+> Task :backend-libxposed-102:compileDebugUnitTestJavaWithJavac UP-TO-DATE
+> Task :sample-module-102:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :backend-libxposed-102:assembleRelease UP-TO-DATE
+> Task :sample-module-101:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :sample-module-102:expandReleaseArtProfileWildcards
+> Task :sample-module-101:expandReleaseArtProfileWildcards
+
+> Task :sample-java-contracts:run
+install mutable: RegistrationReceipt[sample.java.mutable INSTALLED backend=fake-chain generation=1 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+install early: RegistrationReceipt[sample.java.early INSTALLED backend=fake-chain generation=2 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+SAMPLE_OK backend=fake-chain close=CLOSED
+
+> Task :backend-libxposed-102:generateReleaseLintModel
+> Task :backend-libxposed-102:generateReleaseLintVitalModel
+> Task :backend-libxposed-101:generateReleaseLintVitalModel
+> Task :backend-libxposed-101:generateReleaseLintModel
+> Task :sample-module-102:generateReleaseLintVitalReportModel
+> Task :sample-module-101:generateReleaseLintVitalReportModel
+> Task :sample-module-102:mergeReleaseJavaResource
+> Task :sample-module-101:mergeReleaseJavaResource
+> Task :hook-testing:compileTestJava
+> Task :hook-testing:testClasses
+
+> Task :hook-testing:test
+
+BoundedDiagnosticsTest > capacityIsEnforcedAndOverflowCounted PASSED
+
+CallbackStateMachineTest > originalThrowableWinsWhenBothFail PASSED
+
+CallbackStateMachineTest > fatalAfterFailureWinsOverOriginalThrowable PASSED
+
+CallbackStateMachineTest > aroundFailureAfterProceedDoesNotReplayOriginal PASSED
+
+CallbackStateMachineTest > originalThrowableIdentityIsPreserved PASSED
+
+CallbackStateMachineTest > aroundObservesDownstreamThrowableWithoutSwallowingIt PASSED
+
+CallbackStateMachineTest > earlyReturnMatchesOracleAndAfterObservesOutcome PASSED
+
+CallbackStateMachineTest > aroundProceedsOnceAndReturnsDownstreamValue PASSED
+
+CallbackStateMachineTest > aroundCanSkipOriginalWithExplicitOutcome PASSED
+
+CallbackStateMachineTest > aroundWithoutOutcomeNeverCallsOriginalImplicitly PASSED
+
+CallbackStateMachineTest > secondProceedIsContractViolationWithoutReplay PASSED
+
+CallbackStateMachineTest > beforeRunsInOrderAndAfterInReverseOrder PASSED
+
+CallbackStateMachineTest > originalResultFlowsToAfterAndCanBeReplaced PASSED
+
+CallbackStateMachineTest > beforeThrowsMatchesOracle PASSED
+
+CallbackStateMachineTest > fatalBeforeFailureIsNotConvertedIntoOrdinaryOutcome PASSED
+
+CallbackStateMachineTest > callbackInterfacesStayJavaOnly PASSED
+
+CallbackStateMachineTest > afterFailureAfterSuccessPropagatesWithoutReplay PASSED
+
+InstallContractTest > unsupportedRequiredCapabilityRefusesBeforeInstall PASSED
+
+InstallContractTest > undeclaredCapabilityAnswersUnknown PASSED
+
+InstallContractTest > wrongReturnTypeMakesTargetMissing PASSED
+
+InstallContractTest > matchAllInstallsEveryOverloadAndClosesEveryEntry PASSED
+
+InstallContractTest > processPruningHappensBeforeInstall PASSED
+
+InstallContractTest > firstPolicyUsesStableSignatureOrder PASSED
+
+InstallContractTest > sameClassNameInDifferentLoadersBindsDifferentMembers PASSED
+
+InstallContractTest > ambiguousOverloadIsRejectedUnderUnique PASSED
+
+InstallContractTest > staticReturnCheckNarrowsOverloads PASSED
+
+InstallContractTest > matchAllPartialFailureHasPerTargetReceiptsAndKeepsSuccessfulEntry PASSED
+
+InstallContractTest > missingTargetIsReported PASSED
+
+InstallContractTest > resolverExcludesBridgeMethods PASSED
+
+InstallContractTest > matchAllTotalFailurePublishesNoRegistration PASSED
+
+InstallContractTest > closedEnvironmentRefusesNewInstalls PASSED
+
+InstallContractTest > classicOnlyBackendIsRefusedInsteadOfPretendingEquivalence PASSED
+
+InstallContractTest > unknownCapabilityIsNeverTreatedAsSupported PASSED
+
+InstallContractTest > duplicateIdIsIdempotentOnlyForIdenticalSemantics PASSED
+
+InstallContractTest > backendInstallFailureIsNotReportedAsInstalled PASSED
+
+InstallContractTest > retiringGenerationRejectsReplacementUntilCloseCompletes PASSED
+
+InstallContractTest > epochChangeDuringInstallDiscardsPlan PASSED
+
+InstallContractTest > matchAllEpochChangeRollsBackUnpublishedEntries PASSED
+
+ParameterShapeTest > entrySnapshotShapeIsRequiredForSnapshotAccess PASSED
+
+ParameterShapeTest > argumentWritesAreTypeCheckedBeforeDownstreamRuns PASSED
+
+ParameterShapeTest > nullableReferenceResultIsAllowed PASSED
+
+ParameterShapeTest > mutableArgsWriteReachesDownstream PASSED
+
+ParameterShapeTest > entrySnapshotKeepsEntrySlotsButSharesObjects PASSED
+
+ParameterShapeTest > noArgsNeverMaterializesArguments PASSED
+
+ParameterShapeTest > noArgsRejectsArgumentReads PASSED
+
+ParameterShapeTest > aroundSupportsArgumentRewriteThroughContinuation PASSED
+
+ParameterShapeTest > primitiveResultSlotRejectsNull PASSED
+
+ParameterShapeTest > voidTargetOnlyAcceptsNullResult PASSED
+
+ParameterShapeTest > readArgsExposesSlotsAndTypes PASSED
+
+ParameterShapeTest > nullIsRejectedForPrimitiveArgument PASSED
+
+ParameterShapeTest > wrongResultTypeIsRejectedByAfter PASSED
+
+ParameterShapeTest > constructorTargetProceedsWithNullResult PASSED
+
+ReentryAndLifetimeTest > reentrantCallsOwnIndependentFrames PASSED
+
+ReentryAndLifetimeTest > closeDuringInflightCallReportsLeaseAndCompletesOnOldPlan PASSED
+
+ReentryAndLifetimeTest > concurrentCallsAndCloseNeverReplayOriginal PASSED
+
+ReentryAndLifetimeTest > invocationExpiresWhenCallbackReturns PASSED
+
+ReentryAndLifetimeTest > residentCloseIsReportedAsRetiredResident PASSED
+
+ReentryAndLifetimeTest > borrowedInvocationRejectsOtherThreads PASSED
+
+ReentryAndLifetimeTest > closeRejectsNewCallbacksButRunsOriginalOnce PASSED
+
+> Task :backend-libxposed-102:testDebugUnitTest
+> Task :backend-libxposed-101:testDebugUnitTest
+> Task :sample-module-102:minifyReleaseWithR8
+> Task :sample-module-102:compileReleaseArtProfile
+> Task :sample-module-101:minifyReleaseWithR8
+> Task :sample-module-101:compileReleaseArtProfile
+> Task :backend-libxposed-101:lintVitalAnalyzeRelease
+> Task :backend-libxposed-102:lintVitalAnalyzeRelease
+> Task :sample-module-101:lintVitalAnalyzeRelease
+> Task :sample-module-102:lintVitalAnalyzeRelease
+> Task :sample-module-101:lintVitalReportRelease UP-TO-DATE
+> Task :sample-module-102:lintVitalReportRelease UP-TO-DATE
+> Task :sample-module-101:lintVitalRelease
+> Task :sample-module-102:lintVitalRelease
+> Task :sample-module-101:packageRelease
+> Task :sample-module-102:packageRelease
+> Task :sample-module-101:assembleRelease
+> Task :sample-module-102:assembleRelease
+> Task :sample-module-101:createReleaseApkListingFileRedirect UP-TO-DATE
+> Task :sample-module-102:createReleaseApkListingFileRedirect UP-TO-DATE
+
+[Incubating] Problems report is available at: <repository>/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 27s
+196 actionable tasks: 29 executed, 167 up-to-date
+Configuration cache entry stored.

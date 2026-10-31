@@ -12,7 +12,7 @@
 | Android platform | `platforms;android-37.0`，ApiLevel=37.0，revision 2 | `source.properties` |
 | Build tools | 37.0.0 | SDK 安装记录 |
 | Kotlin | 未使用；`android.builtInKotlin=false` | 运行时依赖图无 kotlin-stdlib |
-| libxposed api | 102.0.0（compileOnly / testImplementation） | AAR SHA-256 见 baseline_inventory.json |
+| libxposed api | 102.0.0（BIL 默认）+ 101.0.0（独立 backend）；均 compileOnly / 对应 stub 测试 | AAR SHA-256 见 baseline_inventory.json / baseline.json |
 | NDK/Rust/KSP | 未选择，未安装要求 | 无对应模块 |
 | 设备/模拟器 | 无 | 设备 cell 全部 not_run |
 
@@ -27,6 +27,25 @@ gradle -p . :backend-libxposed-102:assembleRelease \
 gradle -p . :sample-module-102:dependencies \
     --configuration releaseRuntimeClasspath                                      -> rc=0，无 libxposed/kotlin-stdlib
 javap -public -cp <module jar> <each public class>                               -> work/hook/api_dump_hook-{api,core}.txt
+
+# 第二轮
+gradle -p . :hook-testing:test :sample-java-contracts:run \
+    :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest \
+    --no-daemon --console=plain                                                   -> rc=0，67 tests，0 failure
+# 加入 RETIRING 并发夹具后的最终复跑（另含双代 assembleRelease）
+gradle -p . :hook-testing:test :sample-java-contracts:run \
+    :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest \
+    :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease \
+    :sample-module-101:assembleRelease :sample-module-102:assembleRelease \
+    --no-daemon --console=plain                                                   -> rc=0，68 tests，0 failure
+gradle -p . :backend-libxposed-101:assembleRelease \
+    :backend-libxposed-102:assembleRelease :sample-module-101:assembleRelease \
+    :sample-module-102:assembleRelease --no-daemon --console=plain               -> rc=0，双 AAR/APK
+gradle -p . :sample-module-101:dependencies \
+    --configuration releaseRuntimeClasspath                                      -> rc=0，仅 backend-101
+gradle -p . :sample-module-102:dependencies \
+    --configuration releaseRuntimeClasspath                                      -> rc=0，仅 backend-102
+apkanalyzer dex packages [--defined-only] <101/102 release APK>                  -> DEX 定义/引用审计通过
 ```
 
 日志：`work/evidence/logs/`。首次失败记录（wrapper 下载超时、Kotlin DSL 扩展、ThreadDeath lint、
@@ -47,4 +66,8 @@ javap -public -cp <module jar> <each public class>                              
 - JDK 20 vs BIL CI 27：字节码目标（api/core=8，Android=17）已固定，但 JDK 27 的编译/R8 一致性未验证。
 - AGP 内建 Kotlin 默认注入 `kotlin-stdlib` 与 `kotlin/**` 元数据：本 Java-only 切片用
   `android.builtInKotlin=false` + packaging excludes 消除，已复查依赖图与 APK 条目。
-- 未执行：`lint`、instrumented test、签名打包、真实框架装载。
+- 第二轮纠正：真实 101 源码同样是 Hooker/Chain，不新增 classic SPI；101 不使用 102 的 setId/replaceHook。
+- 一次依赖报告把 `--configuration` 与两个 dependencies task 同用，导致其中一个输出全配置；已拆成
+  `round2-sample-101-release-runtime-deps.log` 与 `round2-sample-102-release-runtime-deps.log` 重新核实。
+- DEX 原始字节包含诊断文案 setId/replaceHook，曾被宽扫描误报；最终以 apkanalyzer 方法/类引用表为准。
+- 未执行：`lint`、instrumented test、签名打包、真实 101/102 框架装载。

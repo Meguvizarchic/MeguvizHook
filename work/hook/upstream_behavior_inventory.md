@@ -1,48 +1,48 @@
-# 上游行为盘点（HOOK-001，源码级事实）
+# 上游行为盘点（HOOK-001 / HOOK-003，源码级事实）
 
-证据来源：实际下载的 `io.github.libxposed:api:102.0.0` AAR 与 sources jar（SHA-256 见
+证据来源：实际下载的 `io.github.libxposed:api:101.0.0` 与 `102.0.0` AAR/sources jar（SHA-256 见
 `baseline_inventory.json`），不是凭记忆或研究快照。运行时/设备行为一律标记未验证。
 
-## 1. libxposed API 102.0.0（`XposedInterface`）
+## 1. 101 与 102 的共同链模型
 
-| 事实（源码位置） | 对本 SDK 的约束 |
+| 事实（真实 `XposedInterface` 源码） | 对本 SDK 的约束 |
 |---|---|
-| `hook(Executable)` 返回 `HookBuilder`，`intercept(Hooker)` 安装并返回 `HookHandle` | backend 的安装入口；真实拦截由框架完成 |
-| `Hooker.intercept(Chain)` 返回 Object 并可 `throws Throwable`；`Chain.proceed()/proceed(args)/proceedWith(...)` | 属 FRAMEWORK_CHAIN；core 的 proceed 直接映射 continuation |
-| `Chain.getArgs()` 返回**不可变** List，改参需 `proceed(newArgs)` | `arguments()` 用 `toArray()`；MUTABLE_ARGS 通过 proceed 写回 |
-| `Chain` 不可跨线程共享，`intercept` 结束后不可重用 | 与借用/有效期合同一致，core 强制检查 |
-| `ExceptionMode` 默认 `DEFAULT`，回落到 `module.prop`，未指定为 `PROTECTIVE`：hooker 异常被记录并“当作无 hook 继续”；proceed 抛出的异常总是传播 | **PROPAGATE 必须显式 `PASSTHROUGH`**，不能依赖 module.prop；否则 before/after 失败会被吞 |
-| `HookBuilder.setId`（SinceApi 102）：同模块同 target 同 id 原子替换；hook id 模块间隔离 | 与 logicalId 冲突语义兼容；本切片未实现 replace，能力仅声明到“102 提供” |
-| `HookHandle.unhook()` 幂等；`replaceHook`（102）保留 executable/priority/异常模式/id | close 映射 unhook；replacement 留待后续任务 |
-| 102 hook chain 是 snapshot based：替换/新增不影响在途调用 | 与 core 的不可变 plan 代次语义一致 |
-| `HookFailedError extends XposedFrameworkError extends Error`，上游明确“不应捕获用于 fallback” | adapter 不把它转成 receipt，不伪装可恢复安装失败 |
-| `getApiVersion()` 默认返回库静态 `LIB_API=102`，注释要求框架实现不得覆盖 | 该值是**库版本**，不是运行时能力证据；能力声明标注 device_cell=not_verified |
-| `getFrameworkName/Version/VersionCode/Properties` 提供实现身份 | 仅用于能力 cell 描述，不用作能力推断 |
-| `hookClassInitializer`、`deoptimize`、`getInvoker`（Origin/Chain 调用）、`log`、remote preferences/files | 本切片未使用；不是默认路径依赖 |
+| 两代均有 `hook(Executable)`、`HookBuilder.intercept(Hooker)`、`Hooker.intercept(Chain)` | 101 与 102 都是 FRAMEWORK_CHAIN；**101 不是 classic before/after 模型** |
+| `Chain.proceed()/proceed(args)/proceedWith(...)` | core 的 proceed 直接映射框架 continuation |
+| `Chain.getArgs()` 返回不可变 List，改参需 `proceed(newArgs)` | adapter 用 `toArray()`；MUTABLE_ARGS 通过 proceed 写回 |
+| `Chain` 不可跨线程共享，`intercept` 结束后不可重用 | 与 core 的借用/有效期检查一致 |
+| `ExceptionMode.DEFAULT` 回落到 `module.prop`，未指定为 `PROTECTIVE`；hooker 失败可能被吞 | 两个 adapter 都对 PROPAGATE 显式设置 `PASSTHROUGH` |
+| `HookHandle.unhook()` 幂等 | close 映射 unhook；设备上的实际恢复仍未验证 |
+| `HookFailedError` 是 framework-internal Error，上游禁止捕获用于 fallback | adapter 不把它伪装成可恢复 receipt |
 
-## 2. 模块入口 ABI（102）
+## 2. 实际代际差异
 
-- 入口类继承 `XposedModule`（实现 `XposedModuleInterface`），每个模块代次实例化一次。
-- 生命周期：`onModuleLoaded` / `onPackageLoaded`(Q+) / `onPackageReady` / `onSystemServerStarting`；
-  `PackageReadyParam.getClassLoader()` 是实际 loader（可不同于 default loader）。
-- 热重载（102 可选）：`onHotReloading` 默认 false；`onHotReloaded` 默认 unhook 全部旧 handle；
-  框架不做 `UnregisterNatives`/`JNI_OnUnload`/`dlclose`，旧代 classloader 回收不保证。
-  本切片 `autoHotReload=false`，不实现热重载，能力报 UNKNOWN。
-- 入口 metadata（BIL 实际 102 消费布局，只读核对）：
-  `src/main/resources/META-INF/xposed/module.prop`（`minApiVersion/targetApiVersion/staticScope/
-  exceptionMode/autoHotReload`）、`java_init.list`（入口 FQCN）、`scope.list`（目标包名）。
-  sample 采用相同布局；`native_init.list` 仅在显式选择 native 时才应出现，本切片没有。
+| 能力 | 101.0.0 | 102.0.0 | 适配决策 |
+|---|---|---|---|
+| `LIB_API` / 版本常量 | `LIB_API=101`，无 `API_102` | `API_101/API_102`，`LIB_API=102` | 101 adapter 不引用 102 常量 |
+| `HookBuilder.setId` | 不存在 | SinceApi 102 | 101 不调用；102 用 logicalId 设置 hook id |
+| `HookHandle.replaceHook` | 不存在 | SinceApi 102，支持原子替换 | 101 ATOMIC_REPLACE=UNSUPPORTED；102 仅声明源码能力，尚未实现替换流程 |
+| 热重载入口 | 无 `HotReloadingParam/HotReloadedParam` | 有完整热重载生命周期 | 101 HOT_RELOAD=UNSUPPORTED；102 本切片 UNKNOWN，sample 关闭 |
+| 模块实例 | 每进程一次 | 每模块代次一次 | 101 sample 无 hot-reload metadata；102 明确 `autoHotReload=false` |
+| hook chain snapshot | 102 源码明确说明替换/新增不影响在途调用 | 同左 | core 自身不可变 plan 提供本 SDK 内的代次保证；不把 101 设备行为推断为已验证 |
 
-## 3. 与 BIL 的对齐边界
+两代 `XposedModule`/`XposedModuleInterface` 的 `onPackageReady` 与实际 package loader 都可用于手工入口。
+`getApiVersion()` 默认返回库静态版本，不等于运行时能力探测；能力 cell 均标 `device_cell=not_verified`。
 
-- 跟随版本：Gradle 9.8.2（含 wrapper SHA-256）、AGP 9.4.1、libxposed 102.0.0、compileSdk 37 /
-  minSdk 27 / targetSdk 37、Java 17（Android 模块）、JUnit 4.13.2。
-- BIL `module.prop` 用 `exceptionMode=protective`，属其自身模块选择；本 sample 用 `passthrough`，
-  因为本 SDK 的默认错误策略是 PROPAGATE，且 adapter 在代码中显式设置，不读模块元数据。
+## 3. 入口 metadata 与 BIL 对齐
+
+- BIL 的 102 消费布局只读核对为 `META-INF/xposed/module.prop`、`java_init.list`、`scope.list`。
+- `sample-module-102` 使用 `minApiVersion/targetApiVersion=102`、`exceptionMode=passthrough`、
+  `autoHotReload=false`；`sample-module-101` 使用 101 对应值且不写 102 专有 hot-reload 配置。
+- 两个 sample 都是独立 APK；没有单 APK 双代 bootstrap，也没有 `native_init.list` 或 `.so`。
+- 跟随 BIL：Gradle 9.8.2（含 wrapper SHA-256）、AGP 9.4.1、102.0.0、compileSdk 37 /
+  minSdk 27 / targetSdk 37、Android Java 17、JUnit 4.13.2。101 是额外独立 backend 版本空间，
+  不改变 BIL 的 102 默认对齐。
 - BIL 的 lazy args、常量快路、配置 snapshot、native 池等属于其既有基线，不记为本 SDK 收益；
-  本切片不复制其业务代码、不创建其开发任务。
+  本项目不复制其业务代码、不创建其开发任务。
 
 ## 4. 未验证范围
 
-真实 102 运行时装载、R8 后入口可达性、真实类加载/优先级交错、unhook 的实际入口恢复、
-API101 行为、service 行为：均 not_run / unavailable，不由上述源码事实推断通过。
+真实 101/102 运行时装载、R8 后设备入口可达性、真实类加载/优先级交错、unhook 的实际入口恢复、
+service、热重载和性能行为均 not_run / unavailable。DEX 定义审计与 stub 测试只证明构建和映射，
+不能替代上述设备证据。

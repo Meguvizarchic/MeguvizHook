@@ -1,0 +1,1149 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Calculating task graph as configuration cache cannot be reused because file 'settings.gradle.kts' has changed.
+
+> Configure project :backend-libxposed-101
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+
+> Task :tasks
+
+------------------------------------------------------------
+Tasks runnable from root project 'MeguvizHook'
+------------------------------------------------------------
+
+Android tasks
+-------------
+backend-libxposed-101:signingReport - Displays the signing info for the base and test modules
+backend-libxposed-102:signingReport - Displays the signing info for the base and test modules
+sample-module-101:signingReport - Displays the signing info for the base and test modules
+sample-module-102:signingReport - Displays the signing info for the base and test modules
+
+Application tasks
+-----------------
+sample-java-contracts:run - Runs this project as a JVM application
+
+Build tasks
+-----------
+backend-libxposed-101:assemble - Assemble main outputs for all the variants.
+backend-libxposed-102:assemble - Assemble main outputs for all the variants.
+hook-api:assemble - Assembles the outputs of this project.
+hook-core:assemble - Assembles the outputs of this project.
+hook-testing:assemble - Assembles the outputs of this project.
+sample-java-contracts:assemble - Assembles the outputs of this project.
+sample-module-101:assemble - Assemble main outputs for all the variants.
+sample-module-102:assemble - Assemble main outputs for all the variants.
+backend-libxposed-101:assembleAndroidTest - Assembles all the Test applications.
+backend-libxposed-102:assembleAndroidTest - Assembles all the Test applications.
+sample-module-101:assembleAndroidTest - Assembles all the Test applications.
+sample-module-102:assembleAndroidTest - Assembles all the Test applications.
+backend-libxposed-101:assembleUnitTest - Assembles all the unit test applications.
+backend-libxposed-102:assembleUnitTest - Assembles all the unit test applications.
+sample-module-101:assembleUnitTest - Assembles all the unit test applications.
+sample-module-102:assembleUnitTest - Assembles all the unit test applications.
+backend-libxposed-101:build - Assembles and tests this project.
+backend-libxposed-102:build - Assembles and tests this project.
+hook-api:build - Assembles and tests this project.
+hook-core:build - Assembles and tests this project.
+hook-testing:build - Assembles and tests this project.
+sample-java-contracts:build - Assembles and tests this project.
+sample-module-101:build - Assembles and tests this project.
+sample-module-102:build - Assembles and tests this project.
+backend-libxposed-101:buildDependents - Assembles and tests this project and all projects that depend on it.
+backend-libxposed-102:buildDependents - Assembles and tests this project and all projects that depend on it.
+hook-api:buildDependents - Assembles and tests this project and all projects that depend on it.
+hook-core:buildDependents - Assembles and tests this project and all projects that depend on it.
+hook-testing:buildDependents - Assembles and tests this project and all projects that depend on it.
+sample-java-contracts:buildDependents - Assembles and tests this project and all projects that depend on it.
+sample-module-101:buildDependents - Assembles and tests this project and all projects that depend on it.
+sample-module-102:buildDependents - Assembles and tests this project and all projects that depend on it.
+backend-libxposed-101:buildNeeded - Assembles and tests this project and all projects it depends on.
+backend-libxposed-102:buildNeeded - Assembles and tests this project and all projects it depends on.
+hook-api:buildNeeded - Assembles and tests this project and all projects it depends on.
+hook-core:buildNeeded - Assembles and tests this project and all projects it depends on.
+hook-testing:buildNeeded - Assembles and tests this project and all projects it depends on.
+sample-java-contracts:buildNeeded - Assembles and tests this project and all projects it depends on.
+sample-module-101:buildNeeded - Assembles and tests this project and all projects it depends on.
+sample-module-102:buildNeeded - Assembles and tests this project and all projects it depends on.
+sample-module-101:bundle - Assemble bundles for all the variants.
+sample-module-102:bundle - Assemble bundles for all the variants.
+hook-api:classes - Assembles main classes.
+hook-core:classes - Assembles main classes.
+hook-testing:classes - Assembles main classes.
+sample-java-contracts:classes - Assembles main classes.
+backend-libxposed-101:clean - Deletes the build directory.
+backend-libxposed-102:clean - Deletes the build directory.
+hook-api:clean - Deletes the build directory.
+hook-core:clean - Deletes the build directory.
+hook-testing:clean - Deletes the build directory.
+sample-java-contracts:clean - Deletes the build directory.
+sample-module-101:clean - Deletes the build directory.
+sample-module-102:clean - Deletes the build directory.
+backend-libxposed-101:compileDebugAndroidTestSources
+backend-libxposed-102:compileDebugAndroidTestSources
+sample-module-101:compileDebugAndroidTestSources
+sample-module-102:compileDebugAndroidTestSources
+backend-libxposed-101:compileDebugSources
+backend-libxposed-102:compileDebugSources
+sample-module-101:compileDebugSources
+sample-module-102:compileDebugSources
+backend-libxposed-101:compileDebugUnitTestSources
+backend-libxposed-102:compileDebugUnitTestSources
+sample-module-101:compileDebugUnitTestSources
+sample-module-102:compileDebugUnitTestSources
+backend-libxposed-101:compileReleaseSources
+backend-libxposed-102:compileReleaseSources
+sample-module-101:compileReleaseSources
+sample-module-102:compileReleaseSources
+backend-libxposed-101:extractDebugAnnotations - Extracts Android annotations for the debug variant into the archive file
+backend-libxposed-102:extractDebugAnnotations - Extracts Android annotations for the debug variant into the archive file
+backend-libxposed-101:extractReleaseAnnotations - Extracts Android annotations for the release variant into the archive file
+backend-libxposed-102:extractReleaseAnnotations - Extracts Android annotations for the release variant into the archive file
+hook-api:jar - Assembles a jar archive containing the classes of the 'main' feature.
+hook-core:jar - Assembles a jar archive containing the classes of the 'main' feature.
+hook-testing:jar - Assembles a jar archive containing the classes of the 'main' feature.
+sample-java-contracts:jar - Assembles a jar archive containing the classes of the 'main' feature.
+hook-api:sourcesJar - Assembles a jar archive containing the main sources.
+hook-core:sourcesJar - Assembles a jar archive containing the main sources.
+hook-testing:sourcesJar - Assembles a jar archive containing the main sources.
+sample-java-contracts:sourcesJar - Assembles a jar archive containing the main sources.
+hook-api:testClasses - Assembles test classes.
+hook-core:testClasses - Assembles test classes.
+hook-testing:testClasses - Assembles test classes.
+sample-java-contracts:testClasses - Assembles test classes.
+
+Build Setup tasks
+-----------------
+init - Initializes a new Gradle build.
+updateDaemonJvm - Generates or updates the Gradle Daemon JVM criteria.
+wrapper - Generates Gradle wrapper files.
+
+Distribution tasks
+------------------
+sample-java-contracts:assembleDist - Assembles the main distributions
+sample-java-contracts:distTar - Bundles the project as a distribution.
+sample-java-contracts:distZip - Bundles the project as a distribution.
+sample-java-contracts:installDist - Installs the project as a distribution as-is.
+
+Documentation tasks
+-------------------
+hook-api:javadoc - Generates Javadoc API documentation for the 'main' feature.
+hook-core:javadoc - Generates Javadoc API documentation for the 'main' feature.
+hook-testing:javadoc - Generates Javadoc API documentation for the 'main' feature.
+sample-java-contracts:javadoc - Generates Javadoc API documentation for the 'main' feature.
+
+Help tasks
+----------
+artifactTransforms - Displays the Artifact Transforms that can be executed in root project 'MeguvizHook'.
+backend-libxposed-101:artifactTransforms - Displays the Artifact Transforms that can be executed in project ':backend-libxposed-101'.
+backend-libxposed-102:artifactTransforms - Displays the Artifact Transforms that can be executed in project ':backend-libxposed-102'.
+hook-api:artifactTransforms - Displays the Artifact Transforms that can be executed in project ':hook-api'.
+hook-core:artifactTransforms - Displays the Artifact Transforms that can be executed in project ':hook-core'.
+hook-testing:artifactTransforms - Displays the Artifact Transforms that can be executed in project ':hook-testing'.
+sample-java-contracts:artifactTransforms - Displays the Artifact Transforms that can be executed in project ':sample-java-contracts'.
+sample-module-101:artifactTransforms - Displays the Artifact Transforms that can be executed in project ':sample-module-101'.
+sample-module-102:artifactTransforms - Displays the Artifact Transforms that can be executed in project ':sample-module-102'.
+buildEnvironment - Displays all buildscript dependencies declared in root project 'MeguvizHook'.
+backend-libxposed-101:buildEnvironment - Displays all buildscript dependencies declared in project ':backend-libxposed-101'.
+backend-libxposed-102:buildEnvironment - Displays all buildscript dependencies declared in project ':backend-libxposed-102'.
+hook-api:buildEnvironment - Displays all buildscript dependencies declared in project ':hook-api'.
+hook-core:buildEnvironment - Displays all buildscript dependencies declared in project ':hook-core'.
+hook-testing:buildEnvironment - Displays all buildscript dependencies declared in project ':hook-testing'.
+sample-java-contracts:buildEnvironment - Displays all buildscript dependencies declared in project ':sample-java-contracts'.
+sample-module-101:buildEnvironment - Displays all buildscript dependencies declared in project ':sample-module-101'.
+sample-module-102:buildEnvironment - Displays all buildscript dependencies declared in project ':sample-module-102'.
+dependencies - Displays all dependencies declared in root project 'MeguvizHook'.
+backend-libxposed-101:dependencies - Displays all dependencies declared in project ':backend-libxposed-101'.
+backend-libxposed-102:dependencies - Displays all dependencies declared in project ':backend-libxposed-102'.
+hook-api:dependencies - Displays all dependencies declared in project ':hook-api'.
+hook-core:dependencies - Displays all dependencies declared in project ':hook-core'.
+hook-testing:dependencies - Displays all dependencies declared in project ':hook-testing'.
+sample-java-contracts:dependencies - Displays all dependencies declared in project ':sample-java-contracts'.
+sample-module-101:dependencies - Displays all dependencies declared in project ':sample-module-101'.
+sample-module-102:dependencies - Displays all dependencies declared in project ':sample-module-102'.
+dependencyInsight - Displays the insight into a specific dependency in root project 'MeguvizHook'.
+backend-libxposed-101:dependencyInsight - Displays the insight into a specific dependency in project ':backend-libxposed-101'.
+backend-libxposed-102:dependencyInsight - Displays the insight into a specific dependency in project ':backend-libxposed-102'.
+hook-api:dependencyInsight - Displays the insight into a specific dependency in project ':hook-api'.
+hook-core:dependencyInsight - Displays the insight into a specific dependency in project ':hook-core'.
+hook-testing:dependencyInsight - Displays the insight into a specific dependency in project ':hook-testing'.
+sample-java-contracts:dependencyInsight - Displays the insight into a specific dependency in project ':sample-java-contracts'.
+sample-module-101:dependencyInsight - Displays the insight into a specific dependency in project ':sample-module-101'.
+sample-module-102:dependencyInsight - Displays the insight into a specific dependency in project ':sample-module-102'.
+help - Displays a help message.
+backend-libxposed-101:help - Displays a help message.
+backend-libxposed-102:help - Displays a help message.
+hook-api:help - Displays a help message.
+hook-core:help - Displays a help message.
+hook-testing:help - Displays a help message.
+sample-java-contracts:help - Displays a help message.
+sample-module-101:help - Displays a help message.
+sample-module-102:help - Displays a help message.
+javaToolchains - Displays the detected java toolchains.
+backend-libxposed-101:javaToolchains - Displays the detected java toolchains.
+backend-libxposed-102:javaToolchains - Displays the detected java toolchains.
+hook-api:javaToolchains - Displays the detected java toolchains.
+hook-core:javaToolchains - Displays the detected java toolchains.
+hook-testing:javaToolchains - Displays the detected java toolchains.
+sample-java-contracts:javaToolchains - Displays the detected java toolchains.
+sample-module-101:javaToolchains - Displays the detected java toolchains.
+sample-module-102:javaToolchains - Displays the detected java toolchains.
+kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+backend-libxposed-101:kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+backend-libxposed-102:kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+hook-api:kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+hook-core:kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+hook-testing:kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+sample-java-contracts:kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+sample-module-101:kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+sample-module-102:kotlinDslAccessorsReport - Prints the Kotlin code for accessing the currently available project extensions.
+outgoingVariants - Displays the outgoing variants of root project 'MeguvizHook'.
+backend-libxposed-101:outgoingVariants - Displays the outgoing variants of project ':backend-libxposed-101'.
+backend-libxposed-102:outgoingVariants - Displays the outgoing variants of project ':backend-libxposed-102'.
+hook-api:outgoingVariants - Displays the outgoing variants of project ':hook-api'.
+hook-core:outgoingVariants - Displays the outgoing variants of project ':hook-core'.
+hook-testing:outgoingVariants - Displays the outgoing variants of project ':hook-testing'.
+sample-java-contracts:outgoingVariants - Displays the outgoing variants of project ':sample-java-contracts'.
+sample-module-101:outgoingVariants - Displays the outgoing variants of project ':sample-module-101'.
+sample-module-102:outgoingVariants - Displays the outgoing variants of project ':sample-module-102'.
+projects - Displays the sub-projects of root project 'MeguvizHook'.
+backend-libxposed-101:projects - Displays the sub-projects of project ':backend-libxposed-101'.
+backend-libxposed-102:projects - Displays the sub-projects of project ':backend-libxposed-102'.
+hook-api:projects - Displays the sub-projects of project ':hook-api'.
+hook-core:projects - Displays the sub-projects of project ':hook-core'.
+hook-testing:projects - Displays the sub-projects of project ':hook-testing'.
+sample-java-contracts:projects - Displays the sub-projects of project ':sample-java-contracts'.
+sample-module-101:projects - Displays the sub-projects of project ':sample-module-101'.
+sample-module-102:projects - Displays the sub-projects of project ':sample-module-102'.
+properties - Displays the properties of root project 'MeguvizHook'.
+backend-libxposed-101:properties - Displays the properties of project ':backend-libxposed-101'.
+backend-libxposed-102:properties - Displays the properties of project ':backend-libxposed-102'.
+hook-api:properties - Displays the properties of project ':hook-api'.
+hook-core:properties - Displays the properties of project ':hook-core'.
+hook-testing:properties - Displays the properties of project ':hook-testing'.
+sample-java-contracts:properties - Displays the properties of project ':sample-java-contracts'.
+sample-module-101:properties - Displays the properties of project ':sample-module-101'.
+sample-module-102:properties - Displays the properties of project ':sample-module-102'.
+resolvableConfigurations - Displays the configurations that can be resolved in root project 'MeguvizHook'.
+backend-libxposed-101:resolvableConfigurations - Displays the configurations that can be resolved in project ':backend-libxposed-101'.
+backend-libxposed-102:resolvableConfigurations - Displays the configurations that can be resolved in project ':backend-libxposed-102'.
+hook-api:resolvableConfigurations - Displays the configurations that can be resolved in project ':hook-api'.
+hook-core:resolvableConfigurations - Displays the configurations that can be resolved in project ':hook-core'.
+hook-testing:resolvableConfigurations - Displays the configurations that can be resolved in project ':hook-testing'.
+sample-java-contracts:resolvableConfigurations - Displays the configurations that can be resolved in project ':sample-java-contracts'.
+sample-module-101:resolvableConfigurations - Displays the configurations that can be resolved in project ':sample-module-101'.
+sample-module-102:resolvableConfigurations - Displays the configurations that can be resolved in project ':sample-module-102'.
+tasks - Displays the tasks runnable from root project 'MeguvizHook' (some of the displayed tasks may belong to subprojects).
+backend-libxposed-101:tasks - Displays the tasks runnable from project ':backend-libxposed-101'.
+backend-libxposed-102:tasks - Displays the tasks runnable from project ':backend-libxposed-102'.
+hook-api:tasks - Displays the tasks runnable from project ':hook-api'.
+hook-core:tasks - Displays the tasks runnable from project ':hook-core'.
+hook-testing:tasks - Displays the tasks runnable from project ':hook-testing'.
+sample-java-contracts:tasks - Displays the tasks runnable from project ':sample-java-contracts'.
+sample-module-101:tasks - Displays the tasks runnable from project ':sample-module-101'.
+sample-module-102:tasks - Displays the tasks runnable from project ':sample-module-102'.
+
+Install tasks
+-------------
+sample-module-101:installDebug - Installs the Debug build.
+sample-module-102:installDebug - Installs the Debug build.
+backend-libxposed-101:installDebugAndroidTest - Installs the android (on device) tests for the Debug build.
+backend-libxposed-102:installDebugAndroidTest - Installs the android (on device) tests for the Debug build.
+sample-module-101:installDebugAndroidTest - Installs the android (on device) tests for the Debug build.
+sample-module-102:installDebugAndroidTest - Installs the android (on device) tests for the Debug build.
+backend-libxposed-101:uninstallAll - Uninstall all applications.
+backend-libxposed-102:uninstallAll - Uninstall all applications.
+sample-module-101:uninstallAll - Uninstall all applications.
+sample-module-102:uninstallAll - Uninstall all applications.
+sample-module-101:uninstallDebug - Uninstalls the Debug build.
+sample-module-102:uninstallDebug - Uninstalls the Debug build.
+backend-libxposed-101:uninstallDebugAndroidTest - Uninstalls the android (on device) tests for the Debug build.
+backend-libxposed-102:uninstallDebugAndroidTest - Uninstalls the android (on device) tests for the Debug build.
+sample-module-101:uninstallDebugAndroidTest - Uninstalls the android (on device) tests for the Debug build.
+sample-module-102:uninstallDebugAndroidTest - Uninstalls the android (on device) tests for the Debug build.
+sample-module-101:uninstallRelease - Uninstalls the Release build.
+sample-module-102:uninstallRelease - Uninstalls the Release build.
+
+Verification tasks
+------------------
+backend-libxposed-101:check - Runs all checks.
+backend-libxposed-102:check - Runs all checks.
+hook-api:check - Runs all checks.
+hook-core:check - Runs all checks.
+hook-testing:check - Runs all checks.
+sample-java-contracts:check - Runs all checks.
+sample-module-101:check - Runs all checks.
+sample-module-102:check - Runs all checks.
+backend-libxposed-101:checkJetifier - Checks whether Jetifier is needed for the current project
+backend-libxposed-102:checkJetifier - Checks whether Jetifier is needed for the current project
+sample-module-101:checkJetifier - Checks whether Jetifier is needed for the current project
+sample-module-102:checkJetifier - Checks whether Jetifier is needed for the current project
+backend-libxposed-101:connectedAndroidTest - Installs and runs instrumentation tests for all flavors on connected devices.
+backend-libxposed-102:connectedAndroidTest - Installs and runs instrumentation tests for all flavors on connected devices.
+sample-module-101:connectedAndroidTest - Installs and runs instrumentation tests for all flavors on connected devices.
+sample-module-102:connectedAndroidTest - Installs and runs instrumentation tests for all flavors on connected devices.
+backend-libxposed-101:connectedCheck - Runs all device checks on currently connected devices.
+backend-libxposed-102:connectedCheck - Runs all device checks on currently connected devices.
+sample-module-101:connectedCheck - Runs all device checks on currently connected devices.
+sample-module-102:connectedCheck - Runs all device checks on currently connected devices.
+backend-libxposed-101:connectedDebugAndroidTest - Installs and runs the tests for debug on connected devices.
+backend-libxposed-102:connectedDebugAndroidTest - Installs and runs the tests for debug on connected devices.
+sample-module-101:connectedDebugAndroidTest - Installs and runs the tests for debug on connected devices.
+sample-module-102:connectedDebugAndroidTest - Installs and runs the tests for debug on connected devices.
+backend-libxposed-101:deviceAndroidTest - Installs and runs instrumentation tests using all Device Providers.
+backend-libxposed-102:deviceAndroidTest - Installs and runs instrumentation tests using all Device Providers.
+sample-module-101:deviceAndroidTest - Installs and runs instrumentation tests using all Device Providers.
+sample-module-102:deviceAndroidTest - Installs and runs instrumentation tests using all Device Providers.
+backend-libxposed-101:deviceCheck - Runs all device checks using Device Providers and Test Servers.
+backend-libxposed-102:deviceCheck - Runs all device checks using Device Providers and Test Servers.
+sample-module-101:deviceCheck - Runs all device checks using Device Providers and Test Servers.
+sample-module-102:deviceCheck - Runs all device checks using Device Providers and Test Servers.
+backend-libxposed-101:lint - Runs lint on the default variant.
+backend-libxposed-102:lint - Runs lint on the default variant.
+sample-module-101:lint - Runs lint on the default variant.
+sample-module-102:lint - Runs lint on the default variant.
+backend-libxposed-101:lintDebug - Print text output from the corresponding lint report task
+backend-libxposed-102:lintDebug - Print text output from the corresponding lint report task
+sample-module-101:lintDebug - Print text output from the corresponding lint report task
+sample-module-102:lintDebug - Print text output from the corresponding lint report task
+backend-libxposed-101:lintFix - Runs lint on the default variant and applies any safe suggestions to the source code.
+backend-libxposed-102:lintFix - Runs lint on the default variant and applies any safe suggestions to the source code.
+sample-module-101:lintFix - Runs lint on the default variant and applies any safe suggestions to the source code.
+sample-module-102:lintFix - Runs lint on the default variant and applies any safe suggestions to the source code.
+backend-libxposed-101:lintRelease - Print text output from the corresponding lint report task
+backend-libxposed-102:lintRelease - Print text output from the corresponding lint report task
+sample-module-101:lintRelease - Print text output from the corresponding lint report task
+sample-module-102:lintRelease - Print text output from the corresponding lint report task
+sample-module-101:lintVitalRelease - Print text output from the corresponding lint report task
+sample-module-102:lintVitalRelease - Print text output from the corresponding lint report task
+backend-libxposed-101:test - Run unit tests for all variants.
+backend-libxposed-102:test - Run unit tests for all variants.
+hook-api:test - Runs the test suite.
+hook-core:test - Runs the test suite.
+hook-testing:test - Runs the test suite.
+sample-java-contracts:test - Runs the test suite.
+sample-module-101:test - Run unit tests for all variants.
+sample-module-102:test - Run unit tests for all variants.
+backend-libxposed-101:testDebugUnitTest - Run unit tests for the debug build.
+backend-libxposed-102:testDebugUnitTest - Run unit tests for the debug build.
+sample-module-101:testDebugUnitTest - Run unit tests for the debug build.
+sample-module-102:testDebugUnitTest - Run unit tests for the debug build.
+backend-libxposed-101:updateLintBaseline - Updates the lint baseline using the default variant.
+backend-libxposed-102:updateLintBaseline - Updates the lint baseline using the default variant.
+sample-module-101:updateLintBaseline - Updates the lint baseline using the default variant.
+sample-module-102:updateLintBaseline - Updates the lint baseline using the default variant.
+
+Other tasks
+-----------
+backend-libxposed-101:analyzeDebugAndroidTestDependencies
+backend-libxposed-102:analyzeDebugAndroidTestDependencies
+sample-module-101:analyzeDebugAndroidTestDependencies
+sample-module-102:analyzeDebugAndroidTestDependencies
+backend-libxposed-101:analyzeDebugDependencies
+backend-libxposed-102:analyzeDebugDependencies
+sample-module-101:analyzeDebugDependencies
+sample-module-102:analyzeDebugDependencies
+backend-libxposed-101:analyzeDebugUnitTestDependencies
+backend-libxposed-102:analyzeDebugUnitTestDependencies
+sample-module-101:analyzeDebugUnitTestDependencies
+sample-module-102:analyzeDebugUnitTestDependencies
+backend-libxposed-101:analyzeReleaseDependencies
+backend-libxposed-102:analyzeReleaseDependencies
+sample-module-101:analyzeReleaseDependencies
+sample-module-102:analyzeReleaseDependencies
+sample-module-101:analyzeReleaseR8Config
+sample-module-102:analyzeReleaseR8Config
+backend-libxposed-101:assembleDebug - Assembles main output for variant debug
+backend-libxposed-102:assembleDebug - Assembles main output for variant debug
+sample-module-101:assembleDebug - Assembles main output for variant debug
+sample-module-102:assembleDebug - Assembles main output for variant debug
+backend-libxposed-101:assembleDebugAndroidTest - Assembles main output for variant debugAndroidTest
+backend-libxposed-102:assembleDebugAndroidTest - Assembles main output for variant debugAndroidTest
+sample-module-101:assembleDebugAndroidTest - Assembles main output for variant debugAndroidTest
+sample-module-102:assembleDebugAndroidTest - Assembles main output for variant debugAndroidTest
+backend-libxposed-101:assembleDebugUnitTest - Assembles main output for variant debugUnitTest
+backend-libxposed-102:assembleDebugUnitTest - Assembles main output for variant debugUnitTest
+sample-module-101:assembleDebugUnitTest - Assembles main output for variant debugUnitTest
+sample-module-102:assembleDebugUnitTest - Assembles main output for variant debugUnitTest
+backend-libxposed-101:assembleRelease - Assembles main output for variant release
+backend-libxposed-102:assembleRelease - Assembles main output for variant release
+sample-module-101:assembleRelease - Assembles main output for variant release
+sample-module-102:assembleRelease - Assembles main output for variant release
+sample-module-101:buildDebugPreBundle
+sample-module-102:buildDebugPreBundle
+sample-module-101:buildReleasePreBundle
+sample-module-102:buildReleasePreBundle
+sample-module-101:bundleDebug - Assembles bundle for variant debug
+sample-module-102:bundleDebug - Assembles bundle for variant debug
+backend-libxposed-101:bundleDebugAar - Assembles a bundle containing the library in debug.
+backend-libxposed-102:bundleDebugAar - Assembles a bundle containing the library in debug.
+sample-module-101:bundleDebugClassesToCompileJar
+sample-module-102:bundleDebugClassesToCompileJar
+sample-module-101:bundleDebugClassesToRuntimeJar
+sample-module-102:bundleDebugClassesToRuntimeJar
+backend-libxposed-101:bundleDebugLocalLintAar - Assembles a bundle containing the library in debug.
+backend-libxposed-102:bundleDebugLocalLintAar - Assembles a bundle containing the library in debug.
+sample-module-101:bundleDebugResources
+sample-module-102:bundleDebugResources
+backend-libxposed-101:bundleLibCompileToJarDebug
+backend-libxposed-102:bundleLibCompileToJarDebug
+backend-libxposed-101:bundleLibCompileToJarRelease
+backend-libxposed-102:bundleLibCompileToJarRelease
+backend-libxposed-101:bundleLibRuntimeToDirDebug
+backend-libxposed-102:bundleLibRuntimeToDirDebug
+backend-libxposed-101:bundleLibRuntimeToDirRelease
+backend-libxposed-102:bundleLibRuntimeToDirRelease
+backend-libxposed-101:bundleLibRuntimeToJarDebug
+backend-libxposed-102:bundleLibRuntimeToJarDebug
+backend-libxposed-101:bundleLibRuntimeToJarRelease
+backend-libxposed-102:bundleLibRuntimeToJarRelease
+sample-module-101:bundleRelease - Assembles bundle for variant release
+sample-module-102:bundleRelease - Assembles bundle for variant release
+backend-libxposed-101:bundleReleaseAar - Assembles a bundle containing the library in release.
+backend-libxposed-102:bundleReleaseAar - Assembles a bundle containing the library in release.
+sample-module-101:bundleReleaseClassesToCompileJar
+sample-module-102:bundleReleaseClassesToCompileJar
+sample-module-101:bundleReleaseClassesToRuntimeJar
+sample-module-102:bundleReleaseClassesToRuntimeJar
+backend-libxposed-101:bundleReleaseLocalLintAar - Assembles a bundle containing the library in release.
+backend-libxposed-102:bundleReleaseLocalLintAar - Assembles a bundle containing the library in release.
+sample-module-101:bundleReleaseResources
+sample-module-102:bundleReleaseResources
+backend-libxposed-101:checkDebugAarMetadata
+backend-libxposed-102:checkDebugAarMetadata
+sample-module-101:checkDebugAarMetadata
+sample-module-102:checkDebugAarMetadata
+backend-libxposed-101:checkDebugAndroidTestAarMetadata
+backend-libxposed-102:checkDebugAndroidTestAarMetadata
+sample-module-101:checkDebugAndroidTestAarMetadata
+sample-module-102:checkDebugAndroidTestAarMetadata
+backend-libxposed-101:checkDebugAndroidTestDuplicateClasses
+backend-libxposed-102:checkDebugAndroidTestDuplicateClasses
+sample-module-101:checkDebugAndroidTestDuplicateClasses
+sample-module-102:checkDebugAndroidTestDuplicateClasses
+sample-module-101:checkDebugDuplicateClasses
+sample-module-102:checkDebugDuplicateClasses
+backend-libxposed-101:checkDebugManifest
+backend-libxposed-102:checkDebugManifest
+sample-module-101:checkDebugManifest
+sample-module-102:checkDebugManifest
+backend-libxposed-101:checkReleaseAarMetadata
+backend-libxposed-102:checkReleaseAarMetadata
+sample-module-101:checkReleaseAarMetadata
+sample-module-102:checkReleaseAarMetadata
+sample-module-101:checkReleaseDuplicateClasses
+sample-module-102:checkReleaseDuplicateClasses
+backend-libxposed-101:checkReleaseManifest
+backend-libxposed-102:checkReleaseManifest
+sample-module-101:checkReleaseManifest
+sample-module-102:checkReleaseManifest
+sample-module-101:collectReleaseDependencies
+sample-module-102:collectReleaseDependencies
+backend-libxposed-101:compileDebugAndroidTestJavaWithJavac
+backend-libxposed-102:compileDebugAndroidTestJavaWithJavac
+sample-module-101:compileDebugAndroidTestJavaWithJavac
+sample-module-102:compileDebugAndroidTestJavaWithJavac
+backend-libxposed-101:compileDebugAndroidTestNavigationResources
+backend-libxposed-102:compileDebugAndroidTestNavigationResources
+sample-module-101:compileDebugAndroidTestNavigationResources
+sample-module-102:compileDebugAndroidTestNavigationResources
+sample-module-101:compileDebugArtProfile
+sample-module-102:compileDebugArtProfile
+backend-libxposed-101:compileDebugJavaWithJavac
+backend-libxposed-102:compileDebugJavaWithJavac
+sample-module-101:compileDebugJavaWithJavac
+sample-module-102:compileDebugJavaWithJavac
+backend-libxposed-101:compileDebugLibraryResources
+backend-libxposed-102:compileDebugLibraryResources
+backend-libxposed-101:compileDebugNavigationResources
+backend-libxposed-102:compileDebugNavigationResources
+sample-module-101:compileDebugNavigationResources
+sample-module-102:compileDebugNavigationResources
+backend-libxposed-101:compileDebugUnitTestJavaWithJavac
+backend-libxposed-102:compileDebugUnitTestJavaWithJavac
+sample-module-101:compileDebugUnitTestJavaWithJavac
+sample-module-102:compileDebugUnitTestJavaWithJavac
+hook-api:compileJava - Compiles main Java source.
+hook-core:compileJava - Compiles main Java source.
+hook-testing:compileJava - Compiles main Java source.
+sample-java-contracts:compileJava - Compiles main Java source.
+backend-libxposed-101:compileLint
+backend-libxposed-102:compileLint
+sample-module-101:compileLint
+sample-module-102:compileLint
+backend-libxposed-101:compileLintChecks
+backend-libxposed-102:compileLintChecks
+sample-module-101:compileLintChecks
+sample-module-102:compileLintChecks
+sample-module-101:compileReleaseArtProfile
+sample-module-102:compileReleaseArtProfile
+backend-libxposed-101:compileReleaseJavaWithJavac
+backend-libxposed-102:compileReleaseJavaWithJavac
+sample-module-101:compileReleaseJavaWithJavac
+sample-module-102:compileReleaseJavaWithJavac
+backend-libxposed-101:compileReleaseLibraryResources
+backend-libxposed-102:compileReleaseLibraryResources
+backend-libxposed-101:compileReleaseNavigationResources
+backend-libxposed-102:compileReleaseNavigationResources
+sample-module-101:compileReleaseNavigationResources
+sample-module-102:compileReleaseNavigationResources
+hook-api:compileTestJava - Compiles test Java source.
+hook-core:compileTestJava - Compiles test Java source.
+hook-testing:compileTestJava - Compiles test Java source.
+sample-java-contracts:compileTestJava - Compiles test Java source.
+backend-libxposed-101:compressDebugAndroidTestAssets
+backend-libxposed-102:compressDebugAndroidTestAssets
+sample-module-101:compressDebugAndroidTestAssets
+sample-module-102:compressDebugAndroidTestAssets
+sample-module-101:compressDebugAssets
+sample-module-102:compressDebugAssets
+sample-module-101:compressReleaseAssets
+sample-module-102:compressReleaseAssets
+sample-module-101:configureReleaseDependencies
+sample-module-102:configureReleaseDependencies
+backend-libxposed-101:consumeConfigAttr
+backend-libxposed-102:consumeConfigAttr
+sample-module-101:consumeConfigAttr
+sample-module-102:consumeConfigAttr
+backend-libxposed-101:copyDebugJniLibsProjectAndLocalJars
+backend-libxposed-102:copyDebugJniLibsProjectAndLocalJars
+backend-libxposed-101:copyDebugJniLibsProjectOnly
+backend-libxposed-102:copyDebugJniLibsProjectOnly
+backend-libxposed-101:copyReleaseJniLibsProjectAndLocalJars
+backend-libxposed-102:copyReleaseJniLibsProjectAndLocalJars
+backend-libxposed-101:copyReleaseJniLibsProjectOnly
+backend-libxposed-102:copyReleaseJniLibsProjectOnly
+backend-libxposed-101:createDebugAndroidTestApkListingFileRedirect
+backend-libxposed-102:createDebugAndroidTestApkListingFileRedirect
+sample-module-101:createDebugAndroidTestApkListingFileRedirect
+sample-module-102:createDebugAndroidTestApkListingFileRedirect
+sample-module-101:createDebugApkListingFileRedirect
+sample-module-102:createDebugApkListingFileRedirect
+sample-module-101:createDebugApksFromBundleListingFileRedirect
+sample-module-102:createDebugApksFromBundleListingFileRedirect
+sample-module-101:createDebugBundleListingFileRedirect
+sample-module-102:createDebugBundleListingFileRedirect
+sample-module-101:createDebugCompatibleScreenManifests
+sample-module-102:createDebugCompatibleScreenManifests
+backend-libxposed-101:createFullJarDebug
+backend-libxposed-102:createFullJarDebug
+backend-libxposed-101:createFullJarRelease
+backend-libxposed-102:createFullJarRelease
+backend-libxposed-101:createMockableJar
+backend-libxposed-102:createMockableJar
+sample-module-101:createMockableJar
+sample-module-102:createMockableJar
+sample-module-101:createReleaseApkListingFileRedirect
+sample-module-102:createReleaseApkListingFileRedirect
+sample-module-101:createReleaseApksFromBundleListingFileRedirect
+sample-module-102:createReleaseApksFromBundleListingFileRedirect
+sample-module-101:createReleaseBundleListingFileRedirect
+sample-module-102:createReleaseBundleListingFileRedirect
+sample-module-101:createReleaseCompatibleScreenManifests
+sample-module-102:createReleaseCompatibleScreenManifests
+backend-libxposed-101:desugarDebugAndroidTestFileDependencies
+backend-libxposed-102:desugarDebugAndroidTestFileDependencies
+sample-module-101:desugarDebugAndroidTestFileDependencies
+sample-module-102:desugarDebugAndroidTestFileDependencies
+sample-module-101:desugarDebugFileDependencies
+sample-module-102:desugarDebugFileDependencies
+sample-module-101:dexBuilderDebug
+sample-module-102:dexBuilderDebug
+backend-libxposed-101:dexBuilderDebugAndroidTest
+backend-libxposed-102:dexBuilderDebugAndroidTest
+sample-module-101:dexBuilderDebugAndroidTest
+sample-module-102:dexBuilderDebugAndroidTest
+sample-module-101:expandReleaseArtProfileWildcards
+sample-module-102:expandReleaseArtProfileWildcards
+backend-libxposed-101:exportDebugConsumerProguardFiles
+backend-libxposed-102:exportDebugConsumerProguardFiles
+backend-libxposed-101:exportReleaseConsumerProguardFiles
+backend-libxposed-102:exportReleaseConsumerProguardFiles
+sample-module-101:extractApksForDebug
+sample-module-102:extractApksForDebug
+sample-module-101:extractApksForRelease
+sample-module-102:extractApksForRelease
+sample-module-101:extractApksFromBundleForDebug
+sample-module-102:extractApksFromBundleForDebug
+sample-module-101:extractApksFromBundleForRelease
+sample-module-102:extractApksFromBundleForRelease
+sample-module-101:extractDebugNativeDebugMetadata
+sample-module-102:extractDebugNativeDebugMetadata
+sample-module-101:extractDebugNativeSymbolTables
+sample-module-102:extractDebugNativeSymbolTables
+backend-libxposed-101:extractDebugSupportedLocales
+backend-libxposed-102:extractDebugSupportedLocales
+backend-libxposed-101:extractDeepLinksDebug
+backend-libxposed-102:extractDeepLinksDebug
+sample-module-101:extractDeepLinksDebug
+sample-module-102:extractDeepLinksDebug
+backend-libxposed-101:extractDeepLinksForAarDebug
+backend-libxposed-102:extractDeepLinksForAarDebug
+backend-libxposed-101:extractDeepLinksForAarRelease
+backend-libxposed-102:extractDeepLinksForAarRelease
+backend-libxposed-101:extractDeepLinksRelease
+backend-libxposed-102:extractDeepLinksRelease
+sample-module-101:extractDeepLinksRelease
+sample-module-102:extractDeepLinksRelease
+backend-libxposed-101:extractProguardFiles
+backend-libxposed-102:extractProguardFiles
+sample-module-101:extractProguardFiles
+sample-module-102:extractProguardFiles
+sample-module-101:extractReleaseNativeDebugMetadata
+sample-module-102:extractReleaseNativeDebugMetadata
+sample-module-101:extractReleaseNativeSymbolTables
+sample-module-102:extractReleaseNativeSymbolTables
+backend-libxposed-101:extractReleaseSupportedLocales
+backend-libxposed-102:extractReleaseSupportedLocales
+sample-module-101:extractReleaseVersionControlInfo
+sample-module-102:extractReleaseVersionControlInfo
+backend-libxposed-101:generateDebugAndroidTestAssets
+backend-libxposed-102:generateDebugAndroidTestAssets
+sample-module-101:generateDebugAndroidTestAssets
+sample-module-102:generateDebugAndroidTestAssets
+backend-libxposed-101:generateDebugAndroidTestGlobalSynthetics
+backend-libxposed-102:generateDebugAndroidTestGlobalSynthetics
+sample-module-101:generateDebugAndroidTestGlobalSynthetics
+sample-module-102:generateDebugAndroidTestGlobalSynthetics
+backend-libxposed-101:generateDebugAndroidTestLintModel
+backend-libxposed-102:generateDebugAndroidTestLintModel
+sample-module-101:generateDebugAndroidTestLintModel
+sample-module-102:generateDebugAndroidTestLintModel
+backend-libxposed-101:generateDebugAndroidTestResources
+backend-libxposed-102:generateDebugAndroidTestResources
+sample-module-101:generateDebugAndroidTestResources
+sample-module-102:generateDebugAndroidTestResources
+backend-libxposed-101:generateDebugAndroidTestRFile
+backend-libxposed-102:generateDebugAndroidTestRFile
+sample-module-101:generateDebugAndroidTestRFile
+sample-module-102:generateDebugAndroidTestRFile
+backend-libxposed-101:generateDebugAndroidTestSources
+backend-libxposed-102:generateDebugAndroidTestSources
+sample-module-101:generateDebugAndroidTestSources
+sample-module-102:generateDebugAndroidTestSources
+backend-libxposed-101:generateDebugAssets
+backend-libxposed-102:generateDebugAssets
+sample-module-101:generateDebugAssets
+sample-module-102:generateDebugAssets
+backend-libxposed-101:generateDebugExternalPublicTxt
+backend-libxposed-102:generateDebugExternalPublicTxt
+sample-module-101:generateDebugFeatureMetadata
+sample-module-102:generateDebugFeatureMetadata
+sample-module-101:generateDebugFeatureTransitiveDeps
+sample-module-102:generateDebugFeatureTransitiveDeps
+sample-module-101:generateDebugGlobalSynthetics
+sample-module-102:generateDebugGlobalSynthetics
+backend-libxposed-101:generateDebugLintModel
+backend-libxposed-102:generateDebugLintModel
+sample-module-101:generateDebugLintModel
+sample-module-102:generateDebugLintModel
+backend-libxposed-101:generateDebugLintReportModel
+backend-libxposed-102:generateDebugLintReportModel
+sample-module-101:generateDebugLintReportModel
+sample-module-102:generateDebugLintReportModel
+backend-libxposed-101:generateDebugLintVitalModel
+backend-libxposed-102:generateDebugLintVitalModel
+sample-module-101:generateDebugManifestClass
+sample-module-102:generateDebugManifestClass
+backend-libxposed-101:generateDebugResources
+backend-libxposed-102:generateDebugResources
+sample-module-101:generateDebugResources
+sample-module-102:generateDebugResources
+backend-libxposed-101:generateDebugRFile
+backend-libxposed-102:generateDebugRFile
+sample-module-101:generateDebugRFile
+sample-module-102:generateDebugRFile
+backend-libxposed-101:generateDebugSources
+backend-libxposed-102:generateDebugSources
+sample-module-101:generateDebugSources
+sample-module-102:generateDebugSources
+backend-libxposed-101:generateDebugUnitTestAssets
+backend-libxposed-102:generateDebugUnitTestAssets
+sample-module-101:generateDebugUnitTestAssets
+sample-module-102:generateDebugUnitTestAssets
+backend-libxposed-101:generateDebugUnitTestLintModel
+backend-libxposed-102:generateDebugUnitTestLintModel
+sample-module-101:generateDebugUnitTestLintModel
+sample-module-102:generateDebugUnitTestLintModel
+backend-libxposed-101:generateDebugUnitTestResources
+backend-libxposed-102:generateDebugUnitTestResources
+sample-module-101:generateDebugUnitTestResources
+sample-module-102:generateDebugUnitTestResources
+backend-libxposed-101:generateDebugUnitTestSources
+backend-libxposed-102:generateDebugUnitTestSources
+sample-module-101:generateDebugUnitTestSources
+sample-module-102:generateDebugUnitTestSources
+backend-libxposed-101:generateDebugUnitTestStubRFile
+backend-libxposed-102:generateDebugUnitTestStubRFile
+backend-libxposed-101:generateReleaseAssets
+backend-libxposed-102:generateReleaseAssets
+sample-module-101:generateReleaseAssets
+sample-module-102:generateReleaseAssets
+backend-libxposed-101:generateReleaseExternalPublicTxt
+backend-libxposed-102:generateReleaseExternalPublicTxt
+sample-module-101:generateReleaseFeatureMetadata
+sample-module-102:generateReleaseFeatureMetadata
+sample-module-101:generateReleaseFeatureTransitiveDeps
+sample-module-102:generateReleaseFeatureTransitiveDeps
+backend-libxposed-101:generateReleaseLintModel
+backend-libxposed-102:generateReleaseLintModel
+sample-module-101:generateReleaseLintModel
+sample-module-102:generateReleaseLintModel
+backend-libxposed-101:generateReleaseLintReportModel
+backend-libxposed-102:generateReleaseLintReportModel
+sample-module-101:generateReleaseLintReportModel
+sample-module-102:generateReleaseLintReportModel
+backend-libxposed-101:generateReleaseLintVitalModel
+backend-libxposed-102:generateReleaseLintVitalModel
+sample-module-101:generateReleaseLintVitalReportModel
+sample-module-102:generateReleaseLintVitalReportModel
+sample-module-101:generateReleaseManifestClass
+sample-module-102:generateReleaseManifestClass
+backend-libxposed-101:generateReleaseResources
+backend-libxposed-102:generateReleaseResources
+sample-module-101:generateReleaseResources
+sample-module-102:generateReleaseResources
+backend-libxposed-101:generateReleaseRFile
+backend-libxposed-102:generateReleaseRFile
+sample-module-101:generateReleaseRFile
+sample-module-102:generateReleaseRFile
+backend-libxposed-101:generateReleaseSources
+backend-libxposed-102:generateReleaseSources
+sample-module-101:generateReleaseSources
+sample-module-102:generateReleaseSources
+backend-libxposed-101:javaPreCompileDebug
+backend-libxposed-102:javaPreCompileDebug
+sample-module-101:javaPreCompileDebug
+sample-module-102:javaPreCompileDebug
+backend-libxposed-101:javaPreCompileDebugAndroidTest
+backend-libxposed-102:javaPreCompileDebugAndroidTest
+sample-module-101:javaPreCompileDebugAndroidTest
+sample-module-102:javaPreCompileDebugAndroidTest
+backend-libxposed-101:javaPreCompileDebugUnitTest
+backend-libxposed-102:javaPreCompileDebugUnitTest
+sample-module-101:javaPreCompileDebugUnitTest
+sample-module-102:javaPreCompileDebugUnitTest
+backend-libxposed-101:javaPreCompileRelease
+backend-libxposed-102:javaPreCompileRelease
+sample-module-101:javaPreCompileRelease
+sample-module-102:javaPreCompileRelease
+backend-libxposed-101:lintAnalyzeDebug - Run lint analysis on the debug component
+backend-libxposed-102:lintAnalyzeDebug - Run lint analysis on the debug component
+sample-module-101:lintAnalyzeDebug - Run lint analysis on the debug component
+sample-module-102:lintAnalyzeDebug - Run lint analysis on the debug component
+backend-libxposed-101:lintAnalyzeDebugAndroidTest - Run lint analysis on the debugAndroidTest component
+backend-libxposed-102:lintAnalyzeDebugAndroidTest - Run lint analysis on the debugAndroidTest component
+sample-module-101:lintAnalyzeDebugAndroidTest - Run lint analysis on the debugAndroidTest component
+sample-module-102:lintAnalyzeDebugAndroidTest - Run lint analysis on the debugAndroidTest component
+backend-libxposed-101:lintAnalyzeDebugUnitTest - Run lint analysis on the debugUnitTest component
+backend-libxposed-102:lintAnalyzeDebugUnitTest - Run lint analysis on the debugUnitTest component
+sample-module-101:lintAnalyzeDebugUnitTest - Run lint analysis on the debugUnitTest component
+sample-module-102:lintAnalyzeDebugUnitTest - Run lint analysis on the debugUnitTest component
+backend-libxposed-101:lintAnalyzeRelease - Run lint analysis on the release component
+backend-libxposed-102:lintAnalyzeRelease - Run lint analysis on the release component
+sample-module-101:lintAnalyzeRelease - Run lint analysis on the release component
+sample-module-102:lintAnalyzeRelease - Run lint analysis on the release component
+backend-libxposed-101:lintFixDebug - Fix lint on the debug variant
+backend-libxposed-102:lintFixDebug - Fix lint on the debug variant
+sample-module-101:lintFixDebug - Fix lint on the debug variant
+sample-module-102:lintFixDebug - Fix lint on the debug variant
+backend-libxposed-101:lintFixRelease - Fix lint on the release variant
+backend-libxposed-102:lintFixRelease - Fix lint on the release variant
+sample-module-101:lintFixRelease - Fix lint on the release variant
+sample-module-102:lintFixRelease - Fix lint on the release variant
+backend-libxposed-101:lintReportDebug - Run lint on the debug variant
+backend-libxposed-102:lintReportDebug - Run lint on the debug variant
+sample-module-101:lintReportDebug - Run lint on the debug variant
+sample-module-102:lintReportDebug - Run lint on the debug variant
+backend-libxposed-101:lintReportRelease - Run lint on the release variant
+backend-libxposed-102:lintReportRelease - Run lint on the release variant
+sample-module-101:lintReportRelease - Run lint on the release variant
+sample-module-102:lintReportRelease - Run lint on the release variant
+backend-libxposed-101:lintVitalAnalyzeDebug - Run lint analysis with only the fatal issues enabled on the debug variant
+backend-libxposed-102:lintVitalAnalyzeDebug - Run lint analysis with only the fatal issues enabled on the debug variant
+backend-libxposed-101:lintVitalAnalyzeRelease - Run lint analysis with only the fatal issues enabled on the release variant
+backend-libxposed-102:lintVitalAnalyzeRelease - Run lint analysis with only the fatal issues enabled on the release variant
+sample-module-101:lintVitalAnalyzeRelease - Run lint analysis with only the fatal issues enabled 
+sample-module-102:lintVitalAnalyzeRelease - Run lint analysis with only the fatal issues enabled 
+sample-module-101:lintVitalReportRelease - Run lint with only the fatal issues enabled on the release variant
+sample-module-102:lintVitalReportRelease - Run lint with only the fatal issues enabled on the release variant
+sample-module-101:makeApkFromBundleForDebug
+sample-module-102:makeApkFromBundleForDebug
+sample-module-101:makeApkFromBundleForRelease
+sample-module-102:makeApkFromBundleForRelease
+backend-libxposed-101:mapDebugAndroidTestSourceSetPaths
+backend-libxposed-102:mapDebugAndroidTestSourceSetPaths
+sample-module-101:mapDebugAndroidTestSourceSetPaths
+sample-module-102:mapDebugAndroidTestSourceSetPaths
+backend-libxposed-101:mapDebugSourceSetPaths
+backend-libxposed-102:mapDebugSourceSetPaths
+sample-module-101:mapDebugSourceSetPaths
+sample-module-102:mapDebugSourceSetPaths
+backend-libxposed-101:mapReleaseSourceSetPaths
+backend-libxposed-102:mapReleaseSourceSetPaths
+sample-module-101:mapReleaseSourceSetPaths
+sample-module-102:mapReleaseSourceSetPaths
+backend-libxposed-101:mergeDebugAndroidTestAssets
+backend-libxposed-102:mergeDebugAndroidTestAssets
+sample-module-101:mergeDebugAndroidTestAssets
+sample-module-102:mergeDebugAndroidTestAssets
+backend-libxposed-101:mergeDebugAndroidTestGeneratedProguardFiles
+backend-libxposed-102:mergeDebugAndroidTestGeneratedProguardFiles
+sample-module-101:mergeDebugAndroidTestGeneratedProguardFiles
+sample-module-102:mergeDebugAndroidTestGeneratedProguardFiles
+backend-libxposed-101:mergeDebugAndroidTestJavaResource
+backend-libxposed-102:mergeDebugAndroidTestJavaResource
+sample-module-101:mergeDebugAndroidTestJavaResource
+sample-module-102:mergeDebugAndroidTestJavaResource
+backend-libxposed-101:mergeDebugAndroidTestJniLibFolders
+backend-libxposed-102:mergeDebugAndroidTestJniLibFolders
+sample-module-101:mergeDebugAndroidTestJniLibFolders
+sample-module-102:mergeDebugAndroidTestJniLibFolders
+backend-libxposed-101:mergeDebugAndroidTestManifest
+backend-libxposed-102:mergeDebugAndroidTestManifest
+sample-module-101:mergeDebugAndroidTestManifest
+sample-module-102:mergeDebugAndroidTestManifest
+backend-libxposed-101:mergeDebugAndroidTestNativeLibs
+backend-libxposed-102:mergeDebugAndroidTestNativeLibs
+sample-module-101:mergeDebugAndroidTestNativeLibs
+sample-module-102:mergeDebugAndroidTestNativeLibs
+backend-libxposed-101:mergeDebugAndroidTestResources
+backend-libxposed-102:mergeDebugAndroidTestResources
+sample-module-101:mergeDebugAndroidTestResources
+sample-module-102:mergeDebugAndroidTestResources
+sample-module-101:mergeDebugArtProfile
+sample-module-102:mergeDebugArtProfile
+backend-libxposed-101:mergeDebugAssets
+backend-libxposed-102:mergeDebugAssets
+sample-module-101:mergeDebugAssets
+sample-module-102:mergeDebugAssets
+backend-libxposed-101:mergeDebugConsumerProguardFiles
+backend-libxposed-102:mergeDebugConsumerProguardFiles
+backend-libxposed-101:mergeDebugGeneratedProguardFiles
+backend-libxposed-102:mergeDebugGeneratedProguardFiles
+sample-module-101:mergeDebugGeneratedProguardFiles
+sample-module-102:mergeDebugGeneratedProguardFiles
+backend-libxposed-101:mergeDebugJavaResource
+backend-libxposed-102:mergeDebugJavaResource
+sample-module-101:mergeDebugJavaResource
+sample-module-102:mergeDebugJavaResource
+backend-libxposed-101:mergeDebugJniLibFolders
+backend-libxposed-102:mergeDebugJniLibFolders
+sample-module-101:mergeDebugJniLibFolders
+sample-module-102:mergeDebugJniLibFolders
+sample-module-101:mergeDebugNativeDebugMetadata
+sample-module-102:mergeDebugNativeDebugMetadata
+backend-libxposed-101:mergeDebugNativeLibs
+backend-libxposed-102:mergeDebugNativeLibs
+sample-module-101:mergeDebugNativeLibs
+sample-module-102:mergeDebugNativeLibs
+backend-libxposed-101:mergeDebugResources
+backend-libxposed-102:mergeDebugResources
+sample-module-101:mergeDebugResources
+sample-module-102:mergeDebugResources
+sample-module-101:mergeDebugStartupProfile
+sample-module-102:mergeDebugStartupProfile
+sample-module-101:mergeExtDexDebug
+sample-module-102:mergeExtDexDebug
+backend-libxposed-101:mergeExtDexDebugAndroidTest
+backend-libxposed-102:mergeExtDexDebugAndroidTest
+sample-module-101:mergeExtDexDebugAndroidTest
+sample-module-102:mergeExtDexDebugAndroidTest
+sample-module-101:mergeLibDexDebug
+sample-module-102:mergeLibDexDebug
+backend-libxposed-101:mergeLibDexDebugAndroidTest
+backend-libxposed-102:mergeLibDexDebugAndroidTest
+sample-module-101:mergeLibDexDebugAndroidTest
+sample-module-102:mergeLibDexDebugAndroidTest
+sample-module-101:mergeProjectDexDebug
+sample-module-102:mergeProjectDexDebug
+backend-libxposed-101:mergeProjectDexDebugAndroidTest
+backend-libxposed-102:mergeProjectDexDebugAndroidTest
+sample-module-101:mergeProjectDexDebugAndroidTest
+sample-module-102:mergeProjectDexDebugAndroidTest
+sample-module-101:mergeReleaseArtProfile
+sample-module-102:mergeReleaseArtProfile
+backend-libxposed-101:mergeReleaseAssets
+backend-libxposed-102:mergeReleaseAssets
+sample-module-101:mergeReleaseAssets
+sample-module-102:mergeReleaseAssets
+backend-libxposed-101:mergeReleaseConsumerProguardFiles
+backend-libxposed-102:mergeReleaseConsumerProguardFiles
+backend-libxposed-101:mergeReleaseGeneratedProguardFiles
+backend-libxposed-102:mergeReleaseGeneratedProguardFiles
+sample-module-101:mergeReleaseGeneratedProguardFiles
+sample-module-102:mergeReleaseGeneratedProguardFiles
+backend-libxposed-101:mergeReleaseJavaResource
+backend-libxposed-102:mergeReleaseJavaResource
+sample-module-101:mergeReleaseJavaResource
+sample-module-102:mergeReleaseJavaResource
+backend-libxposed-101:mergeReleaseJniLibFolders
+backend-libxposed-102:mergeReleaseJniLibFolders
+sample-module-101:mergeReleaseJniLibFolders
+sample-module-102:mergeReleaseJniLibFolders
+sample-module-101:mergeReleaseNativeDebugMetadata
+sample-module-102:mergeReleaseNativeDebugMetadata
+backend-libxposed-101:mergeReleaseNativeLibs
+backend-libxposed-102:mergeReleaseNativeLibs
+sample-module-101:mergeReleaseNativeLibs
+sample-module-102:mergeReleaseNativeLibs
+backend-libxposed-101:mergeReleaseResources
+backend-libxposed-102:mergeReleaseResources
+sample-module-101:mergeReleaseResources
+sample-module-102:mergeReleaseResources
+sample-module-101:mergeReleaseStartupProfile
+sample-module-102:mergeReleaseStartupProfile
+sample-module-101:minifyReleaseWithR8
+sample-module-102:minifyReleaseWithR8
+sample-module-101:optimizeReleaseResources
+sample-module-102:optimizeReleaseResources
+sample-module-101:packageDebug
+sample-module-102:packageDebug
+backend-libxposed-101:packageDebugAndroidTest
+backend-libxposed-102:packageDebugAndroidTest
+sample-module-101:packageDebugAndroidTest
+sample-module-102:packageDebugAndroidTest
+backend-libxposed-101:packageDebugAndroidTestResources
+backend-libxposed-102:packageDebugAndroidTestResources
+sample-module-101:packageDebugAndroidTestResources
+sample-module-102:packageDebugAndroidTestResources
+sample-module-101:packageDebugBundle
+sample-module-102:packageDebugBundle
+backend-libxposed-101:packageDebugRenderscript
+backend-libxposed-102:packageDebugRenderscript
+backend-libxposed-101:packageDebugResources
+backend-libxposed-102:packageDebugResources
+sample-module-101:packageDebugResources
+sample-module-102:packageDebugResources
+sample-module-101:packageDebugUniversalApk
+sample-module-102:packageDebugUniversalApk
+sample-module-101:packageRelease
+sample-module-102:packageRelease
+sample-module-101:packageReleaseBundle
+sample-module-102:packageReleaseBundle
+backend-libxposed-101:packageReleaseRenderscript
+backend-libxposed-102:packageReleaseRenderscript
+backend-libxposed-101:packageReleaseResources
+backend-libxposed-102:packageReleaseResources
+sample-module-101:packageReleaseResources
+sample-module-102:packageReleaseResources
+sample-module-101:packageReleaseUniversalApk
+sample-module-102:packageReleaseUniversalApk
+backend-libxposed-101:parseDebugAndroidTestLocalResources
+backend-libxposed-102:parseDebugAndroidTestLocalResources
+sample-module-101:parseDebugAndroidTestLocalResources
+sample-module-102:parseDebugAndroidTestLocalResources
+sample-module-101:parseDebugIntegrityConfig
+sample-module-102:parseDebugIntegrityConfig
+backend-libxposed-101:parseDebugLocalResources
+backend-libxposed-102:parseDebugLocalResources
+sample-module-101:parseDebugLocalResources
+sample-module-102:parseDebugLocalResources
+sample-module-101:parseReleaseIntegrityConfig
+sample-module-102:parseReleaseIntegrityConfig
+backend-libxposed-101:parseReleaseLocalResources
+backend-libxposed-102:parseReleaseLocalResources
+sample-module-101:parseReleaseLocalResources
+sample-module-102:parseReleaseLocalResources
+backend-libxposed-101:preBuild
+backend-libxposed-102:preBuild
+sample-module-101:preBuild
+sample-module-102:preBuild
+backend-libxposed-101:preDebugAndroidTestBuild
+backend-libxposed-102:preDebugAndroidTestBuild
+sample-module-101:preDebugAndroidTestBuild
+sample-module-102:preDebugAndroidTestBuild
+backend-libxposed-101:preDebugBuild
+backend-libxposed-102:preDebugBuild
+sample-module-101:preDebugBuild
+sample-module-102:preDebugBuild
+backend-libxposed-101:preDebugUnitTestBuild
+backend-libxposed-102:preDebugUnitTestBuild
+sample-module-101:preDebugUnitTestBuild
+sample-module-102:preDebugUnitTestBuild
+backend-libxposed-101:prepareDebugArtProfile
+backend-libxposed-102:prepareDebugArtProfile
+prepareKotlinBuildScriptModel
+backend-libxposed-101:prepareLintJarForPublish
+backend-libxposed-102:prepareLintJarForPublish
+sample-module-101:prepareLintJarForPublish
+sample-module-102:prepareLintJarForPublish
+backend-libxposed-101:prepareReleaseArtProfile
+backend-libxposed-102:prepareReleaseArtProfile
+backend-libxposed-101:preReleaseBuild
+backend-libxposed-102:preReleaseBuild
+sample-module-101:preReleaseBuild
+sample-module-102:preReleaseBuild
+sample-module-101:processApplicationManifestDebugForBundle
+sample-module-102:processApplicationManifestDebugForBundle
+sample-module-101:processApplicationManifestReleaseForBundle
+sample-module-102:processApplicationManifestReleaseForBundle
+backend-libxposed-101:processDebugAndroidTestJavaRes
+backend-libxposed-102:processDebugAndroidTestJavaRes
+sample-module-101:processDebugAndroidTestJavaRes
+sample-module-102:processDebugAndroidTestJavaRes
+backend-libxposed-101:processDebugAndroidTestManifest
+backend-libxposed-102:processDebugAndroidTestManifest
+sample-module-101:processDebugAndroidTestManifest
+sample-module-102:processDebugAndroidTestManifest
+backend-libxposed-101:processDebugAndroidTestNavigationResources
+backend-libxposed-102:processDebugAndroidTestNavigationResources
+sample-module-101:processDebugAndroidTestNavigationResources
+sample-module-102:processDebugAndroidTestNavigationResources
+backend-libxposed-101:processDebugAndroidTestResources
+backend-libxposed-102:processDebugAndroidTestResources
+sample-module-101:processDebugAndroidTestResources
+sample-module-102:processDebugAndroidTestResources
+backend-libxposed-101:processDebugJavaRes
+backend-libxposed-102:processDebugJavaRes
+sample-module-101:processDebugJavaRes
+sample-module-102:processDebugJavaRes
+sample-module-101:processDebugMainManifest
+sample-module-102:processDebugMainManifest
+backend-libxposed-101:processDebugManifest
+backend-libxposed-102:processDebugManifest
+sample-module-101:processDebugManifest
+sample-module-102:processDebugManifest
+sample-module-101:processDebugManifestForPackage
+sample-module-102:processDebugManifestForPackage
+backend-libxposed-101:processDebugNavigationResources
+backend-libxposed-102:processDebugNavigationResources
+sample-module-101:processDebugNavigationResources
+sample-module-102:processDebugNavigationResources
+sample-module-101:processDebugResources
+sample-module-102:processDebugResources
+backend-libxposed-101:processDebugUnitTestJavaRes
+backend-libxposed-102:processDebugUnitTestJavaRes
+sample-module-101:processDebugUnitTestJavaRes
+sample-module-102:processDebugUnitTestJavaRes
+sample-module-101:processManifestDebugForFeature
+sample-module-102:processManifestDebugForFeature
+sample-module-101:processManifestReleaseForFeature
+sample-module-102:processManifestReleaseForFeature
+backend-libxposed-101:processReleaseJavaRes
+backend-libxposed-102:processReleaseJavaRes
+sample-module-101:processReleaseJavaRes
+sample-module-102:processReleaseJavaRes
+sample-module-101:processReleaseMainManifest
+sample-module-102:processReleaseMainManifest
+backend-libxposed-101:processReleaseManifest
+backend-libxposed-102:processReleaseManifest
+sample-module-101:processReleaseManifest
+sample-module-102:processReleaseManifest
+sample-module-101:processReleaseManifestForPackage
+sample-module-102:processReleaseManifestForPackage
+backend-libxposed-101:processReleaseNavigationResources
+backend-libxposed-102:processReleaseNavigationResources
+sample-module-101:processReleaseNavigationResources
+sample-module-102:processReleaseNavigationResources
+sample-module-101:processReleaseResources
+sample-module-102:processReleaseResources
+hook-api:processResources - Processes main resources.
+hook-core:processResources - Processes main resources.
+hook-testing:processResources - Processes main resources.
+sample-java-contracts:processResources - Processes main resources.
+hook-api:processTestResources - Processes test resources.
+hook-core:processTestResources - Processes test resources.
+hook-testing:processTestResources - Processes test resources.
+sample-java-contracts:processTestResources - Processes test resources.
+sample-module-101:produceDebugBundleIdeListingFile
+sample-module-102:produceDebugBundleIdeListingFile
+sample-module-101:produceReleaseBundleIdeListingFile
+sample-module-102:produceReleaseBundleIdeListingFile
+backend-libxposed-101:resolveConfigAttr
+backend-libxposed-102:resolveConfigAttr
+sample-module-101:resolveConfigAttr
+sample-module-102:resolveConfigAttr
+sample-module-101:sdkReleaseDependencyData
+sample-module-102:sdkReleaseDependencyData
+sample-module-101:signDebugBundle
+sample-module-102:signDebugBundle
+sample-module-101:signingConfigWriterDebug
+sample-module-102:signingConfigWriterDebug
+backend-libxposed-101:signingConfigWriterDebugAndroidTest
+backend-libxposed-102:signingConfigWriterDebugAndroidTest
+sample-module-101:signingConfigWriterDebugAndroidTest
+sample-module-102:signingConfigWriterDebugAndroidTest
+sample-module-101:signingConfigWriterRelease
+sample-module-102:signingConfigWriterRelease
+sample-module-101:signReleaseBundle
+sample-module-102:signReleaseBundle
+sample-java-contracts:startScripts - Creates OS specific scripts to run the project as a JVM application.
+backend-libxposed-101:stripDebugAndroidTestDebugSymbols
+backend-libxposed-102:stripDebugAndroidTestDebugSymbols
+sample-module-101:stripDebugAndroidTestDebugSymbols
+sample-module-102:stripDebugAndroidTestDebugSymbols
+backend-libxposed-101:stripDebugDebugSymbols
+backend-libxposed-102:stripDebugDebugSymbols
+sample-module-101:stripDebugDebugSymbols
+sample-module-102:stripDebugDebugSymbols
+backend-libxposed-101:stripReleaseDebugSymbols
+backend-libxposed-102:stripReleaseDebugSymbols
+sample-module-101:stripReleaseDebugSymbols
+sample-module-102:stripReleaseDebugSymbols
+backend-libxposed-101:syncDebugLibJars
+backend-libxposed-102:syncDebugLibJars
+backend-libxposed-101:syncReleaseLibJars
+backend-libxposed-102:syncReleaseLibJars
+backend-libxposed-101:updateLintBaselineDebug - Update the lint baseline using the debug variant
+backend-libxposed-102:updateLintBaselineDebug - Update the lint baseline using the debug variant
+sample-module-101:updateLintBaselineDebug - Update the lint baseline using the debug variant
+sample-module-102:updateLintBaselineDebug - Update the lint baseline using the debug variant
+backend-libxposed-101:updateLintBaselineRelease - Update the lint baseline using the release variant
+backend-libxposed-102:updateLintBaselineRelease - Update the lint baseline using the release variant
+sample-module-101:updateLintBaselineRelease - Update the lint baseline using the release variant
+sample-module-102:updateLintBaselineRelease - Update the lint baseline using the release variant
+sample-module-101:validateSigningDebug
+sample-module-102:validateSigningDebug
+backend-libxposed-101:validateSigningDebugAndroidTest
+backend-libxposed-102:validateSigningDebugAndroidTest
+sample-module-101:validateSigningDebugAndroidTest
+sample-module-102:validateSigningDebugAndroidTest
+backend-libxposed-101:verifyReleaseResources
+backend-libxposed-102:verifyReleaseResources
+backend-libxposed-101:writeDebugAarMetadata
+backend-libxposed-102:writeDebugAarMetadata
+backend-libxposed-101:writeDebugAndroidTestSigningConfigVersions
+backend-libxposed-102:writeDebugAndroidTestSigningConfigVersions
+sample-module-101:writeDebugAndroidTestSigningConfigVersions
+sample-module-102:writeDebugAndroidTestSigningConfigVersions
+sample-module-101:writeDebugApplicationId
+sample-module-102:writeDebugApplicationId
+sample-module-101:writeDebugAppMetadata
+sample-module-102:writeDebugAppMetadata
+backend-libxposed-101:writeDebugLintModelMetadata
+backend-libxposed-102:writeDebugLintModelMetadata
+sample-module-101:writeDebugModuleMetadata
+sample-module-102:writeDebugModuleMetadata
+sample-module-101:writeDebugSigningConfigVersions
+sample-module-102:writeDebugSigningConfigVersions
+backend-libxposed-101:writeReleaseAarMetadata
+backend-libxposed-102:writeReleaseAarMetadata
+sample-module-101:writeReleaseApplicationId
+sample-module-102:writeReleaseApplicationId
+sample-module-101:writeReleaseAppMetadata
+sample-module-102:writeReleaseAppMetadata
+backend-libxposed-101:writeReleaseLintModelMetadata
+backend-libxposed-102:writeReleaseLintModelMetadata
+sample-module-101:writeReleaseModuleMetadata
+sample-module-102:writeReleaseModuleMetadata
+sample-module-101:writeReleaseSigningConfigVersions
+sample-module-102:writeReleaseSigningConfigVersions
+sample-module-101:zipApksForDebug
+sample-module-102:zipApksForDebug
+sample-module-101:zipApksForRelease
+sample-module-102:zipApksForRelease
+
+[Incubating] Problems report is available at: <repository>/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 7s
+1 actionable task: 1 executed
+Configuration cache entry stored.

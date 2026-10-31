@@ -6,23 +6,24 @@
 ## 1. 依赖方向
 
 ```
-hook-api  ←  hook-core  ←  backend-libxposed-102  ←  sample-module-102
-   ↑            ↑  ↑                                   (compileOnly io.github.libxposed:api)
+hook-api  ←  hook-core  ←  backend-libxposed-101  ←  sample-module-101
+   ↑            ↑  ├────  backend-libxposed-102  ←  sample-module-102
+   ↑            ↑  ↑              (各代仅 compileOnly 对应 io.github.libxposed:api)
    │            │  └────  hook-testing  ←  sample-java-contracts
    └────────────┴───────  (hook-testing 依赖 api+core，测试用，不是真实后端)
 ```
 
 - 编译依赖单向；运行时 backend 通过 `core.spi.HookBackend` 反向被 `HookEnvironment` 调用，
   不构成编译环。`hook-core` 不依赖任何 backend，`hook-testing` 不进 consumer APK。
-- 未创建的模块（dsl/service/codegen/doctor/native/101/bridge）不进入 settings，不留空壳。
+- 未创建的模块（dsl/service/codegen/doctor/native/bridge）不进入 settings，不留空壳。
   后续添加时各自独立可选，不被 BOM 或默认装配强拉。
 
 ## 2. 互斥装配
 
-- 一个 consumer variant 只选择一个 backend 制品。本切片提供 `backend-libxposed-102`；
-  `backend-libxposed-101` 属下一批任务，加入后两个 artifact 不得同时出现在同一 configuration。
+- 一个 consumer variant 只选择一个 backend 制品。`sample-module-101` 仅依赖 backend-101，
+  `sample-module-102` 仅依赖 backend-102；两个 artifact 不得同时出现在同一 configuration。
 - 两版官方 API 同 FQCN，禁止同时进入编译类路径；`sample-module-101/102` 是分别验证的独立产物，
-  不做单 APK 双代 bootstrap（后续独立资格）。
+  不做单 APK 双代 bootstrap（后续独立资格）。101 产品不得引用 102 的 setId/replaceHook/热重载类型。
 - 框架 API 一律 `compileOnly`：不得打包进 AAR/APK。验证方式：解析依赖图 + 检查最终 APK 条目
   （见 `work/hook/release_artifact_audit.json` 的实际检查结果）。
 - 单测例外：`testImplementation libs.libxposed.api` 只进入测试类路径，用于 stub 映射夹具，

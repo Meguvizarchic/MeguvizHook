@@ -65,12 +65,16 @@ callback 失败分别分类；本切片无 native 路径。
 - 不跨其他模块回调重排序；融合只允许同 owner、同外部注册位置、同优先级（本切片未做融合优化）。
 - `ChainSemantics` 区分 `FRAMEWORK_CHAIN / MODULE_LOCAL_CHAIN / CLASSIC_CALLBACKS / UNAVAILABLE`。
   本切片只 dispatch `FRAMEWORK_CHAIN`；其他 backend 形状在安装时返回 `UNSUPPORTED_CAPABILITY`，
-  不模拟等价。`MatchPolicy.ALL` 同样明确拒绝，留给后续任务。
+  不模拟等价。
+- `MatchPolicy.ALL` 在同一 logical registration 下为每个 target 建立独立 BoundPlan 与回执。
+  普通单项失败不撤销其他成功项，总体返回 `PARTIALLY_INSTALLED`，不承诺跨 target 原子性；
+  全部失败不发布注册。发布前 code epoch 改变则关闭本次已装项，逐项记 `ROLLED_BACK`。
 
 ## 5. 注册 / 移除 / 替换
 
 - 重复 logicalId + 相同 target：完整语义一致（含回调实例、优先级、进程过滤、能力、形状、策略）
-  返回 `ALREADY_INSTALLED`，否则 `CONFLICT`，**不静默覆盖**。
+  返回 `ALREADY_INSTALLED`，否则 `CONFLICT`，**不静默覆盖**。部分安装不得伪装成幂等成功；
+  须先 close 旧代，后续 install 才可发布新 generation。
 - `close()` 不持锁等待宿主调用：竞态调用要么沿旧不可变 plan 完成，要么收到
   `DispatchResult.passthrough()` 由原方法恰好执行一次。
 - `CloseReport` 分别声明：是否拒绝新回调、入口恢复（`RESTORED/NOT_RESTORED/UNKNOWN`）、
@@ -94,4 +98,4 @@ epoch 失效、loader 同名不同身份、桥接方法排除、静态返回检�
 有界诊断溢出。
 
 未覆盖（保持 not_run/unavailable，不记为通过）：真实框架 cell（装载、R8 后入口、真实类加载与
-优先级交错）、`MatchPolicy.ALL`、classic backend dispatch、热替换、service、native、性能阈值。
+优先级交错）、classic backend dispatch、热替换、service、native、性能阈值。

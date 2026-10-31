@@ -8,63 +8,71 @@ import io.github.jichuo1.meguviz.hook.core.spi.BackendCloseReport;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Registration state plus its dispatch channel.
- *
- * <p>Close rejects new SDK work without holding a lock and without waiting for arbitrary host
- * calls: a racing call either finishes on the old immutable plan or falls through to the original
- * exactly once via {@link DispatchResult#passthrough()}. It never sees half of two generations.
+ * One logical registration and its immutable per-target plans. Every backend entry gets a channel
+ * bound to its own plan, while close state and in-flight accounting are shared by the whole logical
+ * registration. Closing never replays a downstream call and never waits for arbitrary host code.
  */
-final class CoreRegistration implements HookRegistration, DispatchChannel {
-    private final BoundPlan plan;
+final class CoreRegistration implements HookRegistration {
+    private final List<BoundPlan> plans;
     private final DiagnosticsSink diagnostics;
+    private final Map<BoundPlan, BackendHandle> handles = new LinkedHashMap<BoundPlan, BackendHandle>();
     private final AtomicInteger inFlight = new AtomicInteger();
     private final AtomicBoolean closeOnce = new AtomicBoolean();
     private volatile RegistrationState state = RegistrationState.INSTALLED;
-    private volatile BackendHandle handle;
     private volatile CloseReport lastCloseReport;
 
     CoreRegistration(BoundPlan plan, DiagnosticsSink diagnostics) {
-        this.plan = plan;
+        this(Collections.singletonList(plan), diagnostics);
+    }
+
+    CoreRegistration(List<BoundPlan> plans, DiagnosticsSink diagnostics) {
+        if (plans.isEmpty()) {
+            throw new IllegalArgumentException("at least one bound plan is required");
+        }
+        this.plans = Collections.unmodifiableList(new ArrayList<BoundPlan>(plans));
         this.diagnostics = diagnostics;
     }
 
-    void bind(BackendHandle backendHandle) {
-        this.handle = backendHandle;
+    DispatchChannel channel(BoundPlan plan) {
+        if (!plans.contains(plan)) {
+            throw new IllegalArgumentException("plan does not belong to this registration");
+        }
+        return new PlanChannel(plan);
+    }
+
+    void bind(BoundPlan plan, BackendHandle backendHandle) {
+        handles.put(plan, backendHandle);
+    }
+
+    List<BoundPlan> plans() {
+        return plans;
     }
 
     BoundPlan plan() {
-        return plan;
+        return plans.get(0);
     }
 
-    @Override
-    public DispatchResult dispatch(BackendInvocation invocation) {
-        if (state != RegistrationState.INSTALLED) {
-            return DispatchResult.passthrough();
-        }
-        inFlight.incrementAndGet();
-        try {
-            if (state != RegistrationState.INSTALLED) {
-                // Close won the race before any SDK work happened; run the original once instead.
-                return DispatchResult.passthrough();
-            }
-            return Dispatcher.dispatch(plan, invocation, diagnostics);
-        } finally {
-            inFlight.decrementAndGet();
-        }
+    boolean isComplete() {
+        return handles.size() == plans.size();
     }
 
     @Override
     public HookId id() {
-        return plan.id();
+        return plan().id();
     }
 
     @Override
     public long generation() {
-        return plan.generation();
+        return plan().generation();
     }
 
     @Override
@@ -78,17 +86,82 @@ final class CoreRegistration implements HookRegistration, DispatchChannel {
             return lastCloseReport;
         }
         state = RegistrationState.RETIRING;
-        BackendHandle current = handle;
-        if (current == null) {
+        if (handles.isEmpty()) {
             state = RegistrationState.CLOSED;
             lastCloseReport = new CloseReport(state, true, CloseReport.EntryRestoration.UNKNOWN,
-                    inFlight.get(), CloseReport.PhysicalRelease.NOT_CLAIMED, "never bound to a backend handle");
+                    inFlight.get(), CloseReport.PhysicalRelease.NOT_CLAIMED, "no backend handle was bound");
             return lastCloseReport;
         }
-        BackendCloseReport report = current.uninstall();
-        state = report.resident() ? RegistrationState.RETIRED_RESIDENT : RegistrationState.CLOSED;
-        lastCloseReport = new CloseReport(state, true, report.entryRestoration(), inFlight.get(),
-                report.physicalRelease(), report.message());
+
+        CloseReport.EntryRestoration restoration = CloseReport.EntryRestoration.RESTORED;
+        CloseReport.PhysicalRelease physical = CloseReport.PhysicalRelease.RELEASED;
+        boolean resident = false;
+        List<String> messages = new ArrayList<String>();
+        for (Map.Entry<BoundPlan, BackendHandle> entry : handles.entrySet()) {
+            BackendCloseReport report;
+            try {
+                report = entry.getValue().uninstall();
+            } catch (RuntimeException failure) {
+                restoration = CloseReport.EntryRestoration.NOT_RESTORED;
+                physical = CloseReport.PhysicalRelease.UNKNOWN;
+                resident = true;
+                messages.add(entry.getKey().target().toGenericString() + ": uninstall failed: " + failure);
+                continue;
+            }
+            restoration = worstRestoration(restoration, report.entryRestoration());
+            physical = worstPhysical(physical, report.physicalRelease());
+            resident |= report.resident();
+            messages.add(entry.getKey().target().toGenericString() + ": " + report.message());
+        }
+        state = resident ? RegistrationState.RETIRED_RESIDENT : RegistrationState.CLOSED;
+        lastCloseReport = new CloseReport(state, true, restoration, inFlight.get(), physical,
+                messages.toString());
         return lastCloseReport;
+    }
+
+    private static CloseReport.EntryRestoration worstRestoration(CloseReport.EntryRestoration current,
+                                                                  CloseReport.EntryRestoration next) {
+        if (current == CloseReport.EntryRestoration.NOT_RESTORED || next == CloseReport.EntryRestoration.NOT_RESTORED) {
+            return CloseReport.EntryRestoration.NOT_RESTORED;
+        }
+        if (current == CloseReport.EntryRestoration.UNKNOWN || next == CloseReport.EntryRestoration.UNKNOWN) {
+            return CloseReport.EntryRestoration.UNKNOWN;
+        }
+        return CloseReport.EntryRestoration.RESTORED;
+    }
+
+    private static CloseReport.PhysicalRelease worstPhysical(CloseReport.PhysicalRelease current,
+                                                              CloseReport.PhysicalRelease next) {
+        if (current == CloseReport.PhysicalRelease.UNKNOWN || next == CloseReport.PhysicalRelease.UNKNOWN) {
+            return CloseReport.PhysicalRelease.UNKNOWN;
+        }
+        if (current == CloseReport.PhysicalRelease.NOT_CLAIMED || next == CloseReport.PhysicalRelease.NOT_CLAIMED) {
+            return CloseReport.PhysicalRelease.NOT_CLAIMED;
+        }
+        return CloseReport.PhysicalRelease.RELEASED;
+    }
+
+    private final class PlanChannel implements DispatchChannel {
+        private final BoundPlan plan;
+
+        private PlanChannel(BoundPlan plan) {
+            this.plan = plan;
+        }
+
+        @Override
+        public DispatchResult dispatch(BackendInvocation invocation) {
+            if (state != RegistrationState.INSTALLED) {
+                return DispatchResult.passthrough();
+            }
+            inFlight.incrementAndGet();
+            try {
+                if (state != RegistrationState.INSTALLED) {
+                    return DispatchResult.passthrough();
+                }
+                return Dispatcher.dispatch(plan, invocation, diagnostics);
+            } finally {
+                inFlight.decrementAndGet();
+            }
+        }
     }
 }
