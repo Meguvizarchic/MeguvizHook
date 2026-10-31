@@ -1,0 +1,113 @@
+name: Verify
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI_COMPILE_SDK_PACKAGE: 'platforms;android-37.2'
+  CI_BUILD_TOOLS: '37.0.0'
+  JDK_JAVA_OPTIONS: '-XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing'
+
+jobs:
+  verify:
+    name: JDK 27 tests, ABI, lint and release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v6.1.0
+        with:
+          distribution: temurin
+          java-version: '27'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4.0.4
+        with:
+          cmdline-tools-version: '16111833'
+          packages: platform-tools
+
+      - name: Install exact Android SDK packages
+        shell: bash
+        run: sdkmanager "${CI_COMPILE_SDK_PACKAGE}" "build-tools;${CI_BUILD_TOOLS}"
+
+      - name: Enable Gradle wrapper
+        shell: bash
+        run: chmod +x gradlew && ./gradlew --version
+
+      - name: Run JVM tests and consumers
+        shell: bash
+        run: |
+          ./gradlew \
+            :hook-dsl:test \
+            :hook-testing:test \
+            :sample-java-contracts:run \
+            :sample-kotlin-contracts:run \
+            :backend-libxposed-101:testDebugUnitTest \
+            :backend-libxposed-102:testDebugUnitTest \
+            --no-daemon --console=plain
+
+      - name: Check public API surfaces
+        shell: bash
+        run: ./gradlew apiCheck --no-daemon --console=plain
+
+      - name: Run full Android lint
+        shell: bash
+        run: ./gradlew lint --no-daemon --console=plain
+
+      - name: Build all release artifacts
+        shell: bash
+        run: |
+          ./gradlew \
+            :backend-libxposed-101:assembleRelease \
+            :backend-libxposed-102:assembleRelease \
+            :sample-module-101:assembleRelease \
+            :sample-module-102:assembleRelease \
+            :sample-module-kotlin-102:assembleRelease \
+            --no-daemon --console=plain
+
+      - name: Verify release dependency isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          for module in sample-module-101 sample-module-102 sample-module-kotlin-102; do
+            deps="$(./gradlew ":${module}:dependencies" --configuration releaseRuntimeClasspath --no-daemon --console=plain)"
+            if grep -Eq 'io\.github\.libxposed:|hook-testing' <<<"${deps}"; then
+              echo "Framework/testing dependency leaked into ${module} release runtime" >&2
+              exit 1
+            fi
+            if [[ "${module}" == 'sample-module-101' ]]; then
+              other_backend='backend-libxposed-102'
+            else
+              other_backend='backend-libxposed-101'
+            fi
+            if grep -q "${other_backend}" <<<"${deps}"; then
+              echo "Other backend generation leaked into ${module}" >&2
+              exit 1
+            fi
+            if [[ "${module}" == 'sample-module-kotlin-102' ]]; then
+              grep -q 'hook-dsl' <<<"${deps}"
+              grep -q 'kotlin-stdlib' <<<"${deps}"
+            else
+              if grep -Eq 'hook-dsl|kotlin-stdlib' <<<"${deps}"; then
+                echo "Kotlin/DSL leaked into Java-only ${module}" >&2
+                exit 1
+              fi
+            fi
+          done

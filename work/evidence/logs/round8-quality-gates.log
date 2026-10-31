@@ -1,0 +1,8 @@
+# QUAL-001 local verification evidence
+
+full_android_lint: ./gradlew lint --no-daemon --console=plain -> BUILD SUCCESSFUL
+api_baseline_normalization: api/api-core/dsl signature sets unchanged after deterministic class-name ordering
+api_positive: ./gradlew apiCheck --no-daemon --console=plain -> BUILD SUCCESSFUL
+api_negative: appended intentional marker to hook-dsl baseline -> :hook-dsl:apiCheck rejected as expected
+api_negative_cleanup: restored baseline -> :hook-dsl:apiCheck BUILD SUCCESSFUL
+ci_status_at_commit: not_run

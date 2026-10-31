@@ -19,29 +19,27 @@ public final class io.github.jichuo1.meguviz.hook.core.BoundedDiagnosticsSink im
   public synchronized long droppedCount();
 }
 Compiled from "CoreRegistration.java"
-class io.github.jichuo1.meguviz.hook.core.CoreRegistration$1 {
-}
-Compiled from "CoreRegistration.java"
-final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$PlanChannel implements io.github.jichuo1.meguviz.hook.core.DispatchChannel {
-  public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
-}
-Compiled from "CoreRegistration.java"
 final class io.github.jichuo1.meguviz.hook.core.CoreRegistration implements io.github.jichuo1.meguviz.hook.api.HookRegistration {
   public io.github.jichuo1.meguviz.hook.api.HookId id();
   public long generation();
   public io.github.jichuo1.meguviz.hook.api.RegistrationState state();
   public io.github.jichuo1.meguviz.hook.api.CloseReport close();
 }
+Compiled from "CoreRegistration.java"
+class io.github.jichuo1.meguviz.hook.core.CoreRegistration$1 {
+}
+Compiled from "CoreRegistration.java"
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$PlanChannel implements io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+  public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
+}
+Compiled from "DiagnosticsSink.java"
+public interface io.github.jichuo1.meguviz.hook.core.DiagnosticsSink {
+  public static final io.github.jichuo1.meguviz.hook.core.DiagnosticsSink NONE;
+  public abstract void record(io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event);
+}
 Compiled from "DiagnosticsSink.java"
 class io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$1 implements io.github.jichuo1.meguviz.hook.core.DiagnosticsSink {
   public void record(io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event);
-}
-Compiled from "DiagnosticsSink.java"
-public final class io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind> {
-  public static final io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind AFTER_CALLBACK_FAILED_WHILE_ORIGINAL_FAILED;
-  public static final io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind BACKEND_FAILURE;
-  public static io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind[] values();
-  public static io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind valueOf(java.lang.String);
 }
 Compiled from "DiagnosticsSink.java"
 public final class io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event {
@@ -53,21 +51,15 @@ public final class io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event {
   public java.lang.String message();
 }
 Compiled from "DiagnosticsSink.java"
-public interface io.github.jichuo1.meguviz.hook.core.DiagnosticsSink {
-  public static final io.github.jichuo1.meguviz.hook.core.DiagnosticsSink NONE;
-  public abstract void record(io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event);
+public final class io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind> {
+  public static final io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind AFTER_CALLBACK_FAILED_WHILE_ORIGINAL_FAILED;
+  public static final io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind BACKEND_FAILURE;
+  public static io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind[] values();
+  public static io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kind valueOf(java.lang.String);
 }
 Compiled from "DispatchChannel.java"
 public interface io.github.jichuo1.meguviz.hook.core.DispatchChannel {
   public abstract io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
-}
-Compiled from "DispatchResult.java"
-public final class io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind> {
-  public static final io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind RETURNED;
-  public static final io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind THREW;
-  public static final io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind PASSTHROUGH;
-  public static io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind[] values();
-  public static io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind valueOf(java.lang.String);
 }
 Compiled from "DispatchResult.java"
 public final class io.github.jichuo1.meguviz.hook.core.DispatchResult {
@@ -78,6 +70,14 @@ public final class io.github.jichuo1.meguviz.hook.core.DispatchResult {
   public java.lang.Object value();
   public java.lang.Throwable throwable();
   public java.lang.String toString();
+}
+Compiled from "DispatchResult.java"
+public final class io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind> {
+  public static final io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind RETURNED;
+  public static final io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind THREW;
+  public static final io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind PASSTHROUGH;
+  public static io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind[] values();
+  public static io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind valueOf(java.lang.String);
 }
 Compiled from "Dispatcher.java"
 final class io.github.jichuo1.meguviz.hook.core.Dispatcher {
@@ -90,15 +90,6 @@ public final class io.github.jichuo1.meguviz.hook.core.HookEnvironment implement
   public synchronized io.github.jichuo1.meguviz.hook.api.RegistrationReceipt install(io.github.jichuo1.meguviz.hook.api.HookSpec);
   public synchronized int activeRegistrationCount();
   public synchronized void close();
-}
-Compiled from "InvocationFrame.java"
-final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$ResultSlot implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
-  public boolean hasReturned();
-  public boolean hasThrown();
-  public java.lang.Object getResult();
-  public java.lang.Throwable getThrowable();
-  public void setResult(java.lang.Object);
-  public void setThrowable(java.lang.Throwable);
 }
 Compiled from "InvocationFrame.java"
 final class io.github.jichuo1.meguviz.hook.core.InvocationFrame implements io.github.jichuo1.meguviz.hook.api.AroundInvocation,io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation,io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation {
@@ -120,15 +111,24 @@ final class io.github.jichuo1.meguviz.hook.core.InvocationFrame implements io.gi
   public io.github.jichuo1.meguviz.hook.api.CallOutcome proceed();
   public io.github.jichuo1.meguviz.hook.api.CallOutcome$State proceedState();
 }
-Compiled from "ReflectiveMemberResolver.java"
-class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver$1 implements java.util.Comparator<java.lang.reflect.Executable> {
-  public int compare(java.lang.reflect.Executable, java.lang.reflect.Executable);
-  public int compare(java.lang.Object, java.lang.Object);
+Compiled from "InvocationFrame.java"
+final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$ResultSlot implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
+  public boolean hasReturned();
+  public boolean hasThrown();
+  public java.lang.Object getResult();
+  public java.lang.Throwable getThrowable();
+  public void setResult(java.lang.Object);
+  public void setThrowable(java.lang.Throwable);
 }
 Compiled from "ReflectiveMemberResolver.java"
 public final class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver implements io.github.jichuo1.meguviz.hook.core.spi.MemberResolver {
   public io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver();
   public java.util.List<java.lang.reflect.Executable> resolve(io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget, java.lang.ClassLoader) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+}
+Compiled from "ReflectiveMemberResolver.java"
+class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver$1 implements java.util.Comparator<java.lang.reflect.Executable> {
+  public int compare(java.lang.reflect.Executable, java.lang.reflect.Executable);
+  public int compare(java.lang.Object, java.lang.Object);
 }
 Compiled from "TypeChecks.java"
 final class io.github.jichuo1.meguviz.hook.core.TypeChecks {

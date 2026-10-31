@@ -33,3 +33,5 @@ configure(listOf(project(":hook-api"), project(":hook-core"), project(":hook-dsl
         }
     }
 }
+
+apply(from = "gradle/api-tasks.gradle.kts")
