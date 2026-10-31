@@ -372,5 +372,7 @@
     "classic callback backend dispatch",
     "service/native/hot reload",
     "performance A/B"
-  ]
+  ],
+  "final_verification_log": "work/evidence/logs/final-verification.log",
+  "final_verification": "BUILD SUCCESSFUL after packaging and builtInKotlin changes; 59 tests, 0 failures"
 }
