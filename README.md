@@ -3,8 +3,9 @@
 独立的 Android Hook SDK：自有 Java API、JVM 执行核心、互斥的 libxposed 后端适配制品与手工入口样例。
 真实的方法拦截始终由所选运行框架提供——本项目**不**替代管理器、注入器或 ART。
 
-当前状态：**第三轮可构建切片（0.1.0-SNAPSHOT，未发布）**。101/102 双 backend、`MatchPolicy.ALL`、
-可选 Kotlin DSL、JVM 合同和静态 release 隔离已验证；真实框架/设备资格全部未执行。
+当前状态：**第四轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
+101/102 双 backend、`MatchPolicy.ALL`、可选 Kotlin DSL、JVM 合同和静态 release 隔离已验证；
+真实框架/设备资格全部未执行。
 
 ## 模块
 
@@ -26,10 +27,11 @@
 ## 工具链（默认版本跟随 BIL）
 
 Gradle **9.8.2**（wrapper 含 SHA-256 校验）· AGP **9.4.1** · Kotlin **2.4.21**（仅可选 DSL）·
-libxposed api **102.0.0**（BIL 默认）+ **101.0.0**（独立 backend）· compileSdk **37** / minSdk **27** /
-targetSdk **37** · Android 模块 Java **17** · api/core Java **8**、dsl JVM **1.8**。
+libxposed api **102.0.0**（BIL 默认）+ **101.0.0**（独立 backend）· compileSdk **37.2** / minSdk **27** /
+targetSdk **37** · build-tools **37.0.0** · Android 模块 Java **17** · api/core Java **8**、dsl JVM **1.8**。
 Android 切片仍为纯 Java：`android.builtInKotlin=false`，不依赖 `hook-dsl`。
-第三轮实际使用 JDK 17（前两轮为 JDK 20）；BIL CI 使用 JDK 27，一致性尚未验证。
+第三/四轮实际使用 JDK 17（前两轮为 JDK 20）；BIL CI 使用 JDK 27，一致性尚未验证。
+逐项上游版本见 `work/integration/bil_dependency_alignment.json`。
 
 ## 构建与测试
 
@@ -38,7 +40,7 @@ Android 切片仍为纯 Java：`android.builtInKotlin=false`，不依赖 `hook-d
 ```bash
 git clone https://github.com/jichuo1/MeguvizHook.git
 cd MeguvizHook
-# 环境：JDK 17+（第三轮实际用 JDK 17）、Android SDK platform android-37.0 + build-tools 37.0.0
+# 环境：JDK 17+（第三/四轮实际用 JDK 17）、Android SDK platform android-37.2 + build-tools 37.0.0
 ./gradlew :hook-dsl:test :hook-testing:test :sample-java-contracts:run
 ./gradlew :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest
 ./gradlew :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease

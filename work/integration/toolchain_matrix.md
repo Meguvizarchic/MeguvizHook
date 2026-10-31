@@ -9,7 +9,7 @@
 | JDK | Azul Zulu 20+36（本环境唯一 JDK；BIL CI 用 temurin 27，未对齐，见偏差） | `java -version`，构建日志 |
 | Gradle | 9.8.2，发行版 SHA-256 与 BIL wrapper 锁定值一致 | `work/evidence/logs/gradle-tasks-all.log` |
 | AGP | 9.4.1（`com.android.library`/`application`） | 构建日志、release 产物 |
-| Android platform | `platforms;android-37.0`，ApiLevel=37.0，revision 2 | `source.properties` |
+| Android platform | `platforms;android-37.2`，compileSdk 37 minor 2（BIL `dba9ed9`） | `source.properties`、第四轮 release 构建 |
 | Build tools | 37.0.0 | SDK 安装记录 |
 | Kotlin | 可选 `hook-dsl` 使用 KGP 2.4.21 / JVM 1.8；Android 仍 `android.builtInKotlin=false` | DSL runtime 含 stdlib；Java-only release 依赖图无 kotlin-stdlib/DSL |
 | libxposed api | 102.0.0（BIL 默认）+ 101.0.0（独立 backend）；均 compileOnly / 对应 stub 测试 | AAR SHA-256 见 baseline_inventory.json / baseline.json |

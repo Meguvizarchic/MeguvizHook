@@ -17,9 +17,11 @@
         "gradle/libs.versions.toml",
         "gradle/wrapper/gradle-wrapper.properties",
         "work/evidence/logs/gradle-tasks-all.log",
-        "work/baseline.json"
+        "work/baseline.json",
+        "work/integration/bil_dependency_alignment.json",
+        "work/evidence/logs/round4-bil-alignment.log"
       ],
-      "notes": "Gradle 9.8.2 sha256 verified; versions follow BIL; JDK 27 parity open"
+      "notes": "shared dependencies/toolchain aligned with BIL dba9ed9 including android-37.2; unused annotation removed; independent libxposed 101 remains 101.0.0; JDK 27 parity open"
     },
     "INIT-003": {
       "status": "done",
@@ -212,5 +214,5 @@
       "notes": "optional service track; not started"
     }
   },
-  "current_slice": "round3: optional thin Kotlin DSL with 80 JVM/stub tests and dual-backend release regression; release_qualified remains false"
+  "current_slice": "round4: shared dependencies aligned with BIL dba9ed9; 80 JVM/stub tests and dual-backend release regression pass; release_qualified remains false"
 }

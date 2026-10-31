@@ -1,7 +1,20 @@
-# MeguvizHook 移交（第三轮：可选 Kotlin DSL）
+# MeguvizHook 移交（第四轮：BIL 依赖对齐）
 
-日期：2026-10-31。范围仅 MeguvizHook 仓库；未修改 BIL 或其他 Meguviz 仓库。
+日期：2026-10-31。范围仅 MeguvizHook 仓库；BIL 仅作只读上游参考，未修改其源码。
 任务状态以 `work/progress.json` 为准；task done ≠ release qualified（当前仍为 false）。
+
+## 第四轮结果（INIT-002 增量）
+
+- 上游固定为 `jichuo1/Bilibili_Innocent_Lab@dba9ed9a205171640a07779073d923b5b07a75b0`。
+  AGP 9.4.1、Kotlin 2.4.21、libxposed 102.0.0、JUnit 4.13.2、Gradle 9.8.2 及 wrapper SHA、
+  minSdk/targetSdk 27、Android Java 17 均逐项一致。
+- 4 个 Android 模块已对齐 `compileSdk 37 minor 2`（platform `android-37.2`）与 build-tools 37.0.0。
+- 移除源码未使用、BIL 未直接声明且 libxposed POM 未要求的 `androidx.annotation` 及全部 6 处引用；
+  101 backend 保持项目独立 `101.0.0`，未引入 BIL 的 UI/service/native 等无关依赖。
+- 验证：80 tests / 0 failures、`SAMPLE_OK`、双 backend/双 sample release BUILD SUCCESSFUL，
+  backend release 类路径 annotation=0。证据：`work/integration/bil_dependency_alignment.json`、
+  `work/evidence/logs/round4-bil-alignment.log`。本机 JDK 17 与 BIL CI JDK 27 parity 仍未验证。
+- 回退：对第四轮对齐提交执行 `git revert`，上一基线为 `df5bc0d`；禁止强推。
 
 ## 第三轮结果（INT-004）
 

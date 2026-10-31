@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-10-31",
+  "upstream": {
+    "repository": "jichuo1/Bilibili_Innocent_Lab",
+    "commit": "dba9ed9a205171640a07779073d923b5b07a75b0",
+    "paths": [
+      "Bilibili_Innocent_Lab/gradle/libs.versions.toml",
+      "Bilibili_Innocent_Lab/gradle/wrapper/gradle-wrapper.properties",
+      "Bilibili_Innocent_Lab/gradle.properties",
+      "Bilibili_Innocent_Lab/app/build.gradle.kts",
+      ".github/workflows/advanced-verify.yml",
+      ".github/workflows/canary-build.yml"
+    ]
+  },
+  "shared_alignment": [
+    {
+      "item": "AGP",
+      "bil": "9.4.1",
+      "meguvizhook": "9.4.1",
+      "status": "aligned"
+    },
+    {
+      "item": "Kotlin",
+      "bil": "2.4.21",
+      "meguvizhook": "2.4.21",
+      "status": "aligned"
+    },
+    {
+      "item": "libxposed API 102",
+      "bil": "102.0.0",
+      "meguvizhook": "102.0.0",
+      "status": "aligned"
+    },
+    {
+      "item": "JUnit",
+      "bil": "4.13.2",
+      "meguvizhook": "4.13.2",
+      "status": "aligned"
+    },
+    {
+      "item": "Gradle",
+      "bil": "9.8.2",
+      "meguvizhook": "9.8.2",
+      "status": "aligned"
+    },
+    {
+      "item": "Gradle distribution SHA-256",
+      "bil": "21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607",
+      "meguvizhook": "21bd5da2de49b642904077f38c0efdc7778e92b3ed0889392dca61b97e389607",
+      "status": "aligned"
+    },
+    {
+      "item": "Android compileSdk",
+      "bil": "37 minor 2 / android-37.2",
+      "meguvizhook": "37 minor 2 / android-37.2",
+      "status": "aligned"
+    },
+    {
+      "item": "Android build-tools",
+      "bil": "37.0.0",
+      "meguvizhook": "37.0.0",
+      "status": "aligned"
+    },
+    {
+      "item": "minSdk/targetSdk",
+      "bil": "27/27",
+      "meguvizhook": "27/27",
+      "status": "aligned"
+    },
+    {
+      "item": "Android Java",
+      "bil": "17",
+      "meguvizhook": "17",
+      "status": "aligned"
+    }
+  ],
+  "removed": [
+    {
+      "coordinate": "androidx.annotation:annotation",
+      "previous": "1.9.1",
+      "reason": "no source imports, no BIL direct declaration, and no libxposed 101/102 POM dependency; all six usages removed"
+    }
+  ],
+  "project_specific": [
+    {
+      "item": "libxposed API 101",
+      "version": "101.0.0",
+      "reason": "additional independent backend; BIL has no 101 dependency to align"
+    }
+  ],
+  "not_imported": "BIL-only UI, service, native, codegen and app dependencies are outside MeguvizHook scope",
+  "verification": {
+    "tests": 80,
+    "failures": 0,
+    "sample": "SAMPLE_OK",
+    "release_build": "BUILD SUCCESSFUL",
+    "annotation_references": 0,
+    "build_log": "work/evidence/logs/round4-bil-alignment.log",
+    "jdk": "17 local; BIL CI 27 parity remains unverified"
+  }
+}

@@ -4,7 +4,12 @@ plugins {
 
 android {
     namespace = "io.github.jichuo1.meguviz.hook.sample102"
-    compileSdk = providers.gradleProperty("project.android.compileSdk").get().toInt()
+    compileSdk {
+        version = release(providers.gradleProperty("project.android.compileSdk").get().toInt()) {
+            minorApiLevel = 2
+        }
+    }
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "io.github.jichuo1.meguviz.hook.sample102"
@@ -43,5 +48,4 @@ dependencies {
     // Exactly one backend generation in this variant. The framework API is compileOnly and must not
     // appear in the APK; adding backend-libxposed-101 here later must stay mutually exclusive.
     compileOnly(libs.libxposed.api)
-    compileOnly(libs.androidx.annotation)
 }

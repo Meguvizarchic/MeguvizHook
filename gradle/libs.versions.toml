@@ -7,7 +7,6 @@ kotlin = "2.4.21"
 libxposed = "102.0.0"
 libxposed101 = "101.0.0"
 junit = "4.13.2"
-androidx-annotation = "1.9.1"
 
 [plugins]
 android-library = { id = "com.android.library", version.ref = "agp" }
@@ -18,4 +17,3 @@ kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposed" }
 libxposed101-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposed101" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
-androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidx-annotation" }

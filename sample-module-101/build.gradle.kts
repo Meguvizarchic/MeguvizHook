@@ -4,7 +4,12 @@ plugins {
 
 android {
     namespace = "io.github.jichuo1.meguviz.hook.sample101"
-    compileSdk = providers.gradleProperty("project.android.compileSdk").get().toInt()
+    compileSdk {
+        version = release(providers.gradleProperty("project.android.compileSdk").get().toInt()) {
+            minorApiLevel = 2
+        }
+    }
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "io.github.jichuo1.meguviz.hook.sample101"
@@ -40,5 +45,4 @@ dependencies {
 
     // Exactly one backend generation. Framework classes are provided by the 101 runtime.
     compileOnly(libs.libxposed101.api)
-    compileOnly(libs.androidx.annotation)
 }

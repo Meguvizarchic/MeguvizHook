@@ -1,0 +1,287 @@
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+Calculating task graph as configuration cache cannot be reused because file 'gradle\libs.versions.toml' has changed.
+
+> Configure project :backend-libxposed-101
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+Add android.sync.suppressAgpWarnings=UNSUPPORTED_PROJECT_OPTION_USE to the gradle.properties file to suppress this warning.
+
+> Task :sample-module-101:generateReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-102:preBuild UP-TO-DATE
+> Task :backend-libxposed-102:generateReleaseAssets UP-TO-DATE
+> Task :sample-module-101:preBuild UP-TO-DATE
+> Task :backend-libxposed-101:generateReleaseAssets UP-TO-DATE
+> Task :backend-libxposed-101:preBuild UP-TO-DATE
+> Task :hook-dsl:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :backend-libxposed-101:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-101:preReleaseBuild UP-TO-DATE
+> Task :backend-libxposed-101:preDebugBuild UP-TO-DATE
+> Task :backend-libxposed-102:preReleaseBuild UP-TO-DATE
+> Task :sample-module-101:preReleaseBuild UP-TO-DATE
+> Task :backend-libxposed-102:preDebugUnitTestBuild UP-TO-DATE
+> Task :backend-libxposed-102:preDebugBuild UP-TO-DATE
+> Task :hook-core:processResources NO-SOURCE
+> Task :hook-api:processResources NO-SOURCE
+> Task :hook-testing:processResources NO-SOURCE
+> Task :backend-libxposed-102:processDebugUnitTestJavaRes NO-SOURCE
+> Task :backend-libxposed-101:processReleaseJavaRes NO-SOURCE
+> Task :sample-java-contracts:processResources NO-SOURCE
+> Task :backend-libxposed-101:processDebugJavaRes NO-SOURCE
+> Task :hook-dsl:processResources NO-SOURCE
+> Task :hook-dsl:processTestResources NO-SOURCE
+> Task :backend-libxposed-102:processReleaseJavaRes NO-SOURCE
+> Task :backend-libxposed-101:processDebugUnitTestJavaRes NO-SOURCE
+> Task :backend-libxposed-102:processDebugJavaRes NO-SOURCE
+> Task :hook-testing:processTestResources NO-SOURCE
+> Task :hook-api:compileJava UP-TO-DATE
+> Task :hook-core:compileJava UP-TO-DATE
+> Task :backend-libxposed-101:prepareReleaseArtProfile
+> Task :backend-libxposed-101:extractDeepLinksForAarRelease
+> Task :backend-libxposed-101:processDebugNavigationResources
+> Task :backend-libxposed-101:processReleaseNavigationResources
+> Task :sample-module-101:processReleaseJavaRes
+> Task :backend-libxposed-102:processDebugNavigationResources
+> Task :backend-libxposed-101:mapReleaseSourceSetPaths
+> Task :backend-libxposed-101:generateReleaseResources
+> Task :backend-libxposed-102:generateDebugResources
+> Task :backend-libxposed-101:generateDebugResources
+> Task :hook-core:classes UP-TO-DATE
+> Task :hook-api:classes UP-TO-DATE
+> Task :hook-testing:compileJava UP-TO-DATE
+> Task :hook-testing:classes UP-TO-DATE
+> Task :backend-libxposed-101:checkReleaseAarMetadata
+> Task :backend-libxposed-102:prepareLintJarForPublish
+> Task :backend-libxposed-101:prepareLintJarForPublish
+> Task :hook-core:jar UP-TO-DATE
+> Task :hook-testing:jar UP-TO-DATE
+> Task :hook-api:jar UP-TO-DATE
+> Task :sample-java-contracts:compileJava UP-TO-DATE
+> Task :sample-java-contracts:classes UP-TO-DATE
+> Task :hook-testing:compileTestJava UP-TO-DATE
+> Task :hook-testing:testClasses UP-TO-DATE
+> Task :backend-libxposed-101:writeReleaseAarMetadata
+> Task :backend-libxposed-102:prepareReleaseArtProfile
+> Task :hook-testing:test UP-TO-DATE
+> Task :backend-libxposed-102:javaPreCompileDebug
+> Task :backend-libxposed-101:javaPreCompileDebug
+> Task :backend-libxposed-101:javaPreCompileDebugUnitTest
+> Task :backend-libxposed-102:javaPreCompileDebugUnitTest
+> Task :backend-libxposed-101:javaPreCompileRelease
+> Task :backend-libxposed-102:extractDeepLinksForAarRelease FROM-CACHE
+> Task :backend-libxposed-102:generateReleaseResources FROM-CACHE
+> Task :backend-libxposed-102:writeReleaseAarMetadata
+> Task :backend-libxposed-102:mapReleaseSourceSetPaths
+> Task :backend-libxposed-102:javaPreCompileRelease FROM-CACHE
+> Task :backend-libxposed-101:mergeReleaseAssets
+> Task :backend-libxposed-102:mergeReleaseJniLibFolders
+> Task :backend-libxposed-101:mergeReleaseJniLibFolders
+> Task :backend-libxposed-102:mergeReleaseNativeLibs NO-SOURCE
+> Task :backend-libxposed-101:mergeReleaseNativeLibs NO-SOURCE
+> Task :backend-libxposed-102:mergeReleaseAssets
+> Task :backend-libxposed-102:processReleaseNavigationResources FROM-CACHE
+> Task :backend-libxposed-102:stripReleaseDebugSymbols NO-SOURCE
+> Task :backend-libxposed-101:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-101:generateReleaseResources FROM-CACHE
+> Task :sample-module-101:processReleaseNavigationResources
+> Task :sample-module-101:javaPreCompileRelease FROM-CACHE
+> Task :sample-module-101:mergeReleaseJniLibFolders
+> Task :sample-module-101:mapReleaseSourceSetPaths
+> Task :backend-libxposed-102:checkReleaseAarMetadata
+> Task :backend-libxposed-101:extractDeepLinksRelease
+> Task :backend-libxposed-101:packageDebugResources
+> Task :backend-libxposed-102:packageReleaseResources
+> Task :sample-module-101:packageReleaseResources
+> Task :backend-libxposed-101:copyReleaseJniLibsProjectAndLocalJars
+> Task :backend-libxposed-101:copyReleaseJniLibsProjectOnly
+> Task :backend-libxposed-101:packageReleaseResources
+> Task :backend-libxposed-102:packageDebugResources
+> Task :sample-module-101:checkReleaseAarMetadata
+> Task :backend-libxposed-101:mergeReleaseResources
+> Task :backend-libxposed-102:mergeReleaseResources
+> Task :sample-module-101:extractDeepLinksRelease
+> Task :sample-module-101:createReleaseCompatibleScreenManifests
+> Task :sample-module-101:mergeReleaseNativeLibs NO-SOURCE
+> Task :sample-module-101:mergeReleaseArtProfile
+> Task :sample-module-101:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-101:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :sample-module-101:mergeReleaseStartupProfile
+> Task :sample-module-101:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :sample-module-101:extractProguardFiles
+> Task :backend-libxposed-101:extractProguardFiles
+> Task :backend-libxposed-101:writeReleaseLintModelMetadata
+> Task :sample-module-102:preBuild UP-TO-DATE
+> Task :sample-module-102:preReleaseBuild UP-TO-DATE
+> Task :sample-module-101:writeReleaseAppMetadata
+> Task :backend-libxposed-102:copyReleaseJniLibsProjectAndLocalJars
+> Task :sample-module-102:checkReleaseDuplicateClasses
+> Task :sample-module-101:checkReleaseDuplicateClasses
+> Task :sample-module-102:mergeReleaseJniLibFolders
+> Task :sample-module-102:generateReleaseResources FROM-CACHE
+> Task :sample-module-101:mergeReleaseResources
+> Task :sample-module-102:processReleaseNavigationResources
+> Task :sample-module-102:javaPreCompileRelease FROM-CACHE
+> Task :sample-module-101:mergeReleaseAssets
+> Task :sample-module-102:mapReleaseSourceSetPaths
+> Task :sample-module-102:packageReleaseResources
+> Task :sample-module-102:mergeReleaseArtProfile
+> Task :backend-libxposed-102:copyReleaseJniLibsProjectOnly
+> Task :sample-module-102:mergeReleaseNativeLibs NO-SOURCE
+> Task :sample-module-102:stripReleaseDebugSymbols NO-SOURCE
+> Task :sample-module-102:extractReleaseNativeSymbolTables NO-SOURCE
+> Task :sample-module-102:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :sample-module-102:createReleaseCompatibleScreenManifests
+> Task :sample-module-101:compressReleaseAssets
+> Task :backend-libxposed-102:extractDeepLinksRelease FROM-CACHE
+> Task :sample-module-102:mergeReleaseResources
+> Task :backend-libxposed-101:compileReleaseLibraryResources
+> Task :backend-libxposed-102:compileReleaseLibraryResources
+> Task :sample-module-102:generateReleaseAssets UP-TO-DATE
+> Task :sample-module-102:compileReleaseNavigationResources
+> Task :sample-module-102:extractDeepLinksRelease
+> Task :sample-module-102:mergeReleaseStartupProfile
+> Task :sample-module-102:extractProguardFiles
+> Task :backend-libxposed-102:writeReleaseLintModelMetadata
+> Task :backend-libxposed-102:extractProguardFiles
+> Task :sample-module-102:writeReleaseAppMetadata
+> Task :sample-module-102:mergeReleaseAssets
+> Task :sample-module-102:processReleaseJavaRes
+> Task :sample-module-102:compressReleaseAssets FROM-CACHE
+> Task :sample-module-102:checkReleaseAarMetadata
+> Task :sample-module-101:compileReleaseNavigationResources
+> Task :sample-module-102:writeReleaseSigningConfigVersions
+> Task :sample-module-101:writeReleaseSigningConfigVersions
+> Task :sample-module-102:collectReleaseDependencies
+> Task :sample-module-101:collectReleaseDependencies
+
+> Task :sample-java-contracts:run
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+install mutable: RegistrationReceipt[sample.java.mutable INSTALLED backend=fake-chain generation=1 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+install early: RegistrationReceipt[sample.java.early INSTALLED backend=fake-chain generation=2 installed 1/1 targets targets=[TargetInstallReceipt[public static int io.github.jichuo1.meguviz.hook.testing.Fixtures.add(int,int) INSTALLED installed]]]
+SAMPLE_OK backend=fake-chain close=CLOSED
+
+> Task :backend-libxposed-101:mergeReleaseJavaResource
+> Task :backend-libxposed-102:mergeReleaseJavaResource
+> Task :backend-libxposed-101:processReleaseManifest
+> Task :backend-libxposed-102:processReleaseManifest
+> Task :sample-module-102:processReleaseMainManifest
+> Task :sample-module-101:processReleaseMainManifest
+> Task :sample-module-102:mergeReleaseJavaResource
+> Task :sample-module-101:mergeReleaseJavaResource
+> Task :sample-module-101:processReleaseManifest
+> Task :sample-module-102:processReleaseManifest
+> Task :sample-module-101:processReleaseManifestForPackage
+> Task :sample-module-102:processReleaseManifestForPackage
+> Task :sample-module-102:extractReleaseVersionControlInfo
+> Task :sample-module-101:extractReleaseVersionControlInfo
+> Task :sample-module-102:sdkReleaseDependencyData
+> Task :sample-module-101:sdkReleaseDependencyData
+> Task :backend-libxposed-102:parseDebugLocalResources
+> Task :sample-module-102:parseReleaseLocalResources
+> Task :sample-module-101:parseReleaseLocalResources
+> Task :backend-libxposed-102:parseReleaseLocalResources
+> Task :backend-libxposed-101:parseReleaseLocalResources
+> Task :backend-libxposed-101:parseDebugLocalResources
+> Task :backend-libxposed-101:generateReleaseRFile
+> Task :backend-libxposed-102:generateDebugRFile
+> Task :backend-libxposed-101:generateDebugRFile
+> Task :backend-libxposed-102:generateReleaseRFile
+> Task :sample-module-102:generateReleaseRFile
+> Task :sample-module-101:generateReleaseRFile
+> Task :backend-libxposed-101:generateDebugUnitTestStubRFile
+> Task :backend-libxposed-102:generateDebugUnitTestStubRFile
+> Task :backend-libxposed-101:verifyReleaseResources
+> Task :sample-module-102:processReleaseResources
+> Task :backend-libxposed-102:extractReleaseAnnotations
+> Task :backend-libxposed-101:extractReleaseAnnotations
+> Task :sample-module-101:processReleaseResources
+> Task :backend-libxposed-102:verifyReleaseResources
+> Task :backend-libxposed-102:compileReleaseJavaWithJavac
+> Task :backend-libxposed-101:compileReleaseJavaWithJavac
+> Task :backend-libxposed-101:compileDebugJavaWithJavac
+> Task :backend-libxposed-102:compileDebugJavaWithJavac
+> Task :backend-libxposed-102:mergeReleaseGeneratedProguardFiles
+> Task :backend-libxposed-101:mergeReleaseGeneratedProguardFiles
+> Task :backend-libxposed-102:mergeReleaseConsumerProguardFiles
+> Task :backend-libxposed-101:mergeReleaseConsumerProguardFiles
+> Task :backend-libxposed-101:exportReleaseConsumerProguardFiles
+> Task :backend-libxposed-102:exportReleaseConsumerProguardFiles
+> Task :backend-libxposed-102:bundleLibRuntimeToJarRelease
+> Task :backend-libxposed-101:bundleLibRuntimeToJarDebug
+> Task :backend-libxposed-101:bundleLibRuntimeToJarRelease
+> Task :backend-libxposed-102:bundleLibRuntimeToJarDebug
+> Task :backend-libxposed-102:bundleLibCompileToJarRelease
+> Task :backend-libxposed-102:bundleLibCompileToJarDebug
+> Task :backend-libxposed-101:bundleLibCompileToJarRelease
+> Task :backend-libxposed-101:bundleLibCompileToJarDebug
+> Task :backend-libxposed-102:syncReleaseLibJars
+> Task :backend-libxposed-101:syncReleaseLibJars
+> Task :backend-libxposed-102:createFullJarRelease
+> Task :backend-libxposed-101:createFullJarRelease
+> Task :backend-libxposed-102:bundleReleaseAar
+> Task :backend-libxposed-101:bundleReleaseAar
+> Task :backend-libxposed-102:assembleRelease
+> Task :backend-libxposed-101:assembleRelease
+> Task :backend-libxposed-101:bundleReleaseLocalLintAar
+> Task :backend-libxposed-102:bundleReleaseLocalLintAar
+> Task :sample-module-101:optimizeReleaseResources
+> Task :sample-module-102:compileReleaseJavaWithJavac
+> Task :sample-module-102:mergeReleaseGeneratedProguardFiles
+> Task :sample-module-102:expandReleaseArtProfileWildcards
+> Task :sample-module-101:compileReleaseJavaWithJavac
+> Task :backend-libxposed-101:compileDebugUnitTestJavaWithJavac
+> Task :backend-libxposed-102:compileDebugUnitTestJavaWithJavac
+> Task :sample-module-101:mergeReleaseGeneratedProguardFiles
+> Task :sample-module-101:expandReleaseArtProfileWildcards
+> Task :sample-module-102:optimizeReleaseResources
+> Task :backend-libxposed-101:generateReleaseLintModel
+> Task :backend-libxposed-102:generateReleaseLintModel
+> Task :backend-libxposed-102:generateReleaseLintVitalModel
+> Task :backend-libxposed-101:generateReleaseLintVitalModel
+> Task :sample-module-102:generateReleaseLintVitalReportModel
+> Task :sample-module-101:generateReleaseLintVitalReportModel
+
+> Task :backend-libxposed-102:testDebugUnitTest
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+
+NOTE: Picked up JDK_JAVA_OPTIONS: -XX:MaxMetaspaceSize=1024m -XX:ReservedCodeCacheSize=512m -XX:+UseCodeCacheFlushing --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.prefs/java.util.prefs=ALL-UNNAMED --add-opens=java.base/java.nio.charset=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.xml/javax.xml.namespace=ALL-UNNAMED --add-opens=java.base/java.time=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+> Task :backend-libxposed-101:testDebugUnitTest
+
+> Task :hook-dsl:compileKotlin
+> Task :hook-dsl:compileJava NO-SOURCE
+> Task :hook-dsl:classes UP-TO-DATE
+> Task :hook-dsl:jar UP-TO-DATE
+> Task :hook-dsl:compileTestKotlin
+> Task :hook-dsl:compileTestJava NO-SOURCE
+> Task :hook-dsl:testClasses UP-TO-DATE
+> Task :hook-dsl:test UP-TO-DATE
+> Task :sample-module-102:minifyReleaseWithR8
+> Task :sample-module-102:compileReleaseArtProfile
+> Task :sample-module-101:minifyReleaseWithR8
+> Task :sample-module-101:compileReleaseArtProfile
+> Task :backend-libxposed-102:lintVitalAnalyzeRelease
+> Task :backend-libxposed-101:lintVitalAnalyzeRelease
+> Task :sample-module-102:lintVitalAnalyzeRelease
+> Task :sample-module-102:lintVitalReportRelease
+> Task :sample-module-102:lintVitalRelease
+> Task :sample-module-102:packageRelease
+> Task :sample-module-102:assembleRelease
+> Task :sample-module-102:createReleaseApkListingFileRedirect
+> Task :sample-module-101:lintVitalAnalyzeRelease
+> Task :sample-module-101:lintVitalReportRelease
+> Task :sample-module-101:lintVitalRelease
+> Task :sample-module-101:packageRelease
+> Task :sample-module-101:assembleRelease
+> Task :sample-module-101:createReleaseApkListingFileRedirect
+
+[Incubating] Problems report is available at: file:///<local>/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 49s
+200 actionable tasks: 179 executed, 10 from cache, 11 up-to-date
+Configuration cache entry stored.

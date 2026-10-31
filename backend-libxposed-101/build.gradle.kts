@@ -4,7 +4,12 @@ plugins {
 
 android {
     namespace = "io.github.jichuo1.meguviz.hook.backend.libxposed101"
-    compileSdk = providers.gradleProperty("project.android.compileSdk").get().toInt()
+    compileSdk {
+        version = release(providers.gradleProperty("project.android.compileSdk").get().toInt()) {
+            minorApiLevel = 2
+        }
+    }
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         minSdk = providers.gradleProperty("project.android.minSdk").get().toInt()
@@ -22,10 +27,8 @@ dependencies {
 
     // API 101 is a separate compileOnly input; the 102 artifact is never on this module's classpath.
     compileOnly(libs.libxposed101.api)
-    compileOnly(libs.androidx.annotation)
 
     testImplementation(libs.junit)
     testImplementation(project(":hook-testing"))
     testImplementation(libs.libxposed101.api)
-    testImplementation(libs.androidx.annotation)
 }

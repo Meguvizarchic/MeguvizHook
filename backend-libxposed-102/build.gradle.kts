@@ -4,7 +4,12 @@ plugins {
 
 android {
     namespace = "io.github.jichuo1.meguviz.hook.backend.libxposed102"
-    compileSdk = providers.gradleProperty("project.android.compileSdk").get().toInt()
+    compileSdk {
+        version = release(providers.gradleProperty("project.android.compileSdk").get().toInt()) {
+            minorApiLevel = 2
+        }
+    }
+    buildToolsVersion = "37.0.0"
 
     defaultConfig {
         minSdk = providers.gradleProperty("project.android.minSdk").get().toInt()
@@ -23,12 +28,10 @@ dependencies {
 
     // Framework classes are provided by the runtime and must never be packaged into a consumer APK.
     compileOnly(libs.libxposed.api)
-    compileOnly(libs.androidx.annotation)
 
     testImplementation(libs.junit)
     testImplementation(project(":hook-testing"))
     // compileOnly never reaches the unit-test classpath; the stub-based mapping fixture needs the
     // real 102 interface definitions, matching how BIL consumes them in its own unit tests.
     testImplementation(libs.libxposed.api)
-    testImplementation(libs.androidx.annotation)
 }
