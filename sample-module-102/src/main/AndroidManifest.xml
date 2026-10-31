@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      Minimal libxposed 102 module manifest. Entry metadata lives in
+      src/main/resources/META-INF/xposed/ (module.prop, java_init.list, scope.list).
+      scope.list contains the placeholder host package com.example.host; replace it with the real
+      host package before trying the sample on a device.
+    -->
+    <application
+        android:allowBackup="false"
+        android:label="MeguvizHook Sample 102"
+        android:supportsRtl="true" />
+</manifest>

@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "project": "MeguvizHook",
+  "profile_id": "meguvizhook-profile-draft-v1",
+  "status": "DRAFT_NOT_FROZEN",
+  "release_qualified": false,
+  "freeze": {
+    "owner": null,
+    "timestamp": null,
+    "baseline_aa_evidence": null,
+    "baseline_artifact_sha256": null,
+    "candidate_artifact_sha256": null,
+    "feature_manifest_sha256": null,
+    "workload_sha256": null
+  },
+  "release_profiles": [
+    "core-101",
+    "core-102"
+  ],
+  "workloads": [
+    {
+      "id": "B01",
+      "name": "no_args_before_after",
+      "description": "NO_ARGS before+after around a static no-arg target; SDK-side work only",
+      "controls": [
+        "A0_direct_backend",
+        "A1_existing_equivalent_facade",
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B02",
+      "name": "read_args_two_primitives",
+      "description": "READ_ARGS read of two int slots",
+      "controls": [
+        "A0_direct_backend",
+        "A1_existing_equivalent_facade",
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B03",
+      "name": "entry_snapshot_shallow",
+      "description": "ENTRY_SNAPSHOT shallow slot capture; cost attributed only to this shape",
+      "controls": [
+        "A0_direct_backend",
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B04",
+      "name": "mutable_args_writeback",
+      "description": "MUTABLE_ARGS single validated write visible downstream",
+      "controls": [
+        "A0_direct_backend",
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B05",
+      "name": "around_proceed_once",
+      "description": "AROUND single proceed and result passthrough",
+      "controls": [
+        "A0_direct_backend",
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B06",
+      "name": "reentrant_depth4",
+      "description": "synchronous reentry to depth 4; independent frames, no shared ThreadLocal array",
+      "controls": [
+        "A0_direct_backend",
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B07",
+      "name": "install_latency",
+      "description": "install-time prune/capability/bind/plan publish latency, separated from callbacks",
+      "controls": [
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B08",
+      "name": "close_with_inflight",
+      "description": "close while calls are in flight; no duplicate original, retired state reported",
+      "controls": [
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B09",
+      "name": "callback_failure_paths",
+      "description": "before/after/original failure handling incl. original throwable identity; negative results kept",
+      "controls": [
+        "A0_direct_backend",
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    },
+    {
+      "id": "B10",
+      "name": "package_and_memory",
+      "description": "APK bytes, added RSS, threads, FDs and retired resident budget for the selected profile",
+      "controls": [
+        "A0_direct_backend",
+        "A2_meguvizhook_same_semantics"
+      ],
+      "device_cells": [],
+      "status": "defined_not_measured"
+    }
+  ],
+  "device_cells": [],
+  "statistics": {
+    "independent_sessions": null,
+    "samples_per_session": null,
+    "warmup_policy": null,
+    "randomization_policy": null,
+    "analysis_method": null,
+    "confidence_level": null
+  },
+  "metrics": [
+    {
+      "name": "callback_cpu",
+      "unit": "ns",
+      "minimum_worthwhile_reduction_fraction": null,
+      "maximum_allowed_increase_fraction": null
+    },
+    {
+      "name": "task_p95",
+      "unit": "ns",
+      "minimum_worthwhile_reduction_fraction": null,
+      "maximum_allowed_increase_fraction": null
+    },
+    {
+      "name": "task_p99",
+      "unit": "ns",
+      "minimum_worthwhile_reduction_fraction": null,
+      "maximum_allowed_increase_fraction": null
+    },
+    {
+      "name": "installation",
+      "unit": "ms",
+      "minimum_worthwhile_reduction_fraction": null,
+      "maximum_allowed_increase_fraction": null
+    },
+    {
+      "name": "cold_start",
+      "unit": "ms",
+      "minimum_worthwhile_reduction_fraction": null,
+      "maximum_allowed_increase_fraction": null
+    }
+  ],
+  "budgets": {
+    "additional_rss_bytes": null,
+    "additional_apk_bytes": null,
+    "additional_fd_count": null,
+    "additional_thread_count": null,
+    "retired_resident_bytes": null
+  },
+  "hard_constraints": {
+    "ordinary_hook_added_jni_calls": 0,
+    "ordinary_hook_added_ipc_calls": 0,
+    "native_disabled_added_so": 0,
+    "new_semantic_failures_allowed": 0,
+    "implicit_duplicate_original_execution_allowed": 0
+  },
+  "notes": [
+    "This is a draft, not an established SLO.",
+    "Fill actual constraints after baseline A/A and before treatment A/B.",
+    "Historical research and kit validation do not count as SDK device evidence.",
+    "GATE-001 only: workloads and raw schema are defined; every threshold/sample/device field stays null until A/A then GATE-002."
+  ]
+}

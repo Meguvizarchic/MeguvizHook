@@ -1,0 +1,17 @@
+# Version catalog. Toolchain numbers intentionally follow Bilibili_Innocent_Lab
+# (Bilibili_Innocent_Lab/gradle/libs.versions.toml @ main, read 2026-10-31) so the SDK and its
+# first consumer resolve the same AGP / Gradle / libxposed combination.
+[versions]
+agp = "9.4.1"
+libxposed = "102.0.0"
+junit = "4.13.2"
+androidx-annotation = "1.9.1"
+
+[plugins]
+android-library = { id = "com.android.library", version.ref = "agp" }
+android-application = { id = "com.android.application", version.ref = "agp" }
+
+[libraries]
+libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposed" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidx-annotation" }

@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "task": "HOOK-005",
+  "observed_at": "2026-10-31",
+  "scope": "install-time pruning, binding, match policy and epoch invalidation implemented in HookEnvironment/ReflectiveMemberResolver",
+  "fixtures": [
+    {
+      "id": "process.filtered",
+      "contract": "process pruning happens before capability checks and installation",
+      "test": "InstallContractTest.processPruningHappensBeforeInstall",
+      "expected": "FILTERED, backend.installCount == 0",
+      "observed": "passed"
+    },
+    {
+      "id": "capability.unsupported",
+      "contract": "required capability not SUPPORTED_IN_DECLARED_CELL refuses install",
+      "test": "InstallContractTest.unsupportedRequiredCapabilityRefusesBeforeInstall",
+      "observed": "passed"
+    },
+    {
+      "id": "capability.unknown",
+      "contract": "UNKNOWN (including undeclared keys) is never promoted to supported",
+      "test": "InstallContractTest.unknownCapabilityIsNeverTreatedAsSupported, undeclaredCapabilityAnswersUnknown",
+      "observed": "passed"
+    },
+    {
+      "id": "binding.unique.ambiguous",
+      "contract": "UNIQUE with several overloads returns AMBIGUOUS_TARGET and installs nothing",
+      "test": "InstallContractTest.ambiguousOverloadIsRejectedUnderUnique",
+      "observed": "passed"
+    },
+    {
+      "id": "binding.first.stable",
+      "contract": "FIRST uses a stable signature ordering rather than VM reflection order",
+      "test": "InstallContractTest.firstPolicyUsesStableSignatureOrder",
+      "observed": "passed"
+    },
+    {
+      "id": "binding.return.check",
+      "contract": "declared return type participates in matching and static return checks",
+      "test": "InstallContractTest.staticReturnCheckNarrowsOverloads, wrongReturnTypeMakesTargetMissing",
+      "observed": "passed"
+    },
+    {
+      "id": "binding.bridge.excluded",
+      "contract": "synthetic/bridge methods are not resolved as hook targets",
+      "test": "InstallContractTest.resolverExcludesBridgeMethods",
+      "observed": "passed"
+    },
+    {
+      "id": "binding.loader.identity",
+      "contract": "same class name in different loaders yields different Member identities even with identical loader display names",
+      "test": "InstallContractTest.sameClassNameInDifferentLoadersBindsDifferentMembers",
+      "observed": "passed"
+    },
+    {
+      "id": "epoch.stale",
+      "contract": "a code epoch change during install discards the unpublished plan",
+      "test": "InstallContractTest.epochChangeDuringInstallDiscardsPlan",
+      "observed": "passed (STALE_IDENTITY, installCount == 0)"
+    },
+    {
+      "id": "registration.conflict",
+      "contract": "duplicate logicalId is idempotent only for identical full semantics; otherwise CONFLICT without overwrite",
+      "test": "InstallContractTest.duplicateIdIsIdempotentOnlyForIdenticalSemantics",
+      "observed": "passed"
+    },
+    {
+      "id": "close.inflight",
+      "contract": "close reports observed in-flight leases and never replays the original; racing calls fall through exactly once",
+      "test": "ReentryAndLifetimeTest.closeDuringInflightCallReportsLeaseAndCompletesOnOldPlan, concurrentCallsAndCloseNeverReplayOriginal",
+      "observed": "passed (1000 concurrent calls, 1000 original executions)"
+    }
+  ],
+  "not_implemented": [
+    "MatchPolicy.ALL with per-target receipts (refused explicitly)",
+    "resolution caching and epoch-aware negative cache reuse (no cache exists in this slice)",
+    "replacement/hot generation swap",
+    "device-verified entry restoration"
+  ]
+}

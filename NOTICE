@@ -1,0 +1,29 @@
+MeguvizHook
+Copyright 2026 MeguvizHook contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party components and references
+=====================================
+
+1. libxposed API (io.github.libxposed:api:102.0.0)
+   - License: Apache License 2.0 (https://github.com/libxposed/api)
+   - Usage: compileOnly for the backend adapter and testImplementation for JVM stub fixtures.
+     No libxposed class is bundled into MeguvizHook artifacts or the sample APK.
+   - Its published sources were read to verify interface semantics; no upstream source file is
+     copied into this repository and no upstream copyright header was modified.
+
+2. Gradle wrapper files (gradlew, gradlew.bat, gradle/wrapper/gradle-wrapper.jar,
+   gradle/wrapper/gradle-wrapper.properties)
+   - Copied from the Bilibili_Innocent_Lab repository to keep the exact same Gradle 9.8.2
+     distribution and SHA-256 pin. Wrapper scripts/jar are part of the Gradle project,
+     licensed under Apache License 2.0 (https://github.com/gradle/gradle).
+
+3. JUnit 4.13.2 and androidx.annotation
+   - Test/compile-time dependencies only, resolved from Maven Central / Google Maven.
+
+Reference-only material
+=======================
+Bilibili_Innocent_Lab (BIL) was read read-only to align toolchain versions and to confirm the
+libxposed 102 entry metadata layout. No BIL business code, resources or data paths are copied,
+and no BIL optimization is claimed as a MeguvizHook result.

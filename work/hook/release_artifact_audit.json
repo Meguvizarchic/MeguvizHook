@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "task": "HOOK-003 (102 half)",
+  "observed_at": "2026-10-31",
+  "built_artifacts": {
+    "backend-libxposed-102-release.aar": {
+      "sha256": "dcb63246b5a0bf0a925124f820600d5238423bd95050382d2f438a132f13a8fb",
+      "built_by": ":backend-libxposed-102:assembleRelease",
+      "log": "work/evidence/logs/android-release.log"
+    },
+    "sample-module-102-release-unsigned.apk": {
+      "sha256": "12203dfea23ed8a1dd895294ffa617a97d6b63d54b12a06c64a6e4140f2b435c",
+      "built_by": ":sample-module-102:assembleRelease (minifyEnabled=true, R8)",
+      "log": "work/evidence/logs/android-release.log",
+      "signed": false
+    }
+  },
+  "apk_entry_audit": {
+    "entries": [
+      "META-INF/com/android/build/gradle/app-metadata.properties",
+      "META-INF/version-control-info.textproto",
+      "classes.dex",
+      "META-INF/xposed/java_init.list",
+      "META-INF/xposed/module.prop",
+      "META-INF/xposed/scope.list",
+      "AndroidManifest.xml",
+      "resources.arsc"
+    ],
+    "libxposed_class_files_present": false,
+    "native_libraries_present": false,
+    "kotlin_metadata_present_after_excludes": false,
+    "dex_references_xposedmodule_type": true,
+    "interpretation": "the framework type is referenced by module code but no framework class is packaged; compileOnly boundary holds for this artifact"
+  },
+  "dependency_audit": {
+    "configuration": "sample-module-102 releaseRuntimeClasspath",
+    "log": "work/evidence/logs/sample-release-runtime-deps.log",
+    "contains_libxposed": false,
+    "contains_kotlin_stdlib": false,
+    "contains_backend_101": false,
+    "note": "android.builtInKotlin=false removed the AGP-injected kotlin-stdlib from this Java-only variant"
+  },
+  "r8": {
+    "enabled_for_sample_release": true,
+    "entry_keep_rules": "sample-module-102/proguard-rules.pro",
+    "entry_class_present_in_dex": "verified indirectly by packaging and reference checks only; no dex-level reachability analysis tool was run",
+    "device_loading_verified": false
+  },
+  "not_verified": [
+    "real 102 runtime loading of the sample module",
+    "backend-libxposed-101 artifact and its sample (not implemented)",
+    "dual-generation single-APK bootstrap (explicitly out of scope)",
+    "signed release artifacts",
+    "lint/instrumented device cells"
+  ]
+}

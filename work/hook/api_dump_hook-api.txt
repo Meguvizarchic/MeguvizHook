@@ -1,0 +1,383 @@
+Compiled from "AfterCallback.java"
+public interface io.github.jichuo1.meguviz.hook.api.AfterCallback {
+  public abstract void after(io.github.jichuo1.meguviz.hook.api.HookInvocation, io.github.jichuo1.meguviz.hook.api.InvocationResult) throws java.lang.Throwable;
+}
+Compiled from "AroundCallback.java"
+public interface io.github.jichuo1.meguviz.hook.api.AroundCallback {
+  public abstract void around(io.github.jichuo1.meguviz.hook.api.AroundInvocation) throws java.lang.Throwable;
+}
+Compiled from "AroundInvocation.java"
+public interface io.github.jichuo1.meguviz.hook.api.AroundInvocation extends io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation {
+  public abstract io.github.jichuo1.meguviz.hook.api.CallOutcome proceed();
+  public abstract io.github.jichuo1.meguviz.hook.api.CallOutcome$State proceedState();
+}
+Compiled from "BackendCapabilities.java"
+class io.github.jichuo1.meguviz.hook.api.BackendCapabilities$1 {
+}
+Compiled from "BackendCapabilities.java"
+public final class io.github.jichuo1.meguviz.hook.api.BackendCapabilities$Builder {
+  public io.github.jichuo1.meguviz.hook.api.BackendCapabilities$Builder(java.lang.String, io.github.jichuo1.meguviz.hook.api.ChainSemantics);
+  public io.github.jichuo1.meguviz.hook.api.BackendCapabilities$Builder declare(io.github.jichuo1.meguviz.hook.api.Capability, io.github.jichuo1.meguviz.hook.api.CapabilityResult);
+  public io.github.jichuo1.meguviz.hook.api.BackendCapabilities build();
+}
+Compiled from "BackendCapabilities.java"
+public final class io.github.jichuo1.meguviz.hook.api.BackendCapabilities {
+  public java.lang.String backendId();
+  public io.github.jichuo1.meguviz.hook.api.ChainSemantics chainSemantics();
+  public io.github.jichuo1.meguviz.hook.api.CapabilityResult lookup(io.github.jichuo1.meguviz.hook.api.Capability);
+  public java.util.Map<io.github.jichuo1.meguviz.hook.api.Capability, io.github.jichuo1.meguviz.hook.api.CapabilityResult> asMap();
+}
+Compiled from "BeforeCallback.java"
+public interface io.github.jichuo1.meguviz.hook.api.BeforeCallback {
+  public abstract void before(io.github.jichuo1.meguviz.hook.api.HookInvocation) throws java.lang.Throwable;
+}
+Compiled from "CallOutcome.java"
+public final class io.github.jichuo1.meguviz.hook.api.CallOutcome$State extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.CallOutcome$State> {
+  public static final io.github.jichuo1.meguviz.hook.api.CallOutcome$State NOT_CALLED;
+  public static final io.github.jichuo1.meguviz.hook.api.CallOutcome$State RUNNING;
+  public static final io.github.jichuo1.meguviz.hook.api.CallOutcome$State RETURNED;
+  public static final io.github.jichuo1.meguviz.hook.api.CallOutcome$State THREW;
+  public static io.github.jichuo1.meguviz.hook.api.CallOutcome$State[] values();
+  public static io.github.jichuo1.meguviz.hook.api.CallOutcome$State valueOf(java.lang.String);
+}
+Compiled from "CallOutcome.java"
+public final class io.github.jichuo1.meguviz.hook.api.CallOutcome {
+  public static io.github.jichuo1.meguviz.hook.api.CallOutcome notCalled();
+  public static io.github.jichuo1.meguviz.hook.api.CallOutcome running();
+  public static io.github.jichuo1.meguviz.hook.api.CallOutcome returned(java.lang.Object);
+  public static io.github.jichuo1.meguviz.hook.api.CallOutcome threw(java.lang.Throwable);
+  public io.github.jichuo1.meguviz.hook.api.CallOutcome$State state();
+  public java.lang.Object value();
+  public java.lang.Throwable throwable();
+  public java.lang.String toString();
+}
+Compiled from "Capability.java"
+public final class io.github.jichuo1.meguviz.hook.api.Capability {
+  public static final io.github.jichuo1.meguviz.hook.api.Capability FRAMEWORK_CHAIN;
+  public static final io.github.jichuo1.meguviz.hook.api.Capability MODULE_LOCAL_CHAIN;
+  public static final io.github.jichuo1.meguviz.hook.api.Capability CLASSIC_CALLBACKS;
+  public static final io.github.jichuo1.meguviz.hook.api.Capability ATOMIC_REPLACE;
+  public static final io.github.jichuo1.meguviz.hook.api.Capability HOT_RELOAD;
+  public static io.github.jichuo1.meguviz.hook.api.Capability of(java.lang.String);
+  public java.lang.String key();
+  public boolean equals(java.lang.Object);
+  public int hashCode();
+  public java.lang.String toString();
+}
+Compiled from "CapabilityResult.java"
+public final class io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status> {
+  public static final io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status SUPPORTED_IN_DECLARED_CELL;
+  public static final io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status UNSUPPORTED;
+  public static final io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status UNKNOWN;
+  public static final io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status TEMPORARILY_UNAVAILABLE;
+  public static io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status[] values();
+  public static io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status valueOf(java.lang.String);
+}
+Compiled from "CapabilityResult.java"
+public final class io.github.jichuo1.meguviz.hook.api.CapabilityResult {
+  public static io.github.jichuo1.meguviz.hook.api.CapabilityResult of(io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status, java.lang.String, java.lang.String, java.lang.String, java.lang.String);
+  public static io.github.jichuo1.meguviz.hook.api.CapabilityResult unknown(java.lang.String, java.lang.String);
+  public static io.github.jichuo1.meguviz.hook.api.CapabilityResult unsupported(java.lang.String, java.lang.String);
+  public io.github.jichuo1.meguviz.hook.api.CapabilityResult$Status status();
+  public java.lang.String namespace();
+  public java.lang.String versionHint();
+  public java.lang.String declaredCell();
+  public java.lang.String detail();
+  public boolean isSupportedInDeclaredCell();
+  public java.lang.String toString();
+}
+Compiled from "ChainSemantics.java"
+public final class io.github.jichuo1.meguviz.hook.api.ChainSemantics extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.ChainSemantics> {
+  public static final io.github.jichuo1.meguviz.hook.api.ChainSemantics FRAMEWORK_CHAIN;
+  public static final io.github.jichuo1.meguviz.hook.api.ChainSemantics MODULE_LOCAL_CHAIN;
+  public static final io.github.jichuo1.meguviz.hook.api.ChainSemantics CLASSIC_CALLBACKS;
+  public static final io.github.jichuo1.meguviz.hook.api.ChainSemantics UNAVAILABLE;
+  public static io.github.jichuo1.meguviz.hook.api.ChainSemantics[] values();
+  public static io.github.jichuo1.meguviz.hook.api.ChainSemantics valueOf(java.lang.String);
+}
+Compiled from "CloseReport.java"
+public final class io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration> {
+  public static final io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration RESTORED;
+  public static final io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration NOT_RESTORED;
+  public static final io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration UNKNOWN;
+  public static io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration[] values();
+  public static io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration valueOf(java.lang.String);
+}
+Compiled from "CloseReport.java"
+public final class io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease> {
+  public static final io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease RELEASED;
+  public static final io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease NOT_CLAIMED;
+  public static final io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease UNKNOWN;
+  public static io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease[] values();
+  public static io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease valueOf(java.lang.String);
+}
+Compiled from "CloseReport.java"
+public final class io.github.jichuo1.meguviz.hook.api.CloseReport {
+  public io.github.jichuo1.meguviz.hook.api.CloseReport(io.github.jichuo1.meguviz.hook.api.RegistrationState, boolean, io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration, int, io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease, java.lang.String);
+  public io.github.jichuo1.meguviz.hook.api.RegistrationState state();
+  public boolean newCallbacksRejected();
+  public io.github.jichuo1.meguviz.hook.api.CloseReport$EntryRestoration entryRestoration();
+  public int inFlightAtClose();
+  public io.github.jichuo1.meguviz.hook.api.CloseReport$PhysicalRelease physicalRelease();
+  public java.lang.String message();
+  public java.lang.String toString();
+}
+Compiled from "EntrySnapshotInvocation.java"
+public interface io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation extends io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation {
+  public abstract java.lang.Object getEntryArgument(int);
+  public abstract java.lang.Object[] entrySnapshot();
+}
+Compiled from "ErrorPolicy.java"
+public final class io.github.jichuo1.meguviz.hook.api.ErrorPolicy extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.ErrorPolicy> {
+  public static final io.github.jichuo1.meguviz.hook.api.ErrorPolicy PROPAGATE;
+  public static io.github.jichuo1.meguviz.hook.api.ErrorPolicy[] values();
+  public static io.github.jichuo1.meguviz.hook.api.ErrorPolicy valueOf(java.lang.String);
+}
+Compiled from "HookContractException.java"
+public class io.github.jichuo1.meguviz.hook.api.HookContractException extends java.lang.RuntimeException {
+  public io.github.jichuo1.meguviz.hook.api.HookContractException(java.lang.String);
+}
+Compiled from "HookId.java"
+public final class io.github.jichuo1.meguviz.hook.api.HookId {
+  public static io.github.jichuo1.meguviz.hook.api.HookId of(java.lang.String);
+  public java.lang.String value();
+  public boolean equals(java.lang.Object);
+  public int hashCode();
+  public java.lang.String toString();
+}
+Compiled from "HookInvocation.java"
+public interface io.github.jichuo1.meguviz.hook.api.HookInvocation {
+  public abstract io.github.jichuo1.meguviz.hook.api.HookId id();
+  public abstract long generation();
+  public abstract java.lang.reflect.Executable target();
+  public abstract java.lang.Object thisObject();
+  public abstract io.github.jichuo1.meguviz.hook.api.ParameterAccess access();
+  public abstract java.lang.Thread ownerThread();
+  public abstract void setEarlyResult(java.lang.Object);
+  public abstract void setEarlyThrowable(java.lang.Throwable);
+  public abstract boolean hasEarlyOutcome();
+}
+Compiled from "HookOwner.java"
+public final class io.github.jichuo1.meguviz.hook.api.HookOwner {
+  public static io.github.jichuo1.meguviz.hook.api.HookOwner of(java.lang.String);
+  public java.lang.String value();
+  public boolean equals(java.lang.Object);
+  public int hashCode();
+  public java.lang.String toString();
+}
+Compiled from "HookRegistration.java"
+public interface io.github.jichuo1.meguviz.hook.api.HookRegistration {
+  public abstract io.github.jichuo1.meguviz.hook.api.HookId id();
+  public abstract long generation();
+  public abstract io.github.jichuo1.meguviz.hook.api.RegistrationState state();
+  public abstract io.github.jichuo1.meguviz.hook.api.CloseReport close();
+}
+Compiled from "HookSpec.java"
+class io.github.jichuo1.meguviz.hook.api.HookSpec$1 {
+}
+Compiled from "HookSpec.java"
+public final class io.github.jichuo1.meguviz.hook.api.HookSpec$Builder {
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder(io.github.jichuo1.meguviz.hook.api.HookId, io.github.jichuo1.meguviz.hook.api.HookOwner, io.github.jichuo1.meguviz.hook.api.TargetSpec);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder access(io.github.jichuo1.meguviz.hook.api.ParameterAccess);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder before(io.github.jichuo1.meguviz.hook.api.BeforeCallback);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder after(io.github.jichuo1.meguviz.hook.api.AfterCallback);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder around(io.github.jichuo1.meguviz.hook.api.AroundCallback);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder errorPolicy(io.github.jichuo1.meguviz.hook.api.ErrorPolicy);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder require(io.github.jichuo1.meguviz.hook.api.Capability);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder processes(io.github.jichuo1.meguviz.hook.api.ProcessFilter);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder priority(int);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec build();
+}
+Compiled from "HookSpec.java"
+public final class io.github.jichuo1.meguviz.hook.api.HookSpec {
+  public static final int DEFAULT_PRIORITY;
+  public io.github.jichuo1.meguviz.hook.api.HookId id();
+  public io.github.jichuo1.meguviz.hook.api.HookOwner owner();
+  public io.github.jichuo1.meguviz.hook.api.TargetSpec target();
+  public io.github.jichuo1.meguviz.hook.api.ParameterAccess access();
+  public java.util.List<io.github.jichuo1.meguviz.hook.api.BeforeCallback> beforeCallbacks();
+  public java.util.List<io.github.jichuo1.meguviz.hook.api.AfterCallback> afterCallbacks();
+  public io.github.jichuo1.meguviz.hook.api.AroundCallback aroundCallback();
+  public io.github.jichuo1.meguviz.hook.api.ErrorPolicy errorPolicy();
+  public java.util.Set<io.github.jichuo1.meguviz.hook.api.Capability> requiredCapabilities();
+  public io.github.jichuo1.meguviz.hook.api.ProcessFilter processFilter();
+  public int priority();
+  public boolean hasSameSemantics(io.github.jichuo1.meguviz.hook.api.HookSpec);
+}
+Compiled from "InvocationResult.java"
+public interface io.github.jichuo1.meguviz.hook.api.InvocationResult {
+  public abstract boolean hasReturned();
+  public abstract boolean hasThrown();
+  public abstract java.lang.Object getResult();
+  public abstract java.lang.Throwable getThrowable();
+  public abstract void setResult(java.lang.Object);
+  public abstract void setThrowable(java.lang.Throwable);
+}
+Compiled from "MatchPolicy.java"
+public final class io.github.jichuo1.meguviz.hook.api.MatchPolicy extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.MatchPolicy> {
+  public static final io.github.jichuo1.meguviz.hook.api.MatchPolicy FIRST;
+  public static final io.github.jichuo1.meguviz.hook.api.MatchPolicy UNIQUE;
+  public static final io.github.jichuo1.meguviz.hook.api.MatchPolicy ALL;
+  public static io.github.jichuo1.meguviz.hook.api.MatchPolicy[] values();
+  public static io.github.jichuo1.meguviz.hook.api.MatchPolicy valueOf(java.lang.String);
+}
+Compiled from "MutableArgsInvocation.java"
+public interface io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation extends io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation {
+  public abstract void setArgument(int, java.lang.Object);
+}
+Compiled from "ParameterAccess.java"
+public final class io.github.jichuo1.meguviz.hook.api.ParameterAccess extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.ParameterAccess> {
+  public static final io.github.jichuo1.meguviz.hook.api.ParameterAccess NO_ARGS;
+  public static final io.github.jichuo1.meguviz.hook.api.ParameterAccess READ_ARGS;
+  public static final io.github.jichuo1.meguviz.hook.api.ParameterAccess ENTRY_SNAPSHOT;
+  public static final io.github.jichuo1.meguviz.hook.api.ParameterAccess MUTABLE_ARGS;
+  public static final io.github.jichuo1.meguviz.hook.api.ParameterAccess AROUND;
+  public static io.github.jichuo1.meguviz.hook.api.ParameterAccess[] values();
+  public static io.github.jichuo1.meguviz.hook.api.ParameterAccess valueOf(java.lang.String);
+}
+Compiled from "ProcessFilter.java"
+public final class io.github.jichuo1.meguviz.hook.api.ProcessFilter {
+  public static io.github.jichuo1.meguviz.hook.api.ProcessFilter all();
+  public static io.github.jichuo1.meguviz.hook.api.ProcessFilter only(java.lang.String...);
+  public boolean matches(java.lang.String);
+  public java.util.Set<java.lang.String> processNames();
+  public boolean equals(java.lang.Object);
+  public int hashCode();
+  public java.lang.String toString();
+}
+Compiled from "ReadArgsInvocation.java"
+public interface io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation extends io.github.jichuo1.meguviz.hook.api.HookInvocation {
+  public abstract int argumentCount();
+  public abstract java.lang.Object getArgument(int);
+  public abstract java.lang.Class<?> argumentType(int);
+}
+Compiled from "RegistrationReceipt.java"
+public final class io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status> {
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status INSTALLED;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status ALREADY_INSTALLED;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status CONFLICT;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status UNSUPPORTED_CAPABILITY;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status AMBIGUOUS_TARGET;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status TARGET_MISSING;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status STALE_IDENTITY;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status FILTERED;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status TEMPORARILY_UNAVAILABLE;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status FAILED;
+  public static io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status[] values();
+  public static io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status valueOf(java.lang.String);
+}
+Compiled from "RegistrationReceipt.java"
+public final class io.github.jichuo1.meguviz.hook.api.RegistrationReceipt {
+  public static io.github.jichuo1.meguviz.hook.api.RegistrationReceipt of(io.github.jichuo1.meguviz.hook.api.HookId, io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status, java.lang.String, long, java.lang.String);
+  public static io.github.jichuo1.meguviz.hook.api.RegistrationReceipt installed(io.github.jichuo1.meguviz.hook.api.HookRegistration, java.lang.String, java.lang.String);
+  public io.github.jichuo1.meguviz.hook.api.HookId id();
+  public io.github.jichuo1.meguviz.hook.api.RegistrationReceipt$Status status();
+  public java.lang.String backendId();
+  public long generation();
+  public java.lang.String message();
+  public io.github.jichuo1.meguviz.hook.api.HookRegistration registration();
+  public boolean isInstalled();
+  public java.lang.String toString();
+}
+Compiled from "RegistrationState.java"
+public final class io.github.jichuo1.meguviz.hook.api.RegistrationState extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.RegistrationState> {
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationState PREPARED;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationState INSTALLED;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationState RETIRING;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationState CLOSED;
+  public static final io.github.jichuo1.meguviz.hook.api.RegistrationState RETIRED_RESIDENT;
+  public static io.github.jichuo1.meguviz.hook.api.RegistrationState[] values();
+  public static io.github.jichuo1.meguviz.hook.api.RegistrationState valueOf(java.lang.String);
+}
+Compiled from "TargetKind.java"
+public final class io.github.jichuo1.meguviz.hook.api.TargetKind extends java.lang.Enum<io.github.jichuo1.meguviz.hook.api.TargetKind> {
+  public static final io.github.jichuo1.meguviz.hook.api.TargetKind METHOD;
+  public static final io.github.jichuo1.meguviz.hook.api.TargetKind CONSTRUCTOR;
+  public static io.github.jichuo1.meguviz.hook.api.TargetKind[] values();
+  public static io.github.jichuo1.meguviz.hook.api.TargetKind valueOf(java.lang.String);
+}
+Compiled from "TargetSpec.java"
+class io.github.jichuo1.meguviz.hook.api.TargetSpec$1 {
+}
+Compiled from "TargetSpec.java"
+public final class io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget$Builder {
+  public io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget$Builder parameters(java.lang.String...);
+  public io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget$Builder returning(java.lang.String);
+  public io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget$Builder initializeClass(boolean);
+  public io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget$Builder match(io.github.jichuo1.meguviz.hook.api.MatchPolicy);
+  public io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget build();
+}
+Compiled from "TargetSpec.java"
+public final class io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget extends io.github.jichuo1.meguviz.hook.api.TargetSpec {
+  public io.github.jichuo1.meguviz.hook.api.TargetKind kind();
+  public java.lang.String className();
+  public java.lang.String memberName();
+  public java.util.List<java.lang.String> parameterTypeNames();
+  public java.lang.String returnTypeName();
+  public boolean initialize();
+  public java.lang.String toString();
+}
+Compiled from "TargetSpec.java"
+public final class io.github.jichuo1.meguviz.hook.api.TargetSpec$MemberTarget extends io.github.jichuo1.meguviz.hook.api.TargetSpec {
+  public java.lang.reflect.Executable executable();
+  public java.lang.String toString();
+}
+Compiled from "TargetSpec.java"
+public abstract class io.github.jichuo1.meguviz.hook.api.TargetSpec {
+  public final io.github.jichuo1.meguviz.hook.api.MatchPolicy matchPolicy();
+  public static io.github.jichuo1.meguviz.hook.api.TargetSpec$MemberTarget ofMember(java.lang.reflect.Executable);
+  public static io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget$Builder descriptor(io.github.jichuo1.meguviz.hook.api.TargetKind, java.lang.String, java.lang.String);
+}
+Compiled from "CodeEpoch.java"
+public final class io.github.jichuo1.meguviz.hook.api.identity.CodeEpoch {
+  public io.github.jichuo1.meguviz.hook.api.identity.CodeEpoch(long);
+  public long value();
+  public boolean isCurrent(io.github.jichuo1.meguviz.hook.api.identity.CodeEpoch);
+  public boolean equals(java.lang.Object);
+  public int hashCode();
+  public java.lang.String toString();
+}
+Compiled from "CodeScopeIdentity.java"
+public final class io.github.jichuo1.meguviz.hook.api.identity.CodeScopeIdentity {
+  public io.github.jichuo1.meguviz.hook.api.identity.CodeScopeIdentity(java.lang.String, java.lang.ClassLoader);
+  public java.lang.String packageName();
+  public java.lang.ClassLoader loader();
+  public boolean isSameLoader(io.github.jichuo1.meguviz.hook.api.identity.CodeScopeIdentity);
+  public java.lang.String toString();
+}
+Compiled from "ConfigRevision.java"
+public final class io.github.jichuo1.meguviz.hook.api.identity.ConfigRevision {
+  public io.github.jichuo1.meguviz.hook.api.identity.ConfigRevision(long, boolean);
+  public long value();
+  public boolean remotelyAcknowledged();
+  public java.lang.String toString();
+}
+Compiled from "HookGeneration.java"
+public final class io.github.jichuo1.meguviz.hook.api.identity.HookGeneration {
+  public io.github.jichuo1.meguviz.hook.api.identity.HookGeneration(long);
+  public long value();
+  public boolean equals(java.lang.Object);
+  public int hashCode();
+  public java.lang.String toString();
+}
+Compiled from "NativeArtifactIdentity.java"
+public final class io.github.jichuo1.meguviz.hook.api.identity.NativeArtifactIdentity {
+  public io.github.jichuo1.meguviz.hook.api.identity.NativeArtifactIdentity(java.lang.String, java.lang.String);
+  public java.lang.String coordinate();
+  public java.lang.String sha256();
+  public java.lang.String toString();
+}
+Compiled from "ProcessIdentity.java"
+public final class io.github.jichuo1.meguviz.hook.api.identity.ProcessIdentity {
+  public io.github.jichuo1.meguviz.hook.api.identity.ProcessIdentity(java.lang.String, long, long);
+  public java.lang.String processName();
+  public long pid();
+  public long startHintMillis();
+  public java.lang.String toString();
+}
+Compiled from "ServiceEpoch.java"
+public final class io.github.jichuo1.meguviz.hook.api.identity.ServiceEpoch {
+  public io.github.jichuo1.meguviz.hook.api.identity.ServiceEpoch(long);
+  public long value();
+  public java.lang.String toString();
+}

@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "project": "MeguvizHook",
+  "observed_at": "2026-10-31T15:25:00+08:00",
+  "repository_path": "MeguvizHook (local workspace; remote path withheld from evidence files for hygiene)",
+  "repository_commit": "see git log in the actual repository; evidence files do not embed machine-specific values",
+  "dirty_diff_sha256": null,
+  "repository_created": true,
+  "pre_existing_code": "none; the module set was created by this slice, no prior MeguvizHook sources existed",
+  "toolchain": {
+    "jdk": "20 (Azul Zulu 20+36) used for all builds in this slice; BIL CI pins temurin 27 (not installed here, download failed)",
+    "gradle": "9.8.2 (distribution sha256 verified against the BIL wrapper pin)",
+    "agp": "9.4.1",
+    "kotlin": "not used in this slice (android.builtInKotlin=false)",
+    "ksp_if_selected": null,
+    "ndk_if_selected": null,
+    "rustc_if_selected": null
+  },
+  "resolved_artifacts": [
+    {
+      "coordinate": "io.github.libxposed:api:102.0.0",
+      "type": "aar",
+      "sha256": "423484a6e1807e7a423c4b88fcd8176d104318259d91791877fed88fe91479d0",
+      "scope": "compileOnly (main), testImplementation (stub fixtures)"
+    },
+    {
+      "coordinate": "io.github.libxposed:api:102.0.0:sources",
+      "type": "jar",
+      "sha256": "c4a5761c2409f411ca0f67983a687fbd9dd9a76250d7a68ab7cb2950c820444e",
+      "scope": "source-level behaviour evidence only"
+    },
+    {
+      "coordinate": "junit:junit:4.13.2",
+      "type": "jar",
+      "sha256": "8e495b634469d64fb8acfa3495a065cbacc8a0fff55ce1e31007be4c16dc57d3",
+      "scope": "testImplementation"
+    }
+  ],
+  "actual_gradle_tasks_log": "work/evidence/logs/gradle-tasks-all.log",
+  "selected_backend_artifacts": ["backend-libxposed-102"],
+  "selected_features": ["hook-api", "hook-core", "hook-testing", "sample-java-contracts", "sample-module-102"],
+  "device_cells": [],
+  "unverified": [
+    "real libxposed 102 runtime loading and hook execution",
+    "R8 entry reachability on a device",
+    "real classloader and cross-module priority interleaving",
+    "API 101 adapter (not implemented)",
+    "service / hot reload / native / performance thresholds",
+    "JDK 27 toolchain parity with BIL CI"
+  ],
+  "status": "observed_local_slice_only"
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "task": "GATE-001",
+  "purpose": "Raw record shape for future A/A and A/B runs. No records exist in this slice.",
+  "record": {
+    "run_id": "string, unique per measurement run",
+    "profile_id": "meguvizhook-profile-draft-v1",
+    "workload_id": "B01..B10",
+    "control": "A0_direct_backend | A1_existing_equivalent_facade | A2_meguvizhook_same_semantics | A3_optional_optimization",
+    "phase": "aa_baseline | ab_treatment",
+    "artifact": {
+      "coordinate": "string",
+      "sha256": "string",
+      "backend": "libxposed-102 | other",
+      "features": ["array of explicitly selected optional features"]
+    },
+    "device_cell": {
+      "device": "string or null",
+      "android_api": "integer or null",
+      "abi": "string or null",
+      "manager": "string or null",
+      "framework_version": "string or null",
+      "artifact_hash": "string or null"
+    },
+    "session_index": "integer",
+    "sample_index": "integer",
+    "metrics": {
+      "callback_cpu_ns": "number or null",
+      "task_p95_ns": "number or null",
+      "task_p99_ns": "number or null",
+      "installation_ms": "number or null",
+      "cold_start_ms": "number or null",
+      "additional_rss_bytes": "integer or null",
+      "additional_apk_bytes": "integer or null",
+      "additional_fd_count": "integer or null",
+      "additional_thread_count": "integer or null",
+      "retired_resident_bytes": "integer or null"
+    },
+    "correctness": {
+      "original_execution_count": "integer",
+      "throwable_identity_preserved": "boolean or null",
+      "semantic_failure": "string or null"
+    },
+    "outcome": "measured | negative_result | not_run | unavailable",
+    "evidence_log": "relative path to the raw log",
+    "notes": "string or null"
+  },
+  "rules": [
+    "missing values stay null; not_run/unavailable never becomes pass",
+    "A/A must precede threshold freezing; thresholds are frozen before A/B",
+    "negative results are recorded, not filtered out",
+    "BIL's existing lazy args/constant fast paths/config snapshots are baseline behaviour, never counted as new SDK gains",
+    "host model or source counts must be labelled as such and never mixed with device_measurement"
+  ]
+}
