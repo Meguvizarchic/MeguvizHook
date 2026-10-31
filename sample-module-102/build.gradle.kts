@@ -40,6 +40,10 @@ android {
     }
 }
 
+configurations.matching { it.name == "releaseRuntimeClasspath" }.configureEach {
+    exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib")
+}
+
 dependencies {
     implementation(project(":hook-api"))
     implementation(project(":hook-core"))

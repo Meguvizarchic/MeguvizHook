@@ -16,15 +16,16 @@ hook-api  ←  hook-core  ←  backend-libxposed-101  ←  sample-module-101
 - 编译依赖单向；运行时 backend 通过 `core.spi.HookBackend` 反向被 `HookEnvironment` 调用，
   不构成编译环。`hook-core` 不依赖任何 backend，`hook-testing` 不进 consumer APK。
 - `hook-dsl` 独立可选，只依赖 api+core；`sample-kotlin-contracts` 仅直接选择 dsl+testing，
-  证明公开传递依赖。现有 Java/backend/Android sample 不依赖它，Kotlin 运行时不得渗入 Java-only variant。
+  证明公开传递依赖。`sample-module-kotlin-102` 显式选择 DSL/stdlib；Java-only Android variants 不依赖它，
+  并在 releaseRuntimeClasspath 排除 stdlib、在 APK 排除 Kotlin metadata。
 - 未创建的模块（service/codegen/doctor/native/bridge）不进入 settings，不留空壳。
   后续添加时各自独立可选，不被 BOM 或默认装配强拉。
 
 ## 2. 互斥装配
 
 - 一个 consumer variant 只选择一个 backend 制品。`sample-module-101` 仅依赖 backend-101，
-  `sample-module-102` 仅依赖 backend-102；两个 artifact 不得同时出现在同一 configuration。
-- 两版官方 API 同 FQCN，禁止同时进入编译类路径；`sample-module-101/102` 是分别验证的独立产物，
+  `sample-module-102` 与 `sample-module-kotlin-102` 仅依赖 backend-102；不得同时出现在同一 configuration。
+- 两版官方 API 同 FQCN，禁止同时进入编译类路径；三个 sample 是分别验证的独立产物，
   不做单 APK 双代 bootstrap（后续独立资格）。101 产品不得引用 102 的 setId/replaceHook/热重载类型。
 - 框架 API 一律 `compileOnly`：不得打包进 AAR/APK。验证方式：解析依赖图 + 检查最终 APK 条目
   （见 `work/hook/release_artifact_audit.json` 的实际检查结果）。

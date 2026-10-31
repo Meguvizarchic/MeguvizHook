@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "task": "INT-005",
+  "observed_at": "2026-10-31",
+  "verification_level": "independent Android consumer release, dependency, metadata, DEX definition/reference and default-off audit; no device execution",
+  "audit_tool": "Android build-tools 37.0.0 dexdump",
+  "build_log": "work/evidence/logs/round6-int005.log",
+  "built_artifacts": {
+    "sample-module-101-release-unsigned.apk": {
+      "sha256": "19cc14a704c762ccbe79b70cb0686565fb83e9342e7e26114f1a1139481af385",
+      "bytes": 23413
+    },
+    "sample-module-102-release-unsigned.apk": {
+      "sha256": "33d095439be4ef0cae1726c7f0dc37efe39b4ee4faaf0a860e4fdd3cce778476",
+      "bytes": 23689
+    },
+    "sample-module-kotlin-102-release-unsigned.apk": {
+      "sha256": "f117d8b7dc77bc959ab64dff163cb2974916ff26a15113af8872d7c093b90028",
+      "bytes": 38155
+    }
+  },
+  "consumers": {
+    "java101": {
+      "module": "sample-module-101",
+      "entry": "io.github.jichuo1.meguviz.hook.sample101.SampleHookEntry",
+      "defined_class_count": 70,
+      "apk_entries": [
+        "META-INF/com/android/build/gradle/app-metadata.properties",
+        "META-INF/version-control-info.textproto",
+        "classes.dex",
+        "META-INF/xposed/java_init.list",
+        "META-INF/xposed/module.prop",
+        "META-INF/xposed/scope.list",
+        "AndroidManifest.xml",
+        "resources.arsc"
+      ],
+      "xposed_metadata": {
+        "module.prop": "minApiVersion=101\r\ntargetApiVersion=101\r\nstaticScope=true\r\nexceptionMode=passthrough",
+        "java_init.list": "io.github.jichuo1.meguviz.hook.sample101.SampleHookEntry",
+        "scope.list": "com.example.host"
+      },
+      "dependency_log": "work/evidence/logs/round6-sample-module-101-release-runtime-deps.log",
+      "checks": {
+        "entry_class_defined_in_dex": true,
+        "entry_metadata_matches_dex": true,
+        "module_prop_targets_own_generation": true,
+        "auto_hot_reload_disabled": true,
+        "no_framework_class_definitions": true,
+        "no_other_backend_definitions": true,
+        "no_testing_class_definitions": true,
+        "no_codegen_or_doctor_definitions": true,
+        "no_service_references": true,
+        "no_hot_reload_type_references": true,
+        "no_native_libraries": true,
+        "no_framework_runtime": true,
+        "no_other_backend_runtime": true,
+        "no_testing_runtime": true,
+        "java_only_selection_preserved": true,
+        "no_102_only_references": true
+      },
+      "device_loading_verified": false
+    },
+    "java102": {
+      "module": "sample-module-102",
+      "entry": "io.github.jichuo1.meguviz.hook.sample102.SampleHookEntry",
+      "defined_class_count": 71,
+      "apk_entries": [
+        "META-INF/com/android/build/gradle/app-metadata.properties",
+        "META-INF/version-control-info.textproto",
+        "classes.dex",
+        "META-INF/xposed/java_init.list",
+        "META-INF/xposed/module.prop",
+        "META-INF/xposed/scope.list",
+        "AndroidManifest.xml",
+        "resources.arsc"
+      ],
+      "xposed_metadata": {
+        "module.prop": "minApiVersion=102\r\ntargetApiVersion=102\r\nstaticScope=true\r\nexceptionMode=passthrough\r\nautoHotReload=false",
+        "java_init.list": "io.github.jichuo1.meguviz.hook.sample102.SampleHookEntry",
+        "scope.list": "com.example.host"
+      },
+      "dependency_log": "work/evidence/logs/round6-sample-module-102-release-runtime-deps.log",
+      "checks": {
+        "entry_class_defined_in_dex": true,
+        "entry_metadata_matches_dex": true,
+        "module_prop_targets_own_generation": true,
+        "auto_hot_reload_disabled": true,
+        "no_framework_class_definitions": true,
+        "no_other_backend_definitions": true,
+        "no_testing_class_definitions": true,
+        "no_codegen_or_doctor_definitions": true,
+        "no_service_references": true,
+        "no_hot_reload_type_references": true,
+        "no_native_libraries": true,
+        "no_framework_runtime": true,
+        "no_other_backend_runtime": true,
+        "no_testing_runtime": true,
+        "java_only_selection_preserved": true
+      },
+      "device_loading_verified": false
+    },
+    "kotlin102": {
+      "module": "sample-module-kotlin-102",
+      "entry": "io.github.jichuo1.meguviz.hook.sample.kotlin102.KotlinSampleHookEntry",
+      "defined_class_count": 78,
+      "apk_entries": [
+        "META-INF/com/android/build/gradle/app-metadata.properties",
+        "META-INF/version-control-info.textproto",
+        "classes.dex",
+        "META-INF/xposed/java_init.list",
+        "META-INF/xposed/module.prop",
+        "META-INF/xposed/scope.list",
+        "kotlin/annotation/annotation.kotlin_builtins",
+        "kotlin/collections/collections.kotlin_builtins",
+        "kotlin/concurrent/atomics/atomics.kotlin_builtins",
+        "kotlin/coroutines/coroutines.kotlin_builtins",
+        "kotlin/internal/internal.kotlin_builtins",
+        "kotlin/kotlin.kotlin_builtins",
+        "kotlin/ranges/ranges.kotlin_builtins",
+        "kotlin/reflect/reflect.kotlin_builtins",
+        "AndroidManifest.xml",
+        "resources.arsc"
+      ],
+      "xposed_metadata": {
+        "module.prop": "minApiVersion=102\r\ntargetApiVersion=102\r\nstaticScope=true\r\nexceptionMode=passthrough\r\nautoHotReload=false",
+        "java_init.list": "io.github.jichuo1.meguviz.hook.sample.kotlin102.KotlinSampleHookEntry",
+        "scope.list": "com.example.host"
+      },
+      "dependency_log": "work/evidence/logs/round6-sample-module-kotlin-102-release-runtime-deps.log",
+      "checks": {
+        "entry_class_defined_in_dex": true,
+        "entry_metadata_matches_dex": true,
+        "module_prop_targets_own_generation": true,
+        "auto_hot_reload_disabled": true,
+        "no_framework_class_definitions": true,
+        "no_other_backend_definitions": true,
+        "no_testing_class_definitions": true,
+        "no_codegen_or_doctor_definitions": true,
+        "no_service_references": true,
+        "no_hot_reload_type_references": true,
+        "no_native_libraries": true,
+        "no_framework_runtime": true,
+        "no_other_backend_runtime": true,
+        "no_testing_runtime": true,
+        "kotlin_selection_correct": true
+      },
+      "device_loading_verified": false,
+      "r8_selection_note": "R8 may inline/remove DSL and stdlib classes; selection is verified by releaseRuntimeClasspath plus packaged Kotlin builtins metadata, not by requiring DEX DSL definitions."
+    }
+  },
+  "build_fixes": [
+    "External org.jetbrains.kotlin.android rejected by AGP 9 new DSL: switched to AGP built-in Kotlin as used by BIL.",
+    "Broad stdlib exclusion broke lint: narrowed exclusion to releaseRuntimeClasspath.",
+    "Early named configuration lookup failed: deferred with matching().configureEach."
+  ],
+  "tests": 80,
+  "failures": 0,
+  "static_checks_passed": true,
+  "not_verified": [
+    "real 101/102 runtime loading and execution",
+    "R8 entry loading on a device",
+    "real classloader and cross-module priority interleaving",
+    "signed release artifacts"
+  ],
+  "audit_correction": "Initial Kotlin check incorrectly required DEX DSL definitions after R8; corrected to dependency and Kotlin metadata evidence while retaining independent entry DEX verification."
+}

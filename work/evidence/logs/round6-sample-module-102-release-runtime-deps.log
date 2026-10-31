@@ -1,0 +1,31 @@
+Calculating task graph as configuration cache cannot be reused because file 'settings.gradle.kts' has changed.
+
+> Task :sample-module-102:dependencies
+
+------------------------------------------------------------
+Project ':sample-module-102'
+------------------------------------------------------------
+
+releaseRuntimeClasspath - Runtime classpath of '/release'.
++--- project ':hook-api'
++--- project ':hook-core'
+|    \--- project ':hook-api'
+\--- project ':backend-libxposed-102'
+     +--- project ':hook-api'
+     \--- project ':hook-core' (*)
+
+(*) - Indicates repeated occurrences of a transitive dependency subtree. Gradle expands transitive dependency subtrees only once per project; repeat occurrences only display the root of the subtree, followed by this annotation.
+
+A web-based, searchable dependency report is available by adding the --scan option.
+
+[Incubating] Problems report is available at: file:///<local>/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.8.2/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 14s
+1 actionable task: 1 executed
+Configuration cache entry stored.

@@ -11,7 +11,7 @@
 | AGP | 9.4.1（`com.android.library`/`application`） | 构建日志、release 产物 |
 | Android platform | `platforms;android-37.2`，compileSdk 37 minor 2（BIL `dba9ed9`） | `source.properties`、第四轮 release 构建 |
 | Build tools | 37.0.0 | SDK 安装记录 |
-| Kotlin | 可选 `hook-dsl` 使用 KGP 2.4.21 / JVM 1.8；Android 仍 `android.builtInKotlin=false` | DSL runtime 含 stdlib；Java-only release 依赖图无 kotlin-stdlib/DSL |
+| Kotlin | JVM DSL 使用 KGP 2.4.21 / JVM 1.8；Android Kotlin102 使用 AGP 内建 Kotlin / JVM 17 | Kotlin102 选择 stdlib/DSL；Java-only release 排除 stdlib/metadata |
 | libxposed api | 102.0.0（BIL 默认）+ 101.0.0（独立 backend）；均 compileOnly / 对应 stub 测试 | AAR SHA-256 见 baseline_inventory.json / baseline.json |
 | NDK/Rust/KSP | 未选择，未安装要求 | 无对应模块 |
 | 设备/模拟器 | 无 | 设备 cell 全部 not_run |

@@ -120,17 +120,25 @@
       "evidence": [
         "sample-module-101/src/main/",
         "sample-module-102/src/main/",
+        "sample-module-kotlin-102/src/main/",
         "sample-module-101/src/main/resources/META-INF/xposed/",
-        "sample-module-102/src/main/resources/META-INF/xposed/"
+        "sample-module-102/src/main/resources/META-INF/xposed/",
+        "sample-module-kotlin-102/src/main/resources/META-INF/xposed/"
       ],
-      "notes": "manual Java entries + metadata for 101 and 102 built; R8 DEX entry definitions verified statically; not loaded by a real framework"
+      "notes": "manual Java and Kotlin entries + metadata built; R8 DEX entry definitions verified statically; not loaded by a real framework"
     },
     "INT-005": {
-      "status": "partial",
+      "status": "done",
       "evidence": [
-        "sample-java-contracts/"
+        "sample-java-contracts/",
+        "sample-kotlin-contracts/",
+        "sample-module-101/",
+        "sample-module-102/",
+        "sample-module-kotlin-102/",
+        "work/integration/android_consumer_audit.json",
+        "work/evidence/logs/round6-int005.log"
       ],
-      "notes": "JVM minimal consumer exists; independent Android consumer module pending"
+      "notes": "independent JVM and Android consumers pass build/dependency/metadata/DEX/default-off audits; Java101/102 stay Kotlin-free while Kotlin102 explicitly selects DSL/stdlib; no device execution"
     },
     "VAL-001": {
       "status": "partial",
@@ -144,9 +152,10 @@
       "status": "partial",
       "evidence": [
         "work/hook/release_artifact_audit.json",
-        "work/hook/round3_artifact_recheck.json"
+        "work/hook/round3_artifact_recheck.json",
+        "work/integration/android_consumer_audit.json"
       ],
-      "notes": "dual compileOnly/R8/dexdump/dependency audits pass; Java-only releases contain no DSL/Kotlin; no device verification"
+      "notes": "dual compileOnly/R8/dexdump/dependency/default-off audits pass across three independent APKs; Java-only releases contain no DSL/Kotlin; Kotlin102 selects them explicitly; no device verification"
     },
     "HOOK-006": {
       "status": "planned"
@@ -220,5 +229,5 @@
       "notes": "optional service track; not started"
     }
   },
-  "current_slice": "round5: independent Java/Kotlin consumers plus BIL-aligned toolchain; 80 JVM/stub tests and all release builds pass; release_qualified remains false"
+  "current_slice": "round6: independent JVM/Android consumers with BIL-aligned built-in Kotlin; 80 JVM/stub tests and three release/default-off audits pass; release_qualified remains false"
 }

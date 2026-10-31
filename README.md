@@ -3,9 +3,9 @@
 独立的 Android Hook SDK：自有 Java API、JVM 执行核心、互斥的 libxposed 后端适配制品与手工入口样例。
 真实的方法拦截始终由所选运行框架提供——本项目**不**替代管理器、注入器或 ART。
 
-当前状态：**第五轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
-独立 Java/Kotlin consumer、101/102 双 backend、`MatchPolicy.ALL`、可选 Kotlin DSL、JVM 合同和
-静态 release 隔离已验证；真实框架/设备资格全部未执行。
+当前状态：**第六轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
+独立 Java/Kotlin JVM 与 Android consumer、101/102 双 backend、`MatchPolicy.ALL`、可选 Kotlin DSL、
+JVM 合同和静态 release 隔离已验证；真实框架/设备资格全部未执行。
 
 ## 模块
 
@@ -21,17 +21,18 @@
 | `sample-kotlin-contracts` | 独立 Kotlin consumer；仅直接依赖 dsl+testing，复用同一 core/fixture |
 | `sample-module-101` | 手工 Java 入口的 101 模块 APK（R8 release） |
 | `sample-module-102` | 手工 Java 入口的 102 模块 APK（R8 release） |
+| `sample-module-kotlin-102` | AGP 内建 Kotlin + DSL 的独立 102 模块 APK（R8 release） |
 
 刻意未创建空模块：service、codegen、doctor、native/Rust 均属后续任务。
 101 与 102 都是真实 `Hooker/Chain` 模型；本项目不把 101 伪装成 classic callback backend。
 
 ## 工具链（默认版本跟随 BIL）
 
-Gradle **9.8.2**（wrapper 含 SHA-256 校验）· AGP **9.4.1** · Kotlin **2.4.21**（仅可选 DSL）·
+Gradle **9.8.2**（wrapper 含 SHA-256 校验）· AGP **9.4.1** · Kotlin **2.4.21**（JVM KGP / Android 内建）·
 libxposed api **102.0.0**（BIL 默认）+ **101.0.0**（独立 backend）· compileSdk **37.2** / minSdk **27** /
-targetSdk **37** · build-tools **37.0.0** · Android 模块 Java **17** · api/core Java **8**、dsl JVM **1.8**。
-Android 切片仍为纯 Java：`android.builtInKotlin=false`，不依赖 `hook-dsl`。
-第三/四轮实际使用 JDK 17（前两轮为 JDK 20）；BIL CI 使用 JDK 27，一致性尚未验证。
+targetSdk **37** · build-tools **37.0.0** · Android 模块 Java/Kotlin **17** · api/core Java **8**、dsl JVM **1.8**。
+Java-only Android variants 排除 Kotlin runtime/metadata；仅 Kotlin102 显式选择 DSL/stdlib。
+第三至六轮实际使用 JDK 17（前两轮为 JDK 20）；BIL CI 使用 JDK 27，一致性尚未验证。
 逐项上游版本见 `work/integration/bil_dependency_alignment.json`。
 
 ## 构建与测试
@@ -41,13 +42,15 @@ Android 切片仍为纯 Java：`android.builtInKotlin=false`，不依赖 `hook-d
 ```bash
 git clone https://github.com/jichuo1/MeguvizHook.git
 cd MeguvizHook
-# 环境：JDK 17+（第三至五轮实际用 JDK 17）、Android SDK platform android-37.2 + build-tools 37.0.0
+# 环境：JDK 17+（第三至六轮实际用 JDK 17）、Android SDK platform android-37.2 + build-tools 37.0.0
 ./gradlew :hook-dsl:test :hook-testing:test :sample-java-contracts:run :sample-kotlin-contracts:run
 ./gradlew :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest
 ./gradlew :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease
 ./gradlew :sample-module-101:assembleRelease :sample-module-102:assembleRelease
+./gradlew :sample-module-kotlin-102:assembleRelease
 ./gradlew :sample-module-101:dependencies --configuration releaseRuntimeClasspath
 ./gradlew :sample-module-102:dependencies --configuration releaseRuntimeClasspath
+./gradlew :sample-module-kotlin-102:dependencies --configuration releaseRuntimeClasspath
 ./gradlew tasks --all
 ```
 
@@ -71,15 +74,15 @@ Java/Kotlin 样例分别输出 `SAMPLE_OK` 与 `KOTLIN_SAMPLE_OK`。证据由 JU
 
 ## 制品审计与未验证范围
 
-`work/hook/release_artifact_audit.json`（第二轮）与 `work/hook/round3_artifact_recheck.json`
-（第三轮 dexdump）记录两个 APK/AAR 的 SHA-256 和逐项静态检查：
+`work/hook/release_artifact_audit.json`（第二轮）、`work/hook/round3_artifact_recheck.json`（第三轮）
+与 `work/integration/android_consumer_audit.json`（第六轮）记录 APK/AAR 哈希和逐项静态检查：
 
-- R8 DEX 中入口类真实存在，`java_init.list` 与入口 FQCN 一致；
-- DEX/AAR 无框架类定义，releaseRuntimeClasspath 无 libxposed、kotlin-stdlib、hook-dsl 或另一代 backend；
-- 101 DEX 无 `setId/replaceHook`、热重载或 `libxposed102` 引用；无 testing 类、`.so`、Kotlin metadata。
+- 三个 R8 DEX 入口均真实存在，`java_init.list` 与入口 FQCN 一致；
+- Java-only release 无 libxposed、kotlin-stdlib、hook-dsl 或另一代 backend；Kotlin102 显式选择 DSL/stdlib；
+- 三个 APK 均无框架类定义、testing、service、native 或热重载引用；101 无 102 专有 API 引用。
 
-**仍未验证**：独立 Android consumer（INT-005）、真实 101/102 装载与执行、R8 后设备可达性、
-真实类加载与跨模块优先级、service、热重载、native、任何性能阈值、JDK 27 一致性。
+**仍未验证**：真实 101/102 装载与执行、R8 后设备可达性、真实类加载与跨模块优先级、service、
+热重载、native、任何性能阈值、JDK 27 一致性。
 task done ≠ release qualified。
 
 文档导航：`docs/HANDOFF.md`（本轮移交与下一批任务）、`work/`（机器可读证据与原始日志）。

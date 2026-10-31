@@ -1,7 +1,21 @@
-# MeguvizHook 移交（第五轮：独立 Java/Kotlin consumer）
+# MeguvizHook 移交（第六轮：独立 Android consumers）
 
 日期：2026-10-31。范围仅 MeguvizHook 仓库；BIL 仅作只读上游参考，未修改其源码。
 任务状态以 `work/progress.json` 为准；task done ≠ release qualified（当前仍为 false）。
+
+## 第六轮结果（INT-005）
+
+- 新增 `sample-module-kotlin-102`，与现有 Java API101/102 APK 相互独立；Kotlin102 使用 AGP 内建 Kotlin、
+  DSL/core/backend102 与手工 `XposedModule` 入口，不包含另一代 API/backend。
+- Java101/102 release 继续无 Kotlin stdlib/DSL/metadata；Kotlin102 明确选择 stdlib/DSL 和 Kotlin builtins
+  metadata。R8 可内联移除 DSL 类，因此 Kotlin 选择装配以依赖图和 metadata 判定，入口另由 DEX 核实。
+- 三条 release 均通过依赖、metadata、DEX 定义/引用与默认关闭项审计：无框架实现、testing、service、
+  native、codegen/doctor、另一代 backend 或热重载引用。全量 80 tests / 0 failures，所有构建成功。
+- 构建修正：外部 KGP Android 与 AGP 9 new DSL 不兼容，改用 BIL 同款内建 Kotlin；stdlib 排除曾影响 lint，
+  已收窄并延迟到 releaseRuntimeClasspath；未退回旧 DSL，也未跳过失败任务。
+- 证据：`work/integration/android_consumer_audit.json`、`work/evidence/logs/round6-int005.log`、
+  `round6-*-release-runtime-deps.log`、`round6-android-consumer-dex-audit.log`。真实设备装载仍未验证。
+- 回退：对第六轮提交执行 `git revert`，上一基线为 `eef285c`；禁止强推。
 
 ## 第五轮结果（HOOK-007）
 
@@ -44,11 +58,10 @@
 
 ### 下一批 ready 任务（按 DAG）
 
-1. **INT-005 剩余**：独立 Android consumer、Java API101 与 Kotlin API102 最小 module 的默认关闭项核查。
-2. **INT-011**：BIL 只读消费夹具与 A0/A1/A2 对照设计；不创建 BIL 开发任务。
-3. **INT-009/VAL-001/VAL-002**：真实 101/102 设备 cell（需要设备）。
-4. **GATE-002**：A/A 后才允许冻结阈值和 A/B。
-5. 远端：仅发布源码、文档和脱敏证据；本机 SDK 配置、构建缓存、签名材料与开发包不上传。
+1. **INT-011**：BIL 只读消费夹具与 A0/A1/A2 对照设计；不创建 BIL 开发任务。
+2. **INT-009/VAL-001/VAL-002**：真实 101/102 设备 cell（需要设备）。
+3. **GATE-002**：A/A 后才允许冻结阈值和 A/B。
+4. 远端：仅发布源码、文档和脱敏证据；本机 SDK 配置、构建缓存、签名材料与开发包不上传。
 
 ## 第二轮历史记录
 
