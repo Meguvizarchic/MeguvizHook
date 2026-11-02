@@ -25,12 +25,14 @@ public interface HookInvocation {
     Thread ownerThread();
 
     /**
-     * Requests an early return without executing the original method. Valid before the original
-     * ran; the value is type-checked against the target return type.
+     * In a before callback, or around before {@code proceed()}, requests a return without running
+     * the downstream call. Around may also use this after {@code proceed()} to replace its outcome;
+     * the downstream call is never replayed. After callbacks use {@link InvocationResult} instead.
+     * The value is checked against the target return type.
      */
     void setEarlyResult(Object value);
 
-    /** Requests an early throw without executing the original method. */
+    /** Requests an early throw, or explicitly replaces a completed around outcome with a throw. */
     void setEarlyThrowable(Throwable throwable);
 
     boolean hasEarlyOutcome();

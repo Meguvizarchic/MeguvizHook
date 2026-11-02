@@ -109,6 +109,11 @@ public class HookSpecDsl internal constructor(
         delegate.around(callback)
     }
 
+    /** Proceed with the original arguments and replace only a successful result. */
+    public fun replaceResultOnSuccess(value: Any?) {
+        delegate.replaceResultOnSuccess(value)
+    }
+
     public fun errorPolicy(value: ErrorPolicy) {
         delegate.errorPolicy(value)
     }

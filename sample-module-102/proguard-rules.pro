@@ -7,6 +7,8 @@
     public void onPackageLoaded(...);
     public void onPackageReady(...);
     public void onSystemServerStarting(...);
+    public boolean onHotReloading(...);
+    public void onHotReloaded(...);
 }
 
 # Public SDK contract types stay readable in diagnostics and stack traces.

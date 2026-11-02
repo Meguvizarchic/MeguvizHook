@@ -25,6 +25,11 @@ public final class HookSpec {
     private final List<BeforeCallback> beforeCallbacks;
     private final List<AfterCallback> afterCallbacks;
     private final AroundCallback aroundCallback;
+    private final boolean constantReplacement;
+    private final Object constantResult;
+    private final boolean successReplacement;
+    private final Object successResult;
+    private final StringArgumentCondition stringArgumentCondition;
     private final ErrorPolicy errorPolicy;
     private final Set<Capability> requiredCapabilities;
     private final ProcessFilter processFilter;
@@ -38,12 +43,32 @@ public final class HookSpec {
         this.beforeCallbacks = Collections.unmodifiableList(new ArrayList<BeforeCallback>(builder.beforeCallbacks));
         this.afterCallbacks = Collections.unmodifiableList(new ArrayList<AfterCallback>(builder.afterCallbacks));
         this.aroundCallback = builder.aroundCallback;
+        this.constantReplacement = builder.constantReplacement;
+        this.constantResult = builder.constantResult;
+        this.successReplacement = builder.successReplacement;
+        this.successResult = builder.successResult;
+        this.stringArgumentCondition = builder.stringArgumentCondition;
         this.errorPolicy = builder.errorPolicy;
         this.requiredCapabilities = Collections.unmodifiableSet(new LinkedHashSet<Capability>(builder.requiredCapabilities));
         this.processFilter = builder.processFilter;
         this.priority = builder.priority;
 
-        if (access == ParameterAccess.AROUND) {
+        if (stringArgumentCondition != null) {
+            if (constantReplacement || successReplacement || access != ParameterAccess.READ_ARGS_VIEW || aroundCallback != null
+                    || !beforeCallbacks.isEmpty() || !afterCallbacks.isEmpty()) {
+                throw new IllegalArgumentException("string argument replacement requires READ_ARGS_VIEW and no other callbacks or replacement");
+            }
+        } else if (constantReplacement) {
+            if (successReplacement || access != ParameterAccess.NO_ARGS || aroundCallback != null
+                    || !beforeCallbacks.isEmpty() || !afterCallbacks.isEmpty()) {
+                throw new IllegalArgumentException("constant replacement requires NO_ARGS and no callbacks");
+            }
+        } else if (successReplacement) {
+            if (access != ParameterAccess.NO_ARGS || aroundCallback != null
+                    || !beforeCallbacks.isEmpty() || !afterCallbacks.isEmpty()) {
+                throw new IllegalArgumentException("success replacement requires NO_ARGS and no callbacks");
+            }
+        } else if (access == ParameterAccess.AROUND) {
             if (aroundCallback == null) {
                 throw new IllegalArgumentException("AROUND requires an around callback");
             }
@@ -88,6 +113,31 @@ public final class HookSpec {
         return aroundCallback;
     }
 
+    /** Whether this registration returns a fixed result without invoking user callbacks. */
+    public boolean hasConstantReplacement() {
+        return constantReplacement;
+    }
+
+    /** The exact result reference, including null, declared by {@link Builder#replaceConstant}. */
+    public Object constantResult() {
+        if (!constantReplacement) throw new IllegalStateException("not a constant replacement");
+        return constantResult;
+    }
+
+    /** True when a fixed result replaces only a successful downstream outcome. */
+    public boolean hasSuccessReplacement() { return successReplacement; }
+
+    /** The exact supplied result reference, including null. */
+    public Object successResult() {
+        if (!successReplacement) throw new IllegalStateException("not a success replacement");
+        return successResult;
+    }
+
+    /** The explicit string-argument conditional replacement, or null for an ordinary plan. */
+    public StringArgumentCondition stringArgumentCondition() {
+        return stringArgumentCondition;
+    }
+
     public ErrorPolicy errorPolicy() {
         return errorPolicy;
     }
@@ -117,10 +167,53 @@ public final class HookSpec {
                 && priority == other.priority
                 && processFilter.equals(other.processFilter)
                 && requiredCapabilities.equals(other.requiredCapabilities)
-                && beforeCallbacks.equals(other.beforeCallbacks)
-                && afterCallbacks.equals(other.afterCallbacks)
-                && Objects.equals(aroundCallback, other.aroundCallback)
-                && target.toString().equals(other.target.toString());
+                && sameCallbackInstances(beforeCallbacks, other.beforeCallbacks)
+                && sameCallbackInstances(afterCallbacks, other.afterCallbacks)
+                && aroundCallback == other.aroundCallback
+                && constantReplacement == other.constantReplacement
+                && (!constantReplacement || constantResult == other.constantResult)
+                && successReplacement == other.successReplacement
+                && (!successReplacement || successResult == other.successResult)
+                && sameStringArgumentCondition(stringArgumentCondition, other.stringArgumentCondition)
+                && sameTarget(target, other.target);
+    }
+
+    private static boolean sameStringArgumentCondition(StringArgumentCondition left, StringArgumentCondition right) {
+        if (left == right) return true;
+        return left != null && right != null && left.argumentIndex() == right.argumentIndex()
+                && Objects.equals(left.expected(), right.expected()) && left.result() == right.result()
+                && left.observer() == right.observer();
+    }
+
+    private static boolean sameTarget(TargetSpec left, TargetSpec right) {
+        if (left instanceof TargetSpec.MemberTarget && right instanceof TargetSpec.MemberTarget) {
+            return ((TargetSpec.MemberTarget) left).executable()
+                    .equals(((TargetSpec.MemberTarget) right).executable());
+        }
+        if (!(left instanceof TargetSpec.DescriptorTarget) || !(right instanceof TargetSpec.DescriptorTarget)) {
+            return false;
+        }
+        TargetSpec.DescriptorTarget a = (TargetSpec.DescriptorTarget) left;
+        TargetSpec.DescriptorTarget b = (TargetSpec.DescriptorTarget) right;
+        return a.kind() == b.kind()
+                && a.className().equals(b.className())
+                && a.memberName().equals(b.memberName())
+                && Objects.equals(a.parameterTypeNames(), b.parameterTypeNames())
+                && Objects.equals(a.returnTypeName(), b.returnTypeName())
+                && a.initialize() == b.initialize()
+                && a.matchPolicy() == b.matchPolicy();
+    }
+
+    private static boolean sameCallbackInstances(List<?> first, List<?> second) {
+        if (first.size() != second.size()) {
+            return false;
+        }
+        for (int i = 0; i < first.size(); i++) {
+            if (first.get(i) != second.get(i)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static final class Builder {
@@ -131,6 +224,11 @@ public final class HookSpec {
         private final List<BeforeCallback> beforeCallbacks = new ArrayList<BeforeCallback>();
         private final List<AfterCallback> afterCallbacks = new ArrayList<AfterCallback>();
         private AroundCallback aroundCallback;
+        private boolean constantReplacement;
+        private Object constantResult;
+        private boolean successReplacement;
+        private Object successResult;
+        private StringArgumentCondition stringArgumentCondition;
         private ErrorPolicy errorPolicy = ErrorPolicy.PROPAGATE;
         private final Set<Capability> requiredCapabilities = new LinkedHashSet<Capability>();
         private ProcessFilter processFilter = ProcessFilter.all();
@@ -161,6 +259,52 @@ public final class HookSpec {
             this.aroundCallback = Objects.requireNonNull(callback, "callback");
             this.access = ParameterAccess.AROUND;
             return this;
+        }
+
+        /**
+         * Return the exact supplied reference without running the downstream call or callbacks.
+         * Null is supported for reference and void/constructor targets. For every resolved target,
+         * the SDK checks the result type before installing; an incompatible value fails the request.
+         * This mode is exclusive with callbacks and any parameter access beyond NO_ARGS.
+         */
+        public Builder replaceConstant(Object value) {
+            this.constantReplacement = true;
+            this.constantResult = value;
+            return this;
+        }
+
+        /**
+         * Run the downstream chain once with its original arguments and, only when it succeeds,
+         * replace its result with the exact supplied reference. Downstream exceptions retain their
+         * identity; the SDK does not replay the call. A null result is valid for reference and
+         * void/constructor targets. Every resolved target is checked before any installation.
+         * This mode requires NO_ARGS and is exclusive with callbacks and other replacements.
+         * The selected framework's own exception policy may have additional recovery behavior.
+         */
+        public Builder replaceResultOnSuccess(Object value) {
+            this.successReplacement = true;
+            this.successResult = value;
+            return this;
+        }
+
+        /**
+         * For a String argument equal to expected, notify the observer, then return the exact result
+         * reference without proceeding. Otherwise proceed once with the original arguments. A
+         * missing argument is treated as null. Only this explicitly declared shape is optimized;
+         * it is exclusive with other callbacks and replacements. Every target's argument and return
+         * types are checked before installation. The observer may be null and may throw; it cannot
+         * read or modify a borrowed invocation or the selected result. This method selects the
+         * READ_ARGS_VIEW shape; a later incompatible access selection is rejected at build time.
+         */
+        public Builder replaceIfStringArgumentEquals(int index, String expected, Object result,
+                                                     MatchObserver observer) {
+            this.stringArgumentCondition = new StringArgumentCondition(index, expected, result, observer);
+            this.access = ParameterAccess.READ_ARGS_VIEW;
+            return this;
+        }
+
+        public Builder replaceIfStringArgumentEquals(int index, String expected, Object result) {
+            return replaceIfStringArgumentEquals(index, expected, result, null);
         }
 
         public Builder errorPolicy(ErrorPolicy value) {

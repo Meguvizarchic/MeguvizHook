@@ -231,7 +231,11 @@ public class ParameterShapeTest {
         } catch (NoSuchMethodException error) {
             throw new AssertionError(error);
         }
-        backend.onTarget(constructor, (thisObject, args) -> null);
+        Object receiver = new io.github.jichuo1.meguviz.hook.testing.Fixtures.Constructed(3);
+        backend.onTarget(constructor, (thisObject, args) -> {
+            assertSame(receiver, thisObject);
+            return null;
+        });
         TestSupport.installOrFail(environment, TestSupport.spec("shape.constructor", constructor)
                 .around(invocation -> {
                     assertNull(invocation.thisObject());
@@ -240,11 +244,42 @@ public class ParameterShapeTest {
                 })
                 .build());
         try {
-            assertNull(backend.call(constructor, null, 3));
+            assertNull(backend.call(constructor, receiver, 3));
         } catch (Throwable failure) {
             throw new AssertionError(failure);
         }
         assertEquals(1, backend.originalCallCount(constructor));
+    }
+
+    @Test
+    public void staticTargetHidesBackendReceiverWithoutChangingDownstream() throws Throwable {
+        Object receiver = new Object();
+        backend.onTarget(NO_ARGS, (thisObject, args) -> {
+            assertSame(receiver, thisObject);
+            return 42L;
+        });
+        TestSupport.installOrFail(environment, TestSupport.spec("shape.static.receiver", NO_ARGS)
+                .before(invocation -> assertNull(invocation.thisObject()))
+                .after((invocation, result) -> assertNull(invocation.thisObject()))
+                .build());
+        assertEquals(42L, backend.call(NO_ARGS, receiver));
+        assertEquals(1, backend.originalCallCount(NO_ARGS));
+    }
+
+    @Test
+    public void instanceTargetExposesBackendReceiver() throws Throwable {
+        Executable target = io.github.jichuo1.meguviz.hook.testing.Fixtures.Constructed.class.getMethod("value");
+        Object receiver = new io.github.jichuo1.meguviz.hook.testing.Fixtures.Constructed(7);
+        backend.onTarget(target, (thisObject, args) -> {
+            assertSame(receiver, thisObject);
+            return 7;
+        });
+        TestSupport.installOrFail(environment, TestSupport.spec("shape.instance.receiver", target)
+                .before(invocation -> assertSame(receiver, invocation.thisObject()))
+                .after((invocation, result) -> assertSame(receiver, invocation.thisObject()))
+                .build());
+        assertEquals(7, backend.call(target, receiver));
+        assertEquals(1, backend.originalCallCount(target));
     }
 
     @Test

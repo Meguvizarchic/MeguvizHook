@@ -6,7 +6,9 @@ import java.util.Objects;
 /**
  * Install outcome for one resolved target. {@code MatchPolicy.ALL} uses a list of these receipts;
  * there is no cross-target atomicity claim. {@link Status#ROLLED_BACK} means an installed entry was
- * subsequently closed because the code epoch changed before the logical registration was published.
+ * subsequently closed because the loader or code epoch changed before the logical registration was
+ * published. This records the close attempt; see the receipt message for the aggregate entry
+ * restoration result, which may be unconfirmed.
  */
 public final class TargetInstallReceipt {
     public enum Status {

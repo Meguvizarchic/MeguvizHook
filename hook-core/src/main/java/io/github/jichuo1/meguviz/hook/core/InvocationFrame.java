@@ -11,6 +11,9 @@ import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 
 import java.lang.reflect.Executable;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -18,8 +21,9 @@ import java.util.Objects;
  * nested calls and no thread-local frame stack is reused, so recursion and synchronous reentry can
  * never overwrite each other's proceed state, arguments or snapshot.
  *
- * <p>Implements every invocation interface but enforces the registered shape on each accessor:
- * a callback can never widen its own contract by casting.
+ * <p>The frame owns the shared state for the whole invocation. Each callback receives a distinct
+ * borrowed view; invalidating that view never invalidates a later callback's view. Both the frame
+ * and the view enforce the registered shape, so a callback cannot widen it by casting.
  */
 final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation, MutableArgsInvocation {
     private final BoundPlan plan;
@@ -29,22 +33,28 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
 
     private Object[] args;
     private Object[] entrySnapshot;
+    private List<?> argsView;
 
     private CallOutcome.State proceedState = CallOutcome.State.NOT_CALLED;
     private CallOutcome proceedOutcome = CallOutcome.notCalled();
+    private Throwable observedFatal;
 
     private boolean earlyOutcomeSet;
     private Object earlyResult;
     private Throwable earlyThrowable;
 
-    private final ResultSlot resultSlot = new ResultSlot();
+    // Before-only and around registrations never need an after-stage result slot.
+    private ResultSlot resultSlot;
 
     InvocationFrame(BoundPlan plan, BackendInvocation backend) {
         this.plan = plan;
         this.backend = backend;
         this.owner = Thread.currentThread();
         ParameterAccess access = plan.access();
-        if (access != ParameterAccess.NO_ARGS) {
+        if (access == ParameterAccess.READ_ARGS_VIEW) {
+            // API101/102 adapters can retain the framework's immutable view without toArray().
+            this.argsView = Objects.requireNonNull(backend.readOnlyArguments(), "readOnlyArguments");
+        } else if (access != ParameterAccess.NO_ARGS) {
             // Materialized once per frame at entry; NO_ARGS never reaches this branch.
             this.args = backend.arguments();
             if (access == ParameterAccess.ENTRY_SNAPSHOT) {
@@ -56,6 +66,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
 
     void invalidate() {
         valid = false;
+        argsView = null;
     }
 
     BackendInvocation backend() {
@@ -88,12 +99,22 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     }
 
     Object[] argsForProceed() {
-        // null means "keep incoming arguments" and avoids materialization for NO_ARGS.
+        // null means "keep incoming arguments" for NO_ARGS and READ_ARGS_VIEW.
         return args;
     }
 
-    CallOutcome earlyOutcome() {
-        return earlyThrowable != null ? CallOutcome.threw(earlyThrowable) : CallOutcome.returned(earlyResult);
+    DispatchResult earlyDispatchResult() {
+        return earlyThrowable != null ? DispatchResult.threw(earlyThrowable) : DispatchResult.returned(earlyResult);
+    }
+
+    void initializeEarlyResult(ResultSlot slot) {
+        if (earlyThrowable != null) slot.initThrown(earlyThrowable);
+        else slot.initReturned(earlyResult);
+    }
+
+    /** Internal access after the sole callback's borrowed frame has expired. */
+    boolean hasEarlyOutcomeForDispatch() {
+        return earlyOutcomeSet;
     }
 
     CallOutcome proceedOutcome() {
@@ -101,7 +122,28 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     }
 
     ResultSlot resultSlot() {
+        if (resultSlot == null) resultSlot = new ResultSlot();
         return resultSlot;
+    }
+
+    BorrowedInvocation borrow() {
+        check();
+        return new BorrowedInvocation();
+    }
+
+    void rethrowObservedFatal() {
+        if (observedFatal != null) {
+            throw TypeChecks.fatal(observedFatal);
+        }
+    }
+
+    private void rejectFatal(Throwable throwable) {
+        if (TypeChecks.isFatal(throwable)) {
+            if (observedFatal == null) {
+                observedFatal = throwable;
+            }
+            throw TypeChecks.fatal(observedFatal);
+        }
     }
 
     @Override
@@ -125,35 +167,39 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public Object thisObject() {
         check();
-        return backend.thisObject();
+        Executable target = plan.target();
+        return target instanceof Method && !Modifier.isStatic(target.getModifiers())
+                ? backend.thisObject() : null;
     }
 
     @Override
     public ParameterAccess access() {
+        check();
         return plan.access();
     }
 
     @Override
     public Thread ownerThread() {
+        check();
         return owner;
     }
 
     @Override
     public int argumentCount() {
         requireReadable();
-        return plan.target().getParameterTypes().length;
+        return plan.parameterCount();
     }
 
     @Override
     public Object getArgument(int index) {
         requireReadable();
-        return args[index];
+        return plan.access() == ParameterAccess.READ_ARGS_VIEW ? argsView.get(index) : args[index];
     }
 
     @Override
     public Class<?> argumentType(int index) {
         requireReadable();
-        return plan.target().getParameterTypes()[index];
+        return plan.parameterType(index);
     }
 
     @Override
@@ -177,7 +223,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public void setArgument(int index, Object value) {
         requireMutable();
-        TypeChecks.checkArgumentValue(plan.target(), index, value);
+        TypeChecks.checkArgumentValue(plan, index, value);
         args[index] = value;
     }
 
@@ -193,8 +239,10 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public void setEarlyThrowable(Throwable throwable) {
         check();
+        Objects.requireNonNull(throwable, "throwable");
+        rejectFatal(throwable);
         earlyOutcomeSet = true;
-        earlyThrowable = Objects.requireNonNull(throwable, "throwable");
+        earlyThrowable = throwable;
     }
 
     @Override
@@ -212,6 +260,9 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         if (proceedState != CallOutcome.State.NOT_CALLED) {
             throw new HookContractException("duplicate proceed(): continuation is at most once per invocation");
         }
+        if (earlyOutcomeSet) {
+            throw new HookContractException("proceed() cannot follow an explicit early outcome");
+        }
         proceedState = CallOutcome.State.RUNNING;
         try {
             Object value = backend.proceed(argsForProceed());
@@ -220,9 +271,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         } catch (Throwable throwable) {
             proceedOutcome = CallOutcome.threw(throwable);
             proceedState = CallOutcome.State.THREW;
-            if (TypeChecks.isFatal(throwable)) {
-                throw TypeChecks.fatal(throwable);
-            }
+            rejectFatal(throwable);
         }
         return proceedOutcome;
     }
@@ -233,57 +282,119 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         return proceedState;
     }
 
-    /** After-stage result slot. Initial state is the downstream or early outcome. */
-    final class ResultSlot implements InvocationResult {
-        private CallOutcome outcome = CallOutcome.notCalled();
+    /** A distinct lease for one callback, sharing only the enclosing frame's invocation state. */
+    final class BorrowedInvocation implements AroundInvocation, EntrySnapshotInvocation, MutableArgsInvocation {
+        private boolean active = true;
 
-        void init(CallOutcome initial) {
-            this.outcome = initial;
+        void invalidate() {
+            active = false;
         }
 
-        CallOutcome outcome() {
-            return outcome;
+        private void checkBorrow() {
+            InvocationFrame.this.check();
+            if (!active) {
+                throw new HookContractException("invocation is no longer valid: the callback already returned");
+            }
+        }
+
+        InvocationResult result() {
+            checkBorrow();
+            return new BorrowedResult();
+        }
+
+        @Override public HookId id() { checkBorrow(); return InvocationFrame.this.id(); }
+        @Override public long generation() { checkBorrow(); return InvocationFrame.this.generation(); }
+        @Override public Executable target() { checkBorrow(); return InvocationFrame.this.target(); }
+        @Override public Object thisObject() { checkBorrow(); return InvocationFrame.this.thisObject(); }
+        @Override public ParameterAccess access() { checkBorrow(); return InvocationFrame.this.access(); }
+        @Override public Thread ownerThread() { checkBorrow(); return InvocationFrame.this.ownerThread(); }
+        @Override public int argumentCount() { checkBorrow(); return InvocationFrame.this.argumentCount(); }
+        @Override public Object getArgument(int index) { checkBorrow(); return InvocationFrame.this.getArgument(index); }
+        @Override public Class<?> argumentType(int index) { checkBorrow(); return InvocationFrame.this.argumentType(index); }
+        @Override public Object getEntryArgument(int index) { checkBorrow(); return InvocationFrame.this.getEntryArgument(index); }
+        @Override public Object[] entrySnapshot() { checkBorrow(); return InvocationFrame.this.entrySnapshot(); }
+        @Override public void setArgument(int index, Object value) { checkBorrow(); InvocationFrame.this.setArgument(index, value); }
+        @Override public void setEarlyResult(Object value) { checkBorrow(); InvocationFrame.this.setEarlyResult(value); }
+        @Override public void setEarlyThrowable(Throwable throwable) { checkBorrow(); InvocationFrame.this.setEarlyThrowable(throwable); }
+        @Override public boolean hasEarlyOutcome() { checkBorrow(); return InvocationFrame.this.hasEarlyOutcome(); }
+        @Override public CallOutcome proceed() { checkBorrow(); return InvocationFrame.this.proceed(); }
+        @Override public CallOutcome.State proceedState() { checkBorrow(); return InvocationFrame.this.proceedState(); }
+
+        private final class BorrowedResult implements InvocationResult {
+            @Override public boolean hasReturned() { checkBorrow(); return resultSlot.hasReturned(); }
+            @Override public boolean hasThrown() { checkBorrow(); return resultSlot.hasThrown(); }
+            @Override public Object getResult() { checkBorrow(); return resultSlot.getResult(); }
+            @Override public Throwable getThrowable() { checkBorrow(); return resultSlot.getThrowable(); }
+            @Override public void setResult(Object value) { checkBorrow(); resultSlot.setResult(value); }
+            @Override public void setThrowable(Throwable throwable) { checkBorrow(); resultSlot.setThrowable(throwable); }
+        }
+    }
+
+    /** After-stage result slot. Initial state is the downstream or early outcome. */
+    final class ResultSlot implements InvocationResult {
+        private CallOutcome.State state = CallOutcome.State.NOT_CALLED;
+        private Object value;
+        private Throwable throwable;
+
+        void initReturned(Object result) {
+            state = CallOutcome.State.RETURNED;
+            value = result;
+            throwable = null;
+        }
+
+        void initThrown(Throwable failure) {
+            state = CallOutcome.State.THREW;
+            value = null;
+            throwable = failure;
+        }
+
+        DispatchResult dispatchResult() {
+            return state == CallOutcome.State.THREW
+                    ? DispatchResult.threw(throwable)
+                    : DispatchResult.returned(state == CallOutcome.State.RETURNED ? value : null);
         }
 
         void restoreOriginal(Throwable original) {
-            this.outcome = CallOutcome.threw(original);
+            initThrown(original);
         }
 
         @Override
         public boolean hasReturned() {
             check();
-            return outcome.state() == CallOutcome.State.RETURNED;
+            return state == CallOutcome.State.RETURNED;
         }
 
         @Override
         public boolean hasThrown() {
             check();
-            return outcome.state() == CallOutcome.State.THREW;
+            return state == CallOutcome.State.THREW;
         }
 
         @Override
         public Object getResult() {
             check();
-            return outcome.state() == CallOutcome.State.RETURNED ? outcome.value() : null;
+            return state == CallOutcome.State.RETURNED ? value : null;
         }
 
         @Override
         public Throwable getThrowable() {
             check();
-            return outcome.state() == CallOutcome.State.THREW ? outcome.throwable() : null;
+            return state == CallOutcome.State.THREW ? throwable : null;
         }
 
         @Override
         public void setResult(Object value) {
             check();
             TypeChecks.checkResultValue(plan.target(), value);
-            outcome = CallOutcome.returned(value);
+            initReturned(value);
         }
 
         @Override
         public void setThrowable(Throwable throwable) {
             check();
-            outcome = CallOutcome.threw(Objects.requireNonNull(throwable, "throwable"));
+            Objects.requireNonNull(throwable, "throwable");
+            rejectFatal(throwable);
+            initThrown(throwable);
         }
     }
 }

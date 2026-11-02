@@ -5,6 +5,7 @@ import io.github.jichuo1.meguviz.hook.api.BeforeCallback;
 import io.github.jichuo1.meguviz.hook.api.HookId;
 import io.github.jichuo1.meguviz.hook.api.HookSpec;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
+import io.github.jichuo1.meguviz.hook.api.StringArgumentCondition;
 
 import java.lang.reflect.Executable;
 import java.util.List;
@@ -23,6 +24,12 @@ public final class BoundPlan {
     private final long generation;
     private final ClassLoader loader;
     private final long codeEpoch;
+    private final DispatchResult constantResult;
+    private final StringArgumentCondition stringArgumentCondition;
+    private final DispatchResult conditionalResult;
+    private final BeforeCallback singleBeforeOnly;
+    private final AfterCallback singleAfterOnly;
+    private volatile Class<?>[] parameterTypes;
 
     BoundPlan(HookSpec spec, Executable target, long generation, ClassLoader loader, long codeEpoch) {
         this.spec = spec;
@@ -30,6 +37,17 @@ public final class BoundPlan {
         this.generation = generation;
         this.loader = loader;
         this.codeEpoch = codeEpoch;
+        this.constantResult = spec.hasConstantReplacement()
+                ? DispatchResult.returned(spec.constantResult()) : null;
+        this.stringArgumentCondition = spec.stringArgumentCondition();
+        this.conditionalResult = stringArgumentCondition == null
+                ? null : DispatchResult.returned(stringArgumentCondition.result());
+        List<BeforeCallback> before = spec.beforeCallbacks();
+        this.singleBeforeOnly = before.size() == 1 && spec.afterCallbacks().isEmpty()
+                && spec.access() != ParameterAccess.AROUND ? before.get(0) : null;
+        List<AfterCallback> after = spec.afterCallbacks();
+        this.singleAfterOnly = before.isEmpty() && after.size() == 1
+                && spec.access() != ParameterAccess.AROUND ? after.get(0) : null;
     }
 
     public HookSpec spec() {
@@ -66,6 +84,45 @@ public final class BoundPlan {
 
     public List<AfterCallback> afterCallbacks() {
         return spec.afterCallbacks();
+    }
+
+    DispatchResult constantResult() {
+        return constantResult;
+    }
+
+    StringArgumentCondition stringArgumentCondition() {
+        return stringArgumentCondition;
+    }
+
+    DispatchResult conditionalResult() {
+        return conditionalResult;
+    }
+
+    BeforeCallback singleBeforeOnly() {
+        return singleBeforeOnly;
+    }
+
+    AfterCallback singleAfterOnly() {
+        return singleAfterOnly;
+    }
+
+    int parameterCount() {
+        return parameterTypes().length;
+    }
+
+    Class<?> parameterType(int index) {
+        return parameterTypes()[index];
+    }
+
+    private Class<?>[] parameterTypes() {
+        Class<?>[] current = parameterTypes;
+        if (current == null) {
+            // Reflection may invoke a custom loader. Do not hold a monitor around that work;
+            // simultaneous first readers may compute equivalent private arrays independently.
+            current = target.getParameterTypes();
+            parameterTypes = current;
+        }
+        return current;
     }
 
     @Override

@@ -21,11 +21,12 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Verifies the adapter's mapping against a stubbed 102 interface: exception mode, id/priority
+ * Verifies the adapter's mapping against a stubbed 102 interface: exception mode, priority,
  * propagation, result/throwable/passthrough mapping and unhook behaviour.
  *
  * <p>This is a framework-mapping fixture on the JVM, not evidence of a real 102 runtime, ART
@@ -48,7 +49,7 @@ public class LibXposed102BackendTest {
     }
 
     @Test
-    public void installForcesPassThroughAndPropagatesIdAndPriority() throws Exception {
+    public void installForcesPassThroughAndKeepsFrameworkIdAbsent() throws Exception {
         HookSpec spec = new HookSpec.Builder(HookId.of("adapter.mapping"), HookOwner.of("adapter-test"),
                 TargetSpec.ofMember(sampleTarget()))
                 .priority(70)
@@ -58,7 +59,8 @@ public class LibXposed102BackendTest {
         assertTrue(receipt.toString(), receipt.isInstalled());
 
         assertEquals(XposedInterface.ExceptionMode.PASSTHROUGH, framework.exceptionMode);
-        assertEquals("adapter.mapping", framework.hookId);
+        assertNull("logical IDs must not become module-wide framework IDs", framework.hookId);
+        assertEquals("the adapter must not configure a framework ID", 0, framework.setIdCalls.get());
         assertEquals(70, framework.priority);
         assertEquals("PROTECTIVE would silently swallow callback failures and break PROPAGATE",
                 XposedInterface.ExceptionMode.PASSTHROUGH, framework.exceptionMode);
@@ -169,6 +171,7 @@ public class LibXposed102BackendTest {
         private final AtomicInteger unhookCalls = new AtomicInteger();
         private final AtomicInteger installCalls = new AtomicInteger();
         private final AtomicInteger replaceCalls = new AtomicInteger();
+        private final AtomicInteger setIdCalls = new AtomicInteger();
 
         XposedInterface api() {
             return (XposedInterface) Proxy.newProxyInstance(getClass().getClassLoader(),
@@ -225,6 +228,7 @@ public class LibXposed102BackendTest {
                                 exceptionMode = (XposedInterface.ExceptionMode) args[0];
                                 return proxy;
                             case "setId":
+                                setIdCalls.incrementAndGet();
                                 hookId = (String) args[0];
                                 return proxy;
                             case "intercept":

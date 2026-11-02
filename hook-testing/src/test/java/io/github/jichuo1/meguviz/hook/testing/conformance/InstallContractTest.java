@@ -2,6 +2,7 @@ package io.github.jichuo1.meguviz.hook.testing.conformance;
 
 import io.github.jichuo1.meguviz.hook.api.Capability;
 import io.github.jichuo1.meguviz.hook.api.CapabilityResult;
+import io.github.jichuo1.meguviz.hook.api.BeforeCallback;
 import io.github.jichuo1.meguviz.hook.api.ChainSemantics;
 import io.github.jichuo1.meguviz.hook.api.HookRegistration;
 import io.github.jichuo1.meguviz.hook.api.HookSpec;
@@ -116,6 +117,26 @@ public class InstallContractTest {
                 .build());
         assertEquals(RegistrationReceipt.Status.CONFLICT, conflict.status());
         assertEquals("conflicting install must not replace the existing hook", 1, backend.installCount());
+    }
+
+    @Test
+    public void descriptorMatchPolicyAndInitializationArePartOfInstallSemantics() {
+        BeforeCallback callback = invocation -> { };
+        TargetSpec.DescriptorTarget unique = TargetSpec.descriptor(TargetKind.METHOD, Fixtures.class.getName(), "add")
+                .parameters("int", "int").match(MatchPolicy.UNIQUE).build();
+        TargetSpec.DescriptorTarget first = TargetSpec.descriptor(TargetKind.METHOD, Fixtures.class.getName(), "add")
+                .parameters("int", "int").match(MatchPolicy.FIRST).build();
+        TargetSpec.DescriptorTarget initialized = TargetSpec.descriptor(TargetKind.METHOD, Fixtures.class.getName(), "add")
+                .parameters("int", "int").initializeClass(true).build();
+        HookSpec original = descriptorSpec("duplicate.descriptor", unique, callback);
+        assertTrue(environment.install(original).isInstalled());
+        assertEquals(RegistrationReceipt.Status.ALREADY_INSTALLED,
+                environment.install(descriptorSpec("duplicate.descriptor", unique, callback)).status());
+        assertEquals(RegistrationReceipt.Status.CONFLICT,
+                environment.install(descriptorSpec("duplicate.descriptor", first, callback)).status());
+        assertEquals(RegistrationReceipt.Status.CONFLICT,
+                environment.install(descriptorSpec("duplicate.descriptor", initialized, callback)).status());
+        assertEquals(1, backend.installCount());
     }
 
     @Test
@@ -336,8 +357,17 @@ public class InstallContractTest {
         Method firstAdd = first.getMethod("add", int.class, int.class);
         Method secondAdd = second.getMethod("add", int.class, int.class);
         assertNotEquals("member identity is loader bound", firstAdd, secondAdd);
+        assertEquals("member display strings do not encode loader identity", firstAdd.toString(), secondAdd.toString());
         assertEquals(firstLoader, firstAdd.getDeclaringClass().getClassLoader());
         assertEquals(secondLoader, secondAdd.getDeclaringClass().getClassLoader());
+        BeforeCallback callback = invocation -> { };
+        HookSpec firstSpec = TestSupport.spec("loader.identity", firstAdd).before(callback).build();
+        HookSpec sameMember = TestSupport.spec("loader.identity", first.getMethod("add", int.class, int.class))
+                .before(callback).build();
+        HookSpec secondSpec = TestSupport.spec("loader.identity", secondAdd).before(callback).build();
+        assertTrue(firstSpec.hasSameSemantics(sameMember));
+        assertFalse(firstSpec.hasSameSemantics(secondSpec));
+        assertFalse(secondSpec.hasSameSemantics(firstSpec));
     }
 
     @Test
@@ -429,6 +459,12 @@ public class InstallContractTest {
                 })
                 .build());
         assertEquals(RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE, receipt.status());
+    }
+
+    private static HookSpec descriptorSpec(String id, TargetSpec target, BeforeCallback callback) {
+        return new HookSpec.Builder(io.github.jichuo1.meguviz.hook.api.HookId.of(id),
+                io.github.jichuo1.meguviz.hook.api.HookOwner.of("conformance"), target)
+                .before(callback).build();
     }
 
     private static byte[] readClassBytes(Class<?> type) throws IOException {

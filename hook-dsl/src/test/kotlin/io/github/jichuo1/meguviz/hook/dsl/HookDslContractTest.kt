@@ -35,6 +35,27 @@ class HookDslContractTest {
     )
 
     @Test
+    fun successResultRunsOriginalAndRejectsMixedCallbacks() {
+        val backend = backendWithAdd()
+        HookEnvironment.create(backend).use { environment ->
+            val receipt = environment.install("sample.kotlin.success", "kotlin-sample", member(add)) {
+                replaceResultOnSuccess(93)
+            }
+            assertTrue(receipt.isInstalled)
+            assertEquals(Integer.valueOf(93), backend.call(add, null, 1, 2))
+            assertEquals(1, backend.originalCallCount(add))
+            receipt.registration().close()
+            assertEquals(Integer.valueOf(3), backend.call(add, null, 1, 2))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            hook("sample.kotlin.success.conflict", "kotlin-sample", member(add)) {
+                replaceResultOnSuccess(93)
+                before { }
+            }
+        }
+    }
+
+    @Test
     fun javaAndKotlinMutableHooksProduceTheSameResult() {
         val backend = backendWithAdd()
         HookEnvironment.create(backend).use { environment ->

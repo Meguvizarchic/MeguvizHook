@@ -38,17 +38,109 @@ final class Dispatcher {
             if (plan.access() == ParameterAccess.AROUND) {
                 return dispatchAround(plan, frame);
             }
+            BeforeCallback single = plan.singleBeforeOnly();
+            if (single != null) {
+                return dispatchSingleBefore(single, frame);
+            }
             return dispatchBeforeAfter(plan, frame, diagnostics);
         } finally {
             frame.invalidate();
         }
     }
 
+    /** Selected once by the registration when binding a sole after-only plan. */
+    static DispatchResult dispatchSingleAfter(BoundPlan plan, AfterCallback callback,
+                                               BackendInvocation backend, DiagnosticsSink diagnostics) {
+        InvocationFrame frame = new InvocationFrame(plan, backend);
+        try {
+            return dispatchSingleAfter(plan, callback, frame, diagnostics);
+        } finally {
+            frame.invalidate();
+        }
+    }
+
+    /**
+     * A sole after callback is the frame's only borrow. The result slot remains a distinct object
+     * but can use the frame lifetime directly, eliminating two per-callback wrappers. Expire both
+     * before handling failure or calling diagnostics, just as the ordinary borrowed view does.
+     */
+    private static DispatchResult dispatchSingleAfter(BoundPlan plan, AfterCallback callback,
+                                                       InvocationFrame frame, DiagnosticsSink diagnostics) {
+        InvocationFrame.ResultSlot slot = frame.resultSlot();
+        Throwable originalFailure = null;
+        try {
+            slot.initReturned(frame.backend().proceed(frame.argsForProceed()));
+        } catch (Throwable failure) {
+            if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+            originalFailure = failure;
+            slot.initThrown(failure);
+        }
+        try {
+            try {
+                callback.after(frame, slot);
+            } finally {
+                frame.invalidate();
+            }
+            frame.rethrowObservedFatal();
+        } catch (Throwable failure) {
+            frame.rethrowObservedFatal();
+            if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+            if (originalFailure == null) {
+                slot.initThrown(failure);
+            } else {
+                try {
+                    diagnostics.record(new DiagnosticsSink.Event(
+                            DiagnosticsSink.Event.Kind.AFTER_CALLBACK_FAILED_WHILE_ORIGINAL_FAILED,
+                            plan.id(), plan.generation(), failure, "after callback failed; original throwable kept"));
+                } catch (Throwable diagnosticFailure) {
+                    if (TypeChecks.isFatal(diagnosticFailure)) throw TypeChecks.fatal(diagnosticFailure);
+                }
+                slot.restoreOriginal(originalFailure);
+            }
+        }
+        return slot.dispatchResult();
+    }
+
+    /**
+     * With exactly one before callback, the per-invocation frame is itself its only borrow. Expire
+     * it before downstream code runs, so a retained callback reference cannot be used by the
+     * original method or by synchronous reentry. Internal dispatch state remains accessible only
+     * through package-private methods that do not expose the expired invocation to consumers.
+     */
+    private static DispatchResult dispatchSingleBefore(BeforeCallback callback, InvocationFrame frame) {
+        try {
+            callback.before(frame);
+            frame.rethrowObservedFatal();
+        } catch (Throwable failure) {
+            frame.rethrowObservedFatal();
+            if (TypeChecks.isFatal(failure)) {
+                throw TypeChecks.fatal(failure);
+            }
+            return DispatchResult.threw(failure);
+        } finally {
+            frame.invalidate();
+        }
+        if (frame.hasEarlyOutcomeForDispatch()) return frame.earlyDispatchResult();
+        try {
+            return DispatchResult.returned(frame.backend().proceed(frame.argsForProceed()));
+        } catch (Throwable failure) {
+            if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+            return DispatchResult.threw(failure);
+        }
+    }
+
     private static DispatchResult dispatchBeforeAfter(BoundPlan plan, InvocationFrame frame, DiagnosticsSink diagnostics) {
         for (BeforeCallback callback : plan.beforeCallbacks()) {
             try {
-                callback.before(frame);
+                InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
+                try {
+                    callback.before(borrowed);
+                } finally {
+                    borrowed.invalidate();
+                }
+                frame.rethrowObservedFatal();
             } catch (Throwable failure) {
+                frame.rethrowObservedFatal();
                 if (TypeChecks.isFatal(failure)) {
                     throw TypeChecks.fatal(failure);
                 }
@@ -60,50 +152,89 @@ final class Dispatcher {
             }
         }
 
-        CallOutcome outcome;
+        List<AfterCallback> afters = plan.afterCallbacks();
+        if (afters.isEmpty()) {
+            if (frame.hasEarlyOutcome()) return frame.earlyDispatchResult();
+            try {
+                return DispatchResult.returned(frame.backend().proceed(frame.argsForProceed()));
+            } catch (Throwable failure) {
+                if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+                return DispatchResult.threw(failure);
+            }
+        }
+
+        InvocationFrame.ResultSlot slot = frame.resultSlot();
         Throwable originalFailure = null;
         if (frame.hasEarlyOutcome()) {
-            outcome = frame.earlyOutcome();
+            frame.initializeEarlyResult(slot);
         } else {
             try {
-                outcome = CallOutcome.returned(frame.backend().proceed(frame.argsForProceed()));
+                slot.initReturned(frame.backend().proceed(frame.argsForProceed()));
             } catch (Throwable failure) {
                 if (TypeChecks.isFatal(failure)) {
                     throw TypeChecks.fatal(failure);
                 }
                 originalFailure = failure;
-                outcome = CallOutcome.threw(failure);
+                slot.initThrown(failure);
             }
         }
 
-        InvocationFrame.ResultSlot slot = frame.resultSlot();
-        slot.init(outcome);
-        List<AfterCallback> afters = plan.afterCallbacks();
+        Throwable firstAfterFailure = null;
         for (int i = afters.size() - 1; i >= 0; i--) {
             try {
-                afters.get(i).after(frame, slot);
+                InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
+                try {
+                    afters.get(i).after(borrowed, borrowed.result());
+                } finally {
+                    borrowed.invalidate();
+                }
+                frame.rethrowObservedFatal();
             } catch (Throwable failure) {
+                frame.rethrowObservedFatal();
                 if (TypeChecks.isFatal(failure)) {
                     throw TypeChecks.fatal(failure);
                 }
+                if (firstAfterFailure == null) {
+                    firstAfterFailure = failure;
+                }
                 if (originalFailure != null) {
                     // Both failed: the original throwable wins, the callback failure is diagnostic only.
+                    try {
+                        diagnostics.record(new DiagnosticsSink.Event(
+                                DiagnosticsSink.Event.Kind.AFTER_CALLBACK_FAILED_WHILE_ORIGINAL_FAILED,
+                                plan.id(), plan.generation(), failure, "after callback failed; original throwable kept"));
+                    } catch (Throwable diagnosticFailure) {
+                        if (TypeChecks.isFatal(diagnosticFailure)) {
+                            throw TypeChecks.fatal(diagnosticFailure);
+                        }
+                        // A failing diagnostics sink must not replace the original failure.
+                    }
+                }
+            }
+            if (firstAfterFailure != null) {
+                // Continue the remaining after callbacks, but do not let later slot writes erase a
+                // failure already fixed by the contract. The original exception has precedence.
+                if (originalFailure != null) {
                     slot.restoreOriginal(originalFailure);
-                    diagnostics.record(new DiagnosticsSink.Event(
-                            DiagnosticsSink.Event.Kind.AFTER_CALLBACK_FAILED_WHILE_ORIGINAL_FAILED,
-                            plan.id(), plan.generation(), failure, "after callback failed; original throwable kept"));
                 } else {
-                    slot.init(CallOutcome.threw(failure));
+                    slot.initThrown(firstAfterFailure);
                 }
             }
         }
-        return toDispatchResult(slot.outcome());
+        return slot.dispatchResult();
     }
 
     private static DispatchResult dispatchAround(BoundPlan plan, InvocationFrame frame) {
         try {
-            plan.spec().aroundCallback().around(frame);
+            InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
+            try {
+                plan.spec().aroundCallback().around(borrowed);
+            } finally {
+                borrowed.invalidate();
+            }
+            frame.rethrowObservedFatal();
         } catch (Throwable failure) {
+            frame.rethrowObservedFatal();
             if (TypeChecks.isFatal(failure)) {
                 throw TypeChecks.fatal(failure);
             }
@@ -111,7 +242,7 @@ final class Dispatcher {
             return DispatchResult.threw(failure);
         }
         if (frame.hasEarlyOutcome()) {
-            return toDispatchResult(frame.earlyOutcome());
+            return frame.earlyDispatchResult();
         }
         CallOutcome.State state = frame.proceedState();
         if (state == CallOutcome.State.RETURNED || state == CallOutcome.State.THREW) {

@@ -27,8 +27,8 @@ hook-api  ←  hook-core  ←  backend-libxposed-101  ←  sample-module-101
   `sample-module-102` 与 `sample-module-kotlin-102` 仅依赖 backend-102；不得同时出现在同一 configuration。
 - 两版官方 API 同 FQCN，禁止同时进入编译类路径；三个 sample 是分别验证的独立产物，
   不做单 APK 双代 bootstrap（后续独立资格）。101 产品不得引用 102 的 setId/replaceHook/热重载类型。
-- 框架 API 一律 `compileOnly`：不得打包进 AAR/APK。验证方式：解析依赖图 + 检查最终 APK 条目
-  （见 `work/hook/release_artifact_audit.json` 的实际检查结果）。
+- 框架 API 一律 `compileOnly`：不得打包进 AAR/APK。可解析依赖图并检查最终 APK 条目；
+  具体消费应用仍须检查自己的最终制品。
 - 单测例外：`testImplementation libs.libxposed.api` 只进入测试类路径，用于 stub 映射夹具，
   与发布产物无关。
 
@@ -38,11 +38,12 @@ hook-api  ←  hook-core  ←  backend-libxposed-101  ←  sample-module-101
 |---|---|
 | native / Rust | 无对应模块、无 `.so`、无 JNI 注册（本仓库该切片不含 native 源码） |
 | service | 不连接、不反射私有 IBinder、不创建会话 |
-| reload / trace / codegen / doctor | 不存在，不初始化 |
+| reload / trace | 默认不启用；需要调用方显式接入 |
+| codegen / doctor | 不存在，不初始化 |
 | 诊断 | `DiagnosticsSink.NONE`；显式选择时使用有界实现 |
 | 线程/IPC | 普通回调路径本 SDK 新增 0；框架自身边界不计入“新增” |
 
-这些是结构约束。实证项（APK 内容检查）见审计 JSON；性能数值一律不在本切片声明。
+这些是结构约束，不代表所有消费应用的制品审计或性能资格。
 
 ## 4. Java/Kotlin 稳定消费边界
 

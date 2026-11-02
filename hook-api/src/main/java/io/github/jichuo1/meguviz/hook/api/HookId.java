@@ -7,8 +7,9 @@ import java.util.Objects;
  *
  * <p>The value is chosen by the consumer and must be stable across builds: line numbers, enum
  * ordinals, object identities and {@code ClassLoader.toString()} are not acceptable sources.
- * Two registrations with the same id on the same target are compared by full semantics, never
- * silently overwritten (CONTRACT-001 §5).
+ * Within one HookEnvironment, registrations with the same id on the same target are compared by
+ * full semantics, never silently overwritten (CONTRACT-001 §5). The API102 adapter does not expose
+ * this logical id as a framework hook id; separate environments remain separate registrations.
  */
 public final class HookId {
     private static final int MAX_LENGTH = 128;

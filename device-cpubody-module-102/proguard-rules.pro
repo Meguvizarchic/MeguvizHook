@@ -1,0 +1,6 @@
+-keep class * extends io.github.libxposed.api.XposedModule { <init>(); }
+-keepclassmembers class * extends io.github.libxposed.api.XposedModule { public void onPackageReady(...); }
+-keep,allowobfuscation class io.github.jichuo1.meguviz.hook.api.** { *; }
+-keep class io.github.jichuo1.meguviz.hook.cpubody102.ProbeEntry$Timed* { *; }
+-dontwarn io.github.libxposed.**
+-dontnote io.github.libxposed.**

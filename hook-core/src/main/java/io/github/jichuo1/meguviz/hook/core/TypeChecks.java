@@ -41,15 +41,30 @@ final class TypeChecks {
             }
             return;
         }
-        checkAssignable(type, value, "result of " + target);
+        if (!isAssignable(type, value)) {
+            checkAssignable(type, value, "result of " + target);
+        }
     }
 
-    static void checkArgumentValue(Executable target, int index, Object value) {
-        Class<?>[] types = target.getParameterTypes();
-        if (index < 0 || index >= types.length) {
+    static void checkArgumentValue(BoundPlan plan, int index, Object value) {
+        Executable target = plan.target();
+        if (index < 0 || index >= plan.parameterCount()) {
             throw new IndexOutOfBoundsException("argument index " + index + " of " + target);
         }
-        checkAssignable(types[index], value, "argument " + index + " of " + target);
+        Class<?> type = plan.parameterType(index);
+        if (!isAssignable(type, value)) {
+            checkAssignable(type, value, "argument " + index + " of " + target);
+        }
+    }
+
+    /** Avoid constructing reflective target descriptions on successful slot writes. */
+    private static boolean isAssignable(Class<?> type, Object value) {
+        if (type.isPrimitive()) {
+            if (value == null) return false;
+            Class<?> wrapper = WRAPPERS.get(type);
+            return wrapper == null || wrapper.isInstance(value);
+        }
+        return value == null || type.isInstance(value);
     }
 
     private static void checkAssignable(Class<?> type, Object value, String what) {

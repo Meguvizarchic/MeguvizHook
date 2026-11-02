@@ -1,8 +1,8 @@
 # ADR-0001：冻结 Hook 运行时语义与所有权合同（CONTRACT-001）
 
-状态：Accepted（2026-10-31，本切片冻结；修改需新 ADR 与同步 oracle）
+状态：Accepted（2026-10-31，本切片冻结；身份作用域与 API102 安装决策由 ADR-0003 补充）
 实现负责人：HOOK-002（公开 API）/ HOOK-004（JVM dispatcher）/ HOOK-005（安装期计划）
-验证层级：JVM fake + 独立 oracle；真实框架 cell 未执行（见 `work/hook/release_artifact_audit.json`）
+验证层级包括 JVM fake 和独立 oracle，部分框架路径曾在隔离环境做功能检查；这不等于全设备兼容或性能资格。
 
 ## 1. 身份与 owner
 
@@ -23,12 +23,43 @@
 |---|---|---|
 | NO_ARGS | 不调用 backend 的 `arguments()`；参数读取抛 `HookContractException` | `InvocationFrame` 构造分支 |
 | READ_ARGS | 仅当前线程、当前回调内读取；逃逸/跨线程抛合同异常 | `InvocationFrame.check()` |
+| READ_ARGS_VIEW | 显式借用入口只读参数视图，回调结束即不可访问；保留原参数下传，不承诺深拷贝或框架零分配 | `BackendInvocation.readOnlyArguments()` |
 | ENTRY_SNAPSHOT | 进入注册时的**浅槽快照**：复制数组、共享对象；不深拷贝、不回滚对象内部 | `args.clone()` |
 | MUTABLE_ARGS | 写入经 primitive/引用/null 校验，对下游 continuation 生效 | `TypeChecks` |
 | AROUND | 与 before/after 互斥（本版）；continuation at-most-once | `Dispatcher.dispatchAround` |
 
-同一 invocation 不可跨线程重用；回调返回后立即失效。重入（含递归与同步回入）每层新建
-frame，不共享 ThreadLocal 可变数组。
+同一 invocation 不可跨线程重用；每个回调收到独立借用视图，其 invocation 和结果槽在该回调返回后
+立即失效，即使其他回调正在处理同一次调用也不能复用旧视图。重入（含递归与同步回入）每层新建
+frame，不共享 ThreadLocal 可变数组。独立视图引入的分配成本尚未测量。
+
+恰好一个 before 且没有 after/around 时，当前调用帧自身可作为该回调唯一借用对象；回调结束后、
+执行下游前即失效。该优化不复用跨调用对象，也不放宽重入、跨线程或回调结束后的访问限制。
+
+`READ_ARGS_VIEW` 是新增的显式选择，不改变 `READ_ARGS` 和 `ENTRY_SNAPSHOT` 的现有行为。
+101/102 使用框架不可变参数列表，旧后端默认复制数组回退；对象本身仍共享。视图不是可持久化快照，
+也不承诺底层框架没有分配。框架继续使用原参数执行下游，而不是替换为 SDK 的数组。
+
+`HookSpec.Builder.replaceConstant(value)` 显式声明独占的常量替换，不能与回调或非 NO_ARGS 形状
+组合。解析后在安装任何目标前校验返回类型，使用调用方提供的同一对象引用；执行仍受注册状态、
+在途计数与关闭合同约束。该路径不创建普通回调帧，关闭后的框架入口仍按 PASSTHROUGH 处理。
+
+`replaceResultOnSuccess(value)` 是独立且显式的结果形状：下游先携原参数执行一次，只有正常返回才
+覆盖结果；异常保持原身份并按所选框架策略处理。101/102 的专用通道在下游期间持有租约，旧后端使用
+带 invocation 的普通分发；它与直接跳过下游的常量替换不等价。
+
+可选的 `FusedConstantDispatchChannel` 将准入、取值和退出合并为一次通道调用，仍保留状态双检和
+在途计数。常量通道缓存所属注册的共享计数器并保留所属注册，保持原有状态读、原子加、
+第二次状态读及退出原子减的次序。101/102 仅对明确实现该接口的通道启用。
+未准入标记按引用识别，合法常量与标记是同一对象时
+回退原通道；旧通道不因探测此优化而额外调用取值方法。core 与 backend 必须共享同一接口及标记的类加载身份。
+此优化不改变框架异常保护策略、关闭或在途合同。
+
+`replaceIfStringArgumentEquals(index, expected, result, observer)` 是另一种显式且独占的形状：
+安装前检查全部目标的指定参数为 `String` 并检查返回值，比较使用 `Objects.equals(actual, expected)`，
+缺槽按 null 处理。命中后先固定返回值、执行可选无参通知，再返回该值；未命中携原始参数执行下游一次。
+通知不能读取或修改借用 invocation，通知或下游异常按原身份交给框架。匹配、通知及整个下游执行均计入
+在途调用；101/102 可按绑定期确认的条件通道直接读取单槽，旧后端仍使用普通 dispatch 回退。
+该形状不识别或改写任意 before 闭包；异常模式由显式选择的 `ErrorPolicy` 与后端能力决定。
 
 ## 3. proceed / 结果 / 异常状态机
 
@@ -36,7 +67,7 @@ frame，不共享 ThreadLocal 可变数组。
 SDK 自有包装默认**每次 invocation 至多一次下游执行**；更宽语义需要显式 backend 能力与独立
 注册策略，本版不提供。
 
-默认策略 `ErrorPolicy.PROPAGATE`（唯一默认，兼容 preset 需另名另测）：
+默认策略 `ErrorPolicy.PROPAGATE`（以下表格描述 SDK 对框架交出的行为）：
 
 | 事件 | 冻结行为 | 反例（必须失败的情况） |
 |---|---|---|
@@ -47,13 +78,27 @@ SDK 自有包装默认**每次 invocation 至多一次下游执行**；更宽语
 | after 抛异常，original 已成功 | 传播 after 异常，original 保持 1 次 | “恢复”导致第二次副作用 |
 | after 抛异常，original 也已抛 | 保留原 throwable；after 失败记入**有界**诊断 | 替换原异常、额外再执行 |
 | around proceed 后失败 | 传播 around 异常，proceed 次数不增加 | catch 后第二次 proceed |
+| around 先设置 early outcome 再 proceed | 抛 `HookContractException`，original=0 次 | 已早退仍执行原方法 |
 | around 第二次 proceed | `HookContractException`，original 不因此再执行 | 隐式多次 continuation |
 | around 未 proceed 且无显式结果 | `HookContractException`，**不隐式调用原方法** | 静默放行原方法 |
 | 同设返回与异常 | 结果槽后写覆盖先写，二者恒互斥 | 两个有效结果并存 |
 
-Fatal VM 事件（`VirtualMachineError`、`ThreadDeath`）在任何阶段直接重抛，不进入 after、不进入
-诊断、不视为可恢复回调失败。原方法业务 throwable、backend 安装失败、取消、native panic 与普通
+Fatal VM 事件（`VirtualMachineError`、`ThreadDeath`）在 SDK 内任何阶段直接重抛给框架，不进入
+after、不进入诊断、不视为 SDK 可恢复回调失败。原方法业务 throwable、backend 安装失败、取消、native panic 与普通
 callback 失败分别分类；本切片无 native 路径。
+
+显式选择 `ErrorPolicy.FRAMEWORK_PROTECTIVE` 时，只有声明 `Capability.FRAMEWORK_PROTECTIVE`
+的 backend 才能安装；101/102 将它映射到框架 `ExceptionMode.PROTECTIVE`，SDK 不自行重试下游。
+依上游合同，hooker 在 proceed 前失败由框架继续下游，在 proceed 后失败由框架返回已完成的下游
+结果或异常，下游本身的异常继续传播。框架最终是否处理 fatal 由其实现决定，SDK 不能承诺向宿主
+穿透；多 after/around 的 SDK 状态机不因此等同于 BIL DSL。当前为 API 合同与 JVM 代理模型证据，
+不等于真实框架验证或对象副作用回滚。
+若框架在 SDK hooker 抛错退出后自行继续下游，该框架回退不属于已结束的 SDK 在途租约；
+`CloseReport` 的 SDK 在途数不能证明该框架下游已经排空。
+
+多个 after 仍按逆序执行；一旦 after 失败，最终异常固定为首次 after 失败，若原方法已失败则固定为
+原异常。后续 after 不能通过修改结果槽覆盖该失败。双失败时诊断 sink 的普通异常不覆盖原异常，
+致命事件仍直接重抛。
 
 保护只涉及返回槽/异常槽/回调控制状态，**不回滚**宿主对象、参数对象内部或外部 I/O 副作用。
 
@@ -72,34 +117,72 @@ callback 失败分别分类；本切片无 native 路径。
 
 ## 5. 注册 / 移除 / 替换
 
-- 重复 logicalId + 相同 target：完整语义一致（含回调实例、优先级、进程过滤、能力、形状、策略）
+- 单个 `HookEnvironment` 内重复 logicalId + 相同 target：完整语义一致（含回调实例、优先级、进程过滤、能力、形状、策略）
   返回 `ALREADY_INSTALLED`，否则 `CONFLICT`，**不静默覆盖**。部分安装不得伪装成幂等成功；
-  须先 close 旧代，后续 install 才可发布新 generation。
+  须先 close 旧代，后续 install 才可发布新 generation。不同环境的 ID 作用域见 ADR-0003。
+- 重复安装前核对已安装 plan 的 loader 与 code epoch；身份不一致返回 `STALE_IDENTITY`，保留旧代供
+  调用方 close。安装使用固定的 loader 与 epoch，并在解析和发布前检查身份；安装期间发现变化则回滚。
+  这些是采样检查，backend 未提供跨组件原子身份快照时，不保证最后一次检查后身份不会再变化。
 - `close()` 不持锁等待宿主调用：竞态调用要么沿旧不可变 plan 完成，要么收到
   `DispatchResult.passthrough()` 由原方法恰好执行一次。
 - `CloseReport` 分别声明：是否拒绝新回调、入口恢复（`RESTORED/NOT_RESTORED/UNKNOWN`）、
   close 时观察到的在途数、物理释放（默认 `NOT_CLAIMED`）、`CLOSED` 或 `RETIRED_RESIDENT`。
   SDK lease 归零不证明机器码返回地址已离开；本切片无 native，故不引入 dlclose 议题。
+- 关闭或未发布安装的回滚若入口恢复为 `NOT_RESTORED/UNKNOWN`，当前环境保留句柄并拒绝同 ID
+  重装；`RESTORED` 可重试，即使物理制品仍驻留。回滚回执包含聚合关闭结果，`ROLLED_BACK` 仅表示
+  已尝试关闭。隔离不跨环境或 ID，幂等 close 不提供卸载重试。
+- backend 卸载抛出运行时异常时，入口恢复状态为 `UNKNOWN`，因为它可能在实际卸载之前或之后抛出。
+  环境关闭遇非致命 `Error` 或未处理的运行时异常时继续尝试其他已知注册，保留未确认恢复的注册
+  和句柄后重抛首个 `Error`（若无 `Error` 则重抛首个未处理的运行时异常）；
+  致命 VM 事件立即传播，后续注册不宣称已关闭，也不自动重试。
+- backend 的 `BackendInstallException` 必须保证该次调用未安装入口，才能按逐项失败处理。安装抛出
+  运行时异常或 `Error` 时尝试关闭已取得的句柄并传播异常；抛错调用未返回的句柄及副作用未知，
+  该 ID 在当前环境内保持隔离，不能仅因其他句柄已恢复就安全重试。
+- 已安装句柄的回执构造或环境发布中断时，独立于发布 map 的 guard 保留注册，关闭已知句柄并隔离
+  同环境同 ID。该保证覆盖标准 map 与受控发布故障；资源耗尽或隔离自身被异步致命事件中断时，
+  不承诺 guard 和清理一定完成。
 - `HookRegistration` 不实现 `AutoCloseable`：`close()` 需要返回报告，与 void 签名不兼容。
 
 ### 单目标原子替换（HOOK-006）
 
+- 替换调用可能已提交但句柄未知，或提交后环境发布失败时，在当前环境隔离同 ID，并令旧、新
+  channel 都拒绝新回调；保留可取得的两代引用和 handle，不尝试卸载可能失效的 handle。旧 close
+  与 backend 替换及环境发布串行化。该保证覆盖标准 map 和受控发布故障；隔离自身遭异步致命事件
+  中断或无法分配报告时，不承诺一定完成状态记录，也不撤销已进入的回调。
+
 - `HookEnvironment.replace(HookSpec)` 只替换当前同 `HookId` 的完整单目标注册；不隐式 install，
-  不接受 partial、`MatchPolicy.ALL`、不同 owner/priority/resolved executable，也不允许跨 loader/epoch。
-- 后端必须声明 `ATOMIC_REPLACE=SUPPORTED_IN_DECLARED_CELL`。101 保持不支持；UNKNOWN 不得视为支持。
-- `BackendHandle.replace` 的返回点是提交点：返回新 handle 后旧 handle 失效，卸载所有权转移到新
-  generation；异常必须表示未提交且旧 hook 继续有效。禁止 close+install 或 install+close 模拟。
+  不接受 partial、`MatchPolicy.ALL`、不同 owner/priority/errorPolicy/resolved executable，也不允许跨 loader/epoch。
+- 后端必须声明 `ATOMIC_REPLACE=SUPPORTED_IN_DECLARED_CELL`，UNKNOWN 不得视为支持。102 使用
+  框架 `replaceHook`；101 保留一个框架入口，在 SDK 内原子切换单目标 channel，不提供框架原生替换。
+- `BackendHandle.replace` 的返回点是提交点：返回非 null 新 handle 后旧 handle 失效，卸载所有权转移
+  到新 generation；`BackendInstallException` 必须保证未提交且旧 handle 仍有效。unchecked 异常、Error
+  或 null 返回意味着结果未知，不得转换成旧代仍有效的失败回执。禁止 close+install 或 install+close 模拟。
 - replace 与 registration.close 使用同一 registration monitor 串行化，与 environment 操作使用固定
   environment→registration 锁序。旧 close 幂等返回 superseded 报告，不得删除新 handle。
 - 旧 in-flight snapshot 继续使用不可变旧 plan 完成，替换不等待业务回调；未进入旧 channel 的旧
   snapshot 按 PASSTHROUGH 处理。新 generation 使用新 plan/channel，不继承旧 in-flight 计数。
 - 后端成功后不再执行可能返回普通失败的检查；epoch/loader 验证必须在提交前完成。回滚不假装能
   通过卸载新 hook 恢复旧 hook。真实 102 框架替换仍需要独立设备资格。
+- 替换结果未知时，在旧注册 monitor 内令新旧 channel 拒绝新 SDK 回调，保留已取得的引用且不对可能
+  已失效的旧 handle 执行 unhook；原 unchecked/Error 按 fatal 优先级传播，旧 close 返回入口 UNKNOWN。
+  同一 environment 的该 ID 被隔离，不提供对未知 handle 的卸载或跨 environment 保护；已进入的调用
+  可以继续完成，不证明物理卸载或框架入口恢复。
+
+### API102 模块代际接手
+
+- 新代在框架 `onHotReloaded` 内使用 `HookEnvironment.adopt`，通过与同一 backend 绑定的单次桥接
+  显式接手框架提供的旧句柄；只支持一个目标，不猜测同目标多个句柄的归属，不保证跨目标原子性。
+- 旧代由模块负责清理线程、外部回调和其他资源；待接手句柄不能先通过旧 environment 关闭。
+  新代模块须处理未接手句柄并重建自身状态，不能跨 classloader 传递旧 SDK 对象。
+- 旧句柄替换已提交后无法通过卸载新句柄恢复旧代；若提交后身份检查或发布失败，停止新 channel、
+  保留已知句柄并隔离该 ID，不宣称回滚。实际框架热重载支持及模块资源清理由调用方确认。
 
 ## 6. 线程与热路径预算
 
 热路径只读 `BoundPlan` 冻结字段、执行业务回调与必要类型/寿命检查。不做：声明重解析、manager
 发现、磁盘/网络配置读取、同步 shell、类路径扫描、无界日志、service 连接、线程池、JNI、IPC。
+无 before 且恰好一个 after 时，注册绑定时选用专用 channel，frame 直接作为该回调的唯一 invocation 借用，结果槽仍为独立对象；
+回调结束即共同失效，原方法异常、after 异常及诊断优先级与通用路径相同。多个回调仍各用独立借用。
 诊断默认关闭，容量有界（`BoundedDiagnosticsSink`）。未选择 native 时本切片新增 so=0（无 native 模块）。
 
 ## 7. 独立 oracle 与反例清单
@@ -111,5 +194,7 @@ before 早退与失败、original 返回/抛出、after 恢复/失败/双失败�
 epoch 失效、loader 同名不同身份、桥接方法排除、静态返回检查、FIRST/UNIQUE/ALL、进程裁剪、
 有界诊断溢出。
 
-未覆盖（保持 not_run/unavailable，不记为通过）：真实框架 cell（装载、R8 后入口、真实类加载与
-优先级交错）、classic backend dispatch、热替换、service、native、性能阈值。
+未覆盖（保持 not_run/unavailable，不记为通过）：其他框架或设备、完整真实类加载与
+优先级交错、classic backend dispatch、热重载、service、native、性能阈值。单次 LSPatch 集成模式
+及单次 Vector 系统注入已覆盖 R8 入口、API102 安装、替换与关闭后的受控调用；单次原生 API101
+cell 覆盖安装、拒绝替换与关闭后调用。它们不代表全部框架和设备。

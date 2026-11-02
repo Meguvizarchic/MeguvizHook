@@ -10,17 +10,22 @@ import io.github.jichuo1.meguviz.hook.api.HookSpec;
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment;
+import io.github.jichuo1.meguviz.hook.core.DispatchChannel;
 import io.github.libxposed.api.XposedInterface;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
@@ -60,13 +65,186 @@ public class LibXposed101BackendTest {
     }
 
     @Test
-    public void api102OnlyCapabilitiesAreUnsupported() {
-        assertEquals(CapabilityResult.Status.UNSUPPORTED,
+    public void sdkLevelReplacementAndApi102OnlyHotReloadAreDistinguished() {
+        assertEquals(CapabilityResult.Status.SUPPORTED_IN_DECLARED_CELL,
                 backend.capabilities().lookup(Capability.ATOMIC_REPLACE).status());
         assertEquals(CapabilityResult.Status.UNSUPPORTED,
                 backend.capabilities().lookup(Capability.HOT_RELOAD).status());
         assertEquals(CapabilityResult.Status.SUPPORTED_IN_DECLARED_CELL,
                 backend.capabilities().lookup(Capability.FRAMEWORK_CHAIN).status());
+    }
+
+    @Test
+    public void replacementKeepsSingleFrameworkEntryAndTransfersCloseOwnership() throws Throwable {
+        framework.proceedResult = 3;
+        AtomicInteger oldCalls = new AtomicInteger();
+        AtomicInteger newCalls = new AtomicInteger();
+        HookSpec oldSpec = replacementSpec(oldCalls);
+        HookSpec newSpec = replacementSpec(newCalls);
+        HookRegistration old = install(oldSpec);
+        XposedInterface.Hooker originalHooker = framework.hooker;
+        assertEquals(3, framework.invokeHook(sampleTarget(), null, 1, 2));
+
+        RegistrationReceipt receipt = environment.replace(newSpec);
+        assertTrue(receipt.toString(), receipt.isInstalled());
+        assertSame(originalHooker, framework.hooker);
+        assertEquals(1, framework.installCalls.get());
+        old.close();
+        assertEquals(0, framework.unhookCalls.get());
+        assertEquals(3, framework.invokeHook(sampleTarget(), null, 1, 2));
+        assertEquals(1, oldCalls.get());
+        assertEquals(1, newCalls.get());
+        receipt.registration().close();
+        assertEquals(1, framework.unhookCalls.get());
+        receipt.registration().close();
+        assertEquals(1, framework.unhookCalls.get());
+    }
+
+    @Test
+    public void capturedOldChannelPassesThroughWhenRetiredBeforeDispatch() throws Throwable {
+        framework.proceedResult = 3;
+        AtomicInteger oldCalls = new AtomicInteger();
+        AtomicInteger newCalls = new AtomicInteger();
+        install(replacementSpec(oldCalls));
+        Field field = framework.hooker.getClass().getDeclaredField("route");
+        field.setAccessible(true);
+        Object route = field.get(framework.hooker);
+        Field channelField = route.getClass().getDeclaredField("channel");
+        channelField.setAccessible(true);
+        DispatchChannel previous = (DispatchChannel) channelField.get(route);
+        CountDownLatch selected = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        DispatchChannel delayed = invocation -> {
+            selected.countDown();
+            try {
+                if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("timed out");
+            } catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(failure);
+            }
+            return previous.dispatch(invocation);
+        };
+        java.lang.reflect.Constructor<?> routeConstructor = route.getClass().getDeclaredConstructor(DispatchChannel.class);
+        routeConstructor.setAccessible(true);
+        field.set(framework.hooker, routeConstructor.newInstance(delayed));
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread caller = new Thread(() -> {
+            try {
+                framework.invokeHook(sampleTarget(), null, 1, 2);
+            } catch (Throwable error) {
+                failure.set(error);
+            }
+        });
+        caller.start();
+        try {
+            assertTrue(selected.await(10, TimeUnit.SECONDS));
+            RegistrationReceipt receipt = environment.replace(replacementSpec(newCalls));
+            assertTrue(receipt.toString(), receipt.isInstalled());
+        } finally {
+            release.countDown();
+            caller.join(10000);
+        }
+        assertTrue("caller did not finish", !caller.isAlive());
+        assertEquals(null, failure.get());
+        assertEquals(0, oldCalls.get());
+        assertEquals(0, newCalls.get());
+        assertEquals(1, framework.proceedCalls.get());
+        framework.invokeHook(sampleTarget(), null, 1, 2);
+        assertEquals(1, newCalls.get());
+        assertEquals(2, framework.proceedCalls.get());
+    }
+
+    @Test
+    public void repeatedReplacementDoesNotWaitForInFlightAndOldCloseCannotUnhookNew() throws Throwable {
+        framework.proceedResult = 3;
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger oldCalls = new AtomicInteger();
+        AtomicInteger middleCalls = new AtomicInteger();
+        AtomicInteger newestCalls = new AtomicInteger();
+        HookSpec oldSpec = new HookSpec.Builder(HookId.of("adapter101.replace"), HookOwner.of("adapter-test"),
+                TargetSpec.ofMember(sampleTarget())).before(invocation -> {
+                    oldCalls.incrementAndGet();
+                    entered.countDown();
+                    if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("timed out");
+                }).build();
+        HookRegistration old = install(oldSpec);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread caller = new Thread(() -> {
+            try {
+                framework.invokeHook(sampleTarget(), null, 1, 2);
+            } catch (Throwable error) {
+                failure.set(error);
+            }
+        });
+        caller.start();
+        try {
+            assertTrue(entered.await(10, TimeUnit.SECONDS));
+            RegistrationReceipt middle = environment.replace(replacementSpec(middleCalls));
+            assertTrue(middle.toString(), middle.isInstalled());
+            framework.invokeHook(sampleTarget(), null, 1, 2);
+            RegistrationReceipt newest = environment.replace(replacementSpec(newestCalls));
+            assertTrue(newest.toString(), newest.isInstalled());
+            old.close();
+            middle.registration().close();
+            assertEquals(0, framework.unhookCalls.get());
+            framework.invokeHook(sampleTarget(), null, 1, 2);
+            assertEquals(1, framework.installCalls.get());
+            assertEquals(1, middleCalls.get());
+            assertEquals(1, newestCalls.get());
+            newest.registration().close();
+            assertEquals(1, framework.unhookCalls.get());
+        } finally {
+            release.countDown();
+            caller.join(10000);
+        }
+        assertTrue("caller did not finish", !caller.isAlive());
+        assertEquals(null, failure.get());
+        assertEquals(1, oldCalls.get());
+        assertEquals(3, framework.proceedCalls.get());
+    }
+
+    @Test
+    public void closeRacingReplacementUnhooksAtMostOneFrameworkEntry() throws Throwable {
+        framework.proceedResult = 3;
+        HookRegistration old = install(replacementSpec(new AtomicInteger()));
+        HookSpec replacement = replacementSpec(new AtomicInteger());
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicReference<RegistrationReceipt> receipt = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread closer = new Thread(() -> {
+            try {
+                start.await();
+                old.close();
+            } catch (Throwable error) {
+                failure.compareAndSet(null, error);
+            }
+        });
+        Thread replacer = new Thread(() -> {
+            try {
+                start.await();
+                receipt.set(environment.replace(replacement));
+            } catch (Throwable error) {
+                failure.compareAndSet(null, error);
+            }
+        });
+        closer.start();
+        replacer.start();
+        start.countDown();
+        closer.join(10000);
+        replacer.join(10000);
+        assertTrue("race did not finish", !closer.isAlive() && !replacer.isAlive());
+        assertEquals(null, failure.get());
+        assertTrue(framework.unhookCalls.get() <= 1);
+        if (receipt.get().isInstalled()) receipt.get().registration().close();
+        assertEquals(1, framework.unhookCalls.get());
+        assertEquals(1, framework.installCalls.get());
+    }
+
+    private HookSpec replacementSpec(AtomicInteger calls) throws NoSuchMethodException {
+        return new HookSpec.Builder(HookId.of("adapter101.replace"), HookOwner.of("adapter-test"),
+                TargetSpec.ofMember(sampleTarget()))
+                .before(invocation -> calls.incrementAndGet()).build();
     }
 
     @Test
@@ -145,6 +323,7 @@ public class LibXposed101BackendTest {
         private Object proceedResult;
         private final AtomicInteger proceedCalls = new AtomicInteger();
         private final AtomicInteger unhookCalls = new AtomicInteger();
+        private final AtomicInteger installCalls = new AtomicInteger();
         private final AtomicInteger unsupportedCalls = new AtomicInteger();
 
         XposedInterface api() {
@@ -202,6 +381,7 @@ public class LibXposed101BackendTest {
                                 exceptionMode = (XposedInterface.ExceptionMode) args[0];
                                 return proxy;
                             case "intercept":
+                                installCalls.incrementAndGet();
                                 hooker = (XposedInterface.Hooker) args[0];
                                 return handleProxy();
                             default:

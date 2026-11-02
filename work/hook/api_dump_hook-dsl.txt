@@ -28,6 +28,7 @@ public final class io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl {
   public final void before(io.github.jichuo1.meguviz.hook.api.BeforeCallback);
   public final void after(io.github.jichuo1.meguviz.hook.api.AfterCallback);
   public final void around(io.github.jichuo1.meguviz.hook.api.AroundCallback);
+  public final void replaceResultOnSuccess(java.lang.Object);
   public final void errorPolicy(io.github.jichuo1.meguviz.hook.api.ErrorPolicy);
   public final void require(io.github.jichuo1.meguviz.hook.api.Capability);
   public final void processes(io.github.jichuo1.meguviz.hook.api.ProcessFilter);

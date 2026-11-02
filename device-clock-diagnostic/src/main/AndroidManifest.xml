@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:allowBackup="false" android:label="MeguvizHook Clock Diagnostic">
+        <!-- No launcher or intent filter: an explicit bounded request is required. -->
+        <activity android:name=".MainActivity" android:exported="true" />
+    </application>
+</manifest>

@@ -1,3 +1,12 @@
+Compiled from "BatchTraceTransport.java"
+public final class io.github.jichuo1.meguviz.hook.core.BatchTraceTransport {
+  public static io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport sender(io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter, boolean, int, int, int);
+  public static io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter receiver(io.github.jichuo1.meguviz.hook.core.BatchTraceTransport$BatchWriter, int, int);
+}
+Compiled from "BatchTraceTransport.java"
+public interface io.github.jichuo1.meguviz.hook.core.BatchTraceTransport$BatchWriter {
+  public abstract void writeBatch(java.util.List<byte[]>) throws java.lang.Exception;
+}
 Compiled from "BoundPlan.java"
 public final class io.github.jichuo1.meguviz.hook.core.BoundPlan {
   public io.github.jichuo1.meguviz.hook.api.HookSpec spec();
@@ -18,6 +27,104 @@ public final class io.github.jichuo1.meguviz.hook.core.BoundedDiagnosticsSink im
   public synchronized java.util.List<io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event> events();
   public synchronized long droppedCount();
 }
+Compiled from "BoundedTraceCompression.java"
+public final class io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression {
+  public static final int HEADER_BYTES;
+  public static final int MAX_PLAIN_BYTES;
+  public static final int MAX_FRAME_BYTES;
+  public io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression(int, int, int, int, io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Algorithm);
+  public io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Encoding encode(byte[]) throws java.io.IOException;
+  public byte[] decode(byte[]) throws java.io.IOException;
+  public io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter encodingWriter(io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter);
+  public io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter decodingWriter(io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter);
+}
+Compiled from "BoundedTraceCompression.java"
+class io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$1 {
+}
+Compiled from "BoundedTraceCompression.java"
+public final class io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Algorithm extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Algorithm> {
+  public static final io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Algorithm ZLIB;
+  public static final io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Algorithm TRACE_SCHEMA_V1;
+  public static io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Algorithm[] values();
+  public static io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Algorithm valueOf(java.lang.String);
+}
+Compiled from "BoundedTraceCompression.java"
+public final class io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision> {
+  public static final io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision BELOW_THRESHOLD;
+  public static final io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision INSUFFICIENT_SAVINGS;
+  public static final io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision COMPRESSED;
+  public static final io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision COMPRESSED_TO_FIT;
+  public static io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision[] values();
+  public static io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision valueOf(java.lang.String);
+}
+Compiled from "BoundedTraceCompression.java"
+public final class io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Encoding {
+  public byte[] bytes();
+  public int plainBytes();
+  public int frameBytes();
+  public int netSavingBytes();
+  public boolean compressed();
+  public io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$Decision reason();
+}
+Compiled from "CallbackExceptionTracker.java"
+public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker {
+  public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker(java.lang.String, int);
+  public io.github.jichuo1.meguviz.hook.api.BeforeCallback before(io.github.jichuo1.meguviz.hook.api.BeforeCallback);
+  public io.github.jichuo1.meguviz.hook.api.AfterCallback after(io.github.jichuo1.meguviz.hook.api.AfterCallback, boolean);
+  public io.github.jichuo1.meguviz.hook.api.AroundCallback around(io.github.jichuo1.meguviz.hook.api.AroundCallback);
+  public int pendingCount();
+  public long droppedCount();
+  public long trackingFailureCount();
+  public long discardedCount();
+  public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event discardNext();
+  public int deliver(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Transport, int) throws java.lang.Exception;
+  public int deliverBatch(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int) throws java.lang.Exception;
+}
+Compiled from "CallbackExceptionTracker.java"
+class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$1 {
+}
+Compiled from "CallbackExceptionTracker.java"
+public interface io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport {
+  public abstract int sendBatch(java.util.List<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event>) throws java.lang.Exception;
+}
+Compiled from "CallbackExceptionTracker.java"
+public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event {
+  public java.lang.String source();
+  public io.github.jichuo1.meguviz.hook.api.HookId hookId();
+  public long generation();
+  public long timeNanos();
+  public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage stage();
+  public java.lang.Throwable failure();
+}
+Compiled from "CallbackExceptionTracker.java"
+public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage> {
+  public static final io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage BEFORE;
+  public static final io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage AFTER;
+  public static final io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage AROUND;
+  public static final io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage OBSERVED_THROWABLE;
+  public static io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage[] values();
+  public static io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage valueOf(java.lang.String);
+}
+Compiled from "CallbackExceptionTracker.java"
+public interface io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Transport {
+  public abstract void send(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event) throws java.lang.Exception;
+}
+Compiled from "ConditionalDispatchChannel.java"
+public interface io.github.jichuo1.meguviz.hook.core.ConditionalDispatchChannel extends io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+  public abstract int argumentIndex();
+  public abstract boolean tryEnter();
+  public abstract boolean matches(java.lang.Object);
+  public abstract void notifyMatch() throws java.lang.Throwable;
+  public abstract java.lang.Object constantValue();
+  public abstract void exit();
+}
+Compiled from "ConstantDispatchChannel.java"
+public interface io.github.jichuo1.meguviz.hook.core.ConstantDispatchChannel extends io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+  public default boolean requiresInvocation();
+  public abstract boolean tryEnter();
+  public abstract java.lang.Object constantValue();
+  public abstract void exit();
+}
 Compiled from "CoreRegistration.java"
 final class io.github.jichuo1.meguviz.hook.core.CoreRegistration implements io.github.jichuo1.meguviz.hook.api.HookRegistration {
   public io.github.jichuo1.meguviz.hook.api.HookId id();
@@ -29,7 +136,37 @@ Compiled from "CoreRegistration.java"
 class io.github.jichuo1.meguviz.hook.core.CoreRegistration$1 {
 }
 Compiled from "CoreRegistration.java"
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$ConditionalPlanChannel implements io.github.jichuo1.meguviz.hook.core.ConditionalDispatchChannel {
+  public int argumentIndex();
+  public boolean tryEnter();
+  public boolean matches(java.lang.Object);
+  public void notifyMatch() throws java.lang.Throwable;
+  public java.lang.Object constantValue();
+  public void exit();
+  public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
+}
+Compiled from "CoreRegistration.java"
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$ConstantPlanChannel implements io.github.jichuo1.meguviz.hook.core.FusedConstantDispatchChannel {
+  public boolean requiresInvocation();
+  public boolean tryEnter();
+  public java.lang.Object constantValue();
+  public void exit();
+  public java.lang.Object dispatchValueOrNotEntered();
+  public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
+}
+Compiled from "CoreRegistration.java"
 final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$PlanChannel implements io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+  public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
+}
+Compiled from "CoreRegistration.java"
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$SingleAfterPlanChannel implements io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+  public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
+}
+Compiled from "CoreRegistration.java"
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$SuccessResultPlanChannel implements io.github.jichuo1.meguviz.hook.core.SuccessResultDispatchChannel {
+  public boolean tryEnter();
+  public java.lang.Object constantValue();
+  public void exit();
   public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
 }
 Compiled from "DiagnosticsSink.java"
@@ -59,6 +196,7 @@ public final class io.github.jichuo1.meguviz.hook.core.DiagnosticsSink$Event$Kin
 }
 Compiled from "DispatchChannel.java"
 public interface io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+  public default boolean requiresInvocation();
   public abstract io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
 }
 Compiled from "DispatchResult.java"
@@ -82,12 +220,18 @@ public final class io.github.jichuo1.meguviz.hook.core.DispatchResult$Kind exten
 Compiled from "Dispatcher.java"
 final class io.github.jichuo1.meguviz.hook.core.Dispatcher {
 }
+Compiled from "FusedConstantDispatchChannel.java"
+public interface io.github.jichuo1.meguviz.hook.core.FusedConstantDispatchChannel extends io.github.jichuo1.meguviz.hook.core.ConstantDispatchChannel {
+  public static final java.lang.Object NOT_ENTERED;
+  public abstract java.lang.Object dispatchValueOrNotEntered();
+}
 Compiled from "HookEnvironment.java"
 public final class io.github.jichuo1.meguviz.hook.core.HookEnvironment implements java.lang.AutoCloseable {
   public static io.github.jichuo1.meguviz.hook.core.HookEnvironment create(io.github.jichuo1.meguviz.hook.core.spi.HookBackend);
   public static io.github.jichuo1.meguviz.hook.core.HookEnvironment create(io.github.jichuo1.meguviz.hook.core.spi.HookBackend, io.github.jichuo1.meguviz.hook.core.spi.MemberResolver, io.github.jichuo1.meguviz.hook.core.DiagnosticsSink);
   public io.github.jichuo1.meguviz.hook.api.BackendCapabilities capabilities();
   public synchronized io.github.jichuo1.meguviz.hook.api.RegistrationReceipt install(io.github.jichuo1.meguviz.hook.api.HookSpec);
+  public synchronized io.github.jichuo1.meguviz.hook.api.RegistrationReceipt adopt(io.github.jichuo1.meguviz.hook.api.HookSpec, io.github.jichuo1.meguviz.hook.core.spi.BackendAdoption);
   public synchronized io.github.jichuo1.meguviz.hook.api.RegistrationReceipt replace(io.github.jichuo1.meguviz.hook.api.HookSpec);
   public synchronized int activeRegistrationCount();
   public synchronized void close();
@@ -113,6 +257,38 @@ final class io.github.jichuo1.meguviz.hook.core.InvocationFrame implements io.gi
   public io.github.jichuo1.meguviz.hook.api.CallOutcome$State proceedState();
 }
 Compiled from "InvocationFrame.java"
+class io.github.jichuo1.meguviz.hook.core.InvocationFrame$1 {
+}
+Compiled from "InvocationFrame.java"
+final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation implements io.github.jichuo1.meguviz.hook.api.AroundInvocation,io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation,io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation {
+  public io.github.jichuo1.meguviz.hook.api.HookId id();
+  public long generation();
+  public java.lang.reflect.Executable target();
+  public java.lang.Object thisObject();
+  public io.github.jichuo1.meguviz.hook.api.ParameterAccess access();
+  public java.lang.Thread ownerThread();
+  public int argumentCount();
+  public java.lang.Object getArgument(int);
+  public java.lang.Class<?> argumentType(int);
+  public java.lang.Object getEntryArgument(int);
+  public java.lang.Object[] entrySnapshot();
+  public void setArgument(int, java.lang.Object);
+  public void setEarlyResult(java.lang.Object);
+  public void setEarlyThrowable(java.lang.Throwable);
+  public boolean hasEarlyOutcome();
+  public io.github.jichuo1.meguviz.hook.api.CallOutcome proceed();
+  public io.github.jichuo1.meguviz.hook.api.CallOutcome$State proceedState();
+}
+Compiled from "InvocationFrame.java"
+final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation$BorrowedResult implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
+  public boolean hasReturned();
+  public boolean hasThrown();
+  public java.lang.Object getResult();
+  public java.lang.Throwable getThrowable();
+  public void setResult(java.lang.Object);
+  public void setThrowable(java.lang.Throwable);
+}
+Compiled from "InvocationFrame.java"
 final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$ResultSlot implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
   public boolean hasReturned();
   public boolean hasThrown();
@@ -120,6 +296,17 @@ final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$ResultSlot imple
   public java.lang.Throwable getThrowable();
   public void setResult(java.lang.Object);
   public void setThrowable(java.lang.Throwable);
+}
+Compiled from "JsonLineTraceTransport.java"
+public final class io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport implements io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Transport {
+  public io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport(io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter, boolean, int);
+  public void send(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event) throws java.lang.Exception;
+  public byte[] encode(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event);
+  public static byte[] encode(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event, boolean, int);
+}
+Compiled from "JsonLineTraceTransport.java"
+public interface io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter {
+  public abstract void writeRecord(byte[]) throws java.lang.Exception;
 }
 Compiled from "ReflectiveMemberResolver.java"
 public final class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver implements io.github.jichuo1.meguviz.hook.core.spi.MemberResolver {
@@ -131,8 +318,20 @@ class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver$1 implements 
   public int compare(java.lang.reflect.Executable, java.lang.reflect.Executable);
   public int compare(java.lang.Object, java.lang.Object);
 }
+Compiled from "SuccessResultDispatchChannel.java"
+public interface io.github.jichuo1.meguviz.hook.core.SuccessResultDispatchChannel extends io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+  public default boolean requiresInvocation();
+  public abstract boolean tryEnter();
+  public abstract java.lang.Object constantValue();
+  public abstract void exit();
+}
 Compiled from "TypeChecks.java"
 final class io.github.jichuo1.meguviz.hook.core.TypeChecks {
+}
+Compiled from "BackendAdoption.java"
+public interface io.github.jichuo1.meguviz.hook.core.spi.BackendAdoption {
+  public abstract io.github.jichuo1.meguviz.hook.core.spi.HookBackend backend();
+  public abstract io.github.jichuo1.meguviz.hook.core.spi.BackendHandle replace(io.github.jichuo1.meguviz.hook.core.BoundPlan, io.github.jichuo1.meguviz.hook.core.DispatchChannel) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 }
 Compiled from "BackendCloseReport.java"
 public final class io.github.jichuo1.meguviz.hook.core.spi.BackendCloseReport {
@@ -163,6 +362,7 @@ public interface io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation {
   public abstract java.lang.reflect.Executable target();
   public abstract java.lang.Object thisObject();
   public abstract java.lang.Object[] arguments();
+  public default java.util.List<?> readOnlyArguments();
   public abstract java.lang.Object proceed(java.lang.Object[]) throws java.lang.Throwable;
 }
 Compiled from "HookBackend.java"

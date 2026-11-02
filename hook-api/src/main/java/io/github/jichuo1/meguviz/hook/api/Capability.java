@@ -12,6 +12,8 @@ public final class Capability {
     public static final Capability CLASSIC_CALLBACKS = new Capability("chain.classic");
     public static final Capability ATOMIC_REPLACE = new Capability("hook.atomic_replace");
     public static final Capability HOT_RELOAD = new Capability("hook.hot_reload");
+    /** Backend explicitly maps {@link ErrorPolicy#FRAMEWORK_PROTECTIVE} to its framework contract. */
+    public static final Capability FRAMEWORK_PROTECTIVE = new Capability("hook.framework_protective");
 
     private final String key;
 

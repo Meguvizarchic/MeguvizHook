@@ -5,6 +5,7 @@ import io.github.jichuo1.meguviz.hook.api.Capability;
 import io.github.jichuo1.meguviz.hook.api.CapabilityResult;
 import io.github.jichuo1.meguviz.hook.api.ChainSemantics;
 import io.github.jichuo1.meguviz.hook.api.CloseReport;
+import io.github.jichuo1.meguviz.hook.api.ErrorPolicy;
 import io.github.jichuo1.meguviz.hook.core.BoundPlan;
 import io.github.jichuo1.meguviz.hook.core.DispatchChannel;
 import io.github.jichuo1.meguviz.hook.core.DispatchResult;
@@ -16,17 +17,26 @@ import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 
 import java.lang.reflect.Executable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Test fake of a framework-chain backend. It proves this SDK's own contract only; it is not a
  * runtime qualification of any real framework, manager or ART backend.
  *
- * <p>The fake reproduces the parts the core depends on: a continuation that runs the original
- * exactly once per call, argument slots owned by the invocation, an uninstall handle, and a code
- * epoch the test can advance. Ordering or classloading behaviour of a real manager is out of scope.
+ * <p>The fake reproduces the parts the core depends on: a continuation that reaches the original
+ * at most once per SDK invocation, argument slots owned by the invocation, an uninstall handle, and a code
+ * epoch the test can advance. Higher priorities run first; ties use installation order as a fake-only
+ * deterministic rule, not a claim about a real manager. Each call uses an immutable chain snapshot;
+ * already retired SDK channels pass through to the next snapshot entry. Real manager ordering,
+ * classloading and device behaviour remain outside this fake's qualification.
  */
 public final class FakeBackend implements HookBackend {
     /** Behaviour of the "original method" behind a target. */
@@ -37,7 +47,7 @@ public final class FakeBackend implements HookBackend {
     private final String backendId;
     private BackendCapabilities capabilities;
     private final FakeContext context;
-    private final Map<Executable, FakeHook> hooks = new java.util.concurrent.ConcurrentHashMap<Executable, FakeHook>();
+    private final ConcurrentHashMap<Executable, List<FakeHook>> hooks = new ConcurrentHashMap<Executable, List<FakeHook>>();
     private final Map<Executable, OriginalBehavior> originals = new java.util.concurrent.ConcurrentHashMap<Executable, OriginalBehavior>();
     private final Map<Executable, AtomicInteger> originalCalls = new java.util.concurrent.ConcurrentHashMap<Executable, AtomicInteger>();
     private final AtomicInteger argumentMaterializations = new AtomicInteger();
@@ -152,11 +162,20 @@ public final class FakeBackend implements HookBackend {
 
     /** Simulates a host call, whether or not a hook is installed. */
     public Object call(Executable target, Object thisObject, Object... args) throws Throwable {
-        FakeHook hook = hooks.get(target);
-        if (hook == null) {
+        List<FakeHook> snapshot = hooks.get(target);
+        if (snapshot == null) {
             return invokeOriginal(target, thisObject, args);
         }
-        DispatchResult result = hook.channel.dispatch(new FakeInvocation(target, thisObject, args));
+        return dispatch(snapshot, 0, target, thisObject, args);
+    }
+
+    private Object dispatch(List<FakeHook> snapshot, int index, Executable target,
+                            Object thisObject, Object[] args) throws Throwable {
+        if (index == snapshot.size()) {
+            return invokeOriginal(target, thisObject, args);
+        }
+        DispatchResult result = snapshot.get(index).channel.dispatch(
+                new FakeInvocation(target, thisObject, args, snapshot, index + 1));
         switch (result.kind()) {
             case RETURNED:
                 return result.value();
@@ -164,7 +183,7 @@ public final class FakeBackend implements HookBackend {
                 throw result.throwable();
             case PASSTHROUGH:
             default:
-                return invokeOriginal(target, thisObject, args);
+                return dispatch(snapshot, index + 1, target, thisObject, args);
         }
     }
 
@@ -191,13 +210,26 @@ public final class FakeBackend implements HookBackend {
 
     @Override
     public BackendHandle install(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
+        if (plan.spec().errorPolicy() != ErrorPolicy.PROPAGATE) {
+            throw new BackendInstallException("fake backend does not model framework-protective behavior");
+        }
         if (failAllInstalls || failNextInstall) {
             failNextInstall = false;
             throw new BackendInstallException("fake install failure requested by the test");
         }
         installCount.incrementAndGet();
-        FakeHook hook = new FakeHook(channel);
-        hooks.put(plan.target(), hook);
+        FakeHook hook = new FakeHook(channel, plan.spec().priority());
+        hooks.compute(plan.target(), (target, current) -> {
+            List<FakeHook> next = current == null ? new ArrayList<FakeHook>() : new ArrayList<FakeHook>(current);
+            next.add(hook);
+            // List sort is stable, so equal priorities follow compute's install order.
+            Collections.sort(next, new Comparator<FakeHook>() {
+                @Override public int compare(FakeHook left, FakeHook right) {
+                    return Integer.compare(right.priority, left.priority);
+                }
+            });
+            return Collections.unmodifiableList(next);
+        });
         if (bumpEpochOnNextInstall) {
             bumpEpochOnNextInstall = false;
             context.epoch++;
@@ -216,7 +248,13 @@ public final class FakeBackend implements HookBackend {
 
         @Override
         public BackendCloseReport uninstall() {
-            hooks.remove(target, hook);
+            hooks.computeIfPresent(target, (ignored, current) -> {
+                int position = indexOfIdentity(current, hook);
+                if (position < 0) return current;
+                List<FakeHook> next = new ArrayList<FakeHook>(current);
+                next.remove(position);
+                return next.isEmpty() ? null : Collections.unmodifiableList(next);
+            });
             return new BackendCloseReport(CloseReport.EntryRestoration.RESTORED,
                     CloseReport.PhysicalRelease.NOT_CLAIMED, residentOnClose,
                     residentOnClose ? "fake stays resident" : "fake entry removed; no physical release claim");
@@ -224,13 +262,28 @@ public final class FakeBackend implements HookBackend {
 
         @Override
         public BackendHandle replace(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
+            if (plan.spec().errorPolicy() != ErrorPolicy.PROPAGATE) {
+                throw new BackendInstallException("fake backend does not model framework-protective behavior");
+            }
             replaceCount.incrementAndGet();
             if (failNextReplace) {
                 failNextReplace = false;
                 throw new BackendInstallException("fake replacement failure requested by the test");
             }
-            FakeHook replacement = new FakeHook(channel);
-            if (!hooks.replace(plan.target(), hook, replacement)) {
+            if (!target.equals(plan.target()) || plan.spec().priority() != hook.priority) {
+                throw new BackendInstallException("replacement must retain the target and priority");
+            }
+            FakeHook replacement = new FakeHook(channel, hook.priority);
+            AtomicBoolean replaced = new AtomicBoolean();
+            hooks.computeIfPresent(target, (ignored, current) -> {
+                int position = indexOfIdentity(current, hook);
+                if (position < 0) return current;
+                List<FakeHook> next = new ArrayList<FakeHook>(current);
+                next.set(position, replacement);
+                replaced.set(true);
+                return Collections.unmodifiableList(next);
+            });
+            if (!replaced.get()) {
                 throw new BackendInstallException("old fake hook is no longer current");
             }
             return new FakeHandle(plan.target(), replacement);
@@ -239,21 +292,35 @@ public final class FakeBackend implements HookBackend {
 
     private static final class FakeHook {
         private final DispatchChannel channel;
+        private final int priority;
 
-        private FakeHook(DispatchChannel channel) {
+        private FakeHook(DispatchChannel channel, int priority) {
             this.channel = channel;
+            this.priority = priority;
         }
+    }
+
+    private static int indexOfIdentity(List<FakeHook> hooks, FakeHook expected) {
+        for (int i = 0; i < hooks.size(); i++) {
+            if (hooks.get(i) == expected) return i;
+        }
+        return -1;
     }
 
     private final class FakeInvocation implements BackendInvocation {
         private final Executable target;
         private final Object thisObject;
         private final Object[] args;
+        private final List<FakeHook> snapshot;
+        private final int nextIndex;
 
-        private FakeInvocation(Executable target, Object thisObject, Object[] args) {
+        private FakeInvocation(Executable target, Object thisObject, Object[] args,
+                               List<FakeHook> snapshot, int nextIndex) {
             this.target = target;
             this.thisObject = thisObject;
             this.args = args;
+            this.snapshot = snapshot;
+            this.nextIndex = nextIndex;
         }
 
         @Override
@@ -269,12 +336,12 @@ public final class FakeBackend implements HookBackend {
         @Override
         public Object[] arguments() {
             argumentMaterializations.incrementAndGet();
-            return args;
+            return args.clone();
         }
 
         @Override
         public Object proceed(Object[] arguments) throws Throwable {
-            return invokeOriginal(target, thisObject, arguments == null ? args : arguments);
+            return dispatch(snapshot, nextIndex, target, thisObject, arguments == null ? args : arguments);
         }
     }
 

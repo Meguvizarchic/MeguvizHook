@@ -1,92 +1,67 @@
 # MeguvizHook
 
-独立的 Android Hook SDK：自有 Java API、JVM 执行核心、互斥的 libxposed 后端适配制品与手工入口样例。
-真实的方法拦截始终由所选运行框架提供——本项目**不**替代管理器、注入器或 ART。
+MeguvizHook 是一个面向 Android 模块开发的 Hook SDK，提供独立的 Java API、JVM 执行核心、Kotlin DSL 和 libxposed API 101／102 适配器。实际方法拦截由运行框架完成；SDK 不替代框架管理器、注入器或 Android Runtime。
 
-当前状态：**第九轮可构建切片（0.1.0-SNAPSHOT，未发布）**。共享依赖已对齐 BIL `dba9ed9`，
-新增单目标 atomic replacement：core/fake、API102 `replaceHook`、Java/Kotlin consumer 均已联调，
-101 继续明确不支持。90 项 JVM/stub 测试、API surface、完整 lint、全部 release 和 DEX 隔离通过；
-真实框架替换、其他设备资格和性能测量仍未执行。
+当前版本为 `0.1.0-SNAPSHOT`，仍在开发中。真实框架和设备行为取决于所选框架及宿主环境，尚不能根据 JVM 测试推断所有设备兼容性或性能收益。
+
+## 功能
+
+- 使用 `HookSpec` 描述目标、回调、参数访问和异常策略，安装后通过回执确认结果并管理注册生命周期。
+- 支持 before、after、around、提前返回、参数改写、只读参数视图和显式常量替换；around 的 continuation 每次调用最多执行一次。
+- 支持单目标原子替换和在途调用的代次隔离；API102 可显式接入框架模块热重载，API101 不提供同一模块热重载生命周期。
+- 可选的回调异常跟踪、JSONL 记录及 API102 远程文件和 Binder 适配；默认不启动服务、线程或远程采集。
+- 可选的同步批量诊断交付和有界压缩，支持 zlib、固定诊断字段字典、完整试压及 RAW 回退。双方须明确选择相同格式与限制。
+
+批量交付确认的含义取决于接收端：接收回调正常返回不代表持久化。发送失败可能已有副作用，显式重试可能重复；跨进程使用者仍需处理授权、连接、队列容量、隐私和保存策略。参见 [异常诊断与远程传输](docs/remote-diagnostics-102.md)。
 
 ## 模块
 
-| 模块 | 说明 |
-|---|---|
-| `hook-api` | 公开合同类型：身份、能力、参数形状、逐项回执、生命周期（Java 8，纯 JDK） |
-| `hook-core` | `HookEnvironment`、安装期 planner、热路径 dispatcher、backend SPI |
-| `hook-dsl` | 独立可选的薄 Kotlin DSL；只委托 api/core（Kotlin 2.4.21，JVM 1.8） |
-| `backend-libxposed-101` | libxposed API 101 适配（独立 AAR，框架 API 为 `compileOnly`） |
-| `backend-libxposed-102` | libxposed API 102 适配（独立 AAR，框架 API 为 `compileOnly`） |
-| `hook-testing` | fake backend、独立语义 oracle、反射 fixtures（非真实后端） |
-| `sample-java-contracts` | 纯 JVM 的 Java 消费样例 |
-| `sample-kotlin-contracts` | 独立 Kotlin consumer；仅直接依赖 dsl+testing，复用同一 core/fixture |
-| `sample-module-101` | 手工 Java 入口的 101 模块 APK（R8 release） |
-| `sample-module-102` | 手工 Java 入口的 102 模块 APK（R8 release） |
-| `sample-module-kotlin-102` | AGP 内建 Kotlin + DSL 的独立 102 模块 APK（R8 release） |
+| 模块 | 内容 |
+| --- | --- |
+| `hook-api` | 公共类型、参数形状、回执及生命周期合同 |
+| `hook-core` | 计划构建、分发和诊断；Java 8 字节码 |
+| `hook-dsl` | 可选 Kotlin DSL |
+| `backend-libxposed-101` | libxposed API 101 后端适配 |
+| `backend-libxposed-102` | libxposed API 102 后端适配 |
+| `hook-testing` | JVM fake backend 与合同验证工具 |
+| `sample-java-contracts`、`sample-kotlin-contracts` | 在 JVM fake backend 上运行的消费示例 |
+| `sample-module-101`、`sample-module-102`、`sample-module-kotlin-102` | Android 模块入口示例 |
 
-刻意未创建空模块：service、codegen、doctor、native/Rust 均属后续任务。
-101 与 102 都是真实 `Hooker/Chain` 模型；本项目不把 101 伪装成 classic callback backend。
+选择与运行框架一致的一代后端；框架 API 由运行时提供。SDK 本身不自动发现服务、管理模块作用范围或配置框架权限。
 
-## 工具链（默认版本跟随 BIL）
+## 构建与示例
 
-Gradle **9.8.2**（wrapper 含 SHA-256 校验）· AGP **9.4.1** · Kotlin **2.4.21**（JVM KGP / Android 内建）·
-libxposed api **102.0.0**（BIL 默认）+ **101.0.0**（独立 backend）· compileSdk **37.2** / minSdk **27** /
-targetSdk **37** · build-tools **37.0.0** · Android 模块 Java/Kotlin **17** · api/core Java **8**、dsl JVM **1.8**。
-Java-only Android variants 排除 Kotlin runtime/metadata；仅 Kotlin102 显式选择 DSL/stdlib。
-本地第三至八轮使用 JDK 17（前两轮为 JDK 20）；JDK 27 已由 CI run 41208912796 验证。
-逐项上游版本见 `work/integration/bil_dependency_alignment.json`。
-
-## 构建与测试
-
-公开仓库：[github.com/jichuo1/MeguvizHook](https://github.com/jichuo1/MeguvizHook)。
+工具链以仓库版本目录与构建配置为准：Gradle 9.8.2、AGP 9.4.1、Kotlin 2.4.21、Android compile SDK 37.2、min SDK 27；本地构建使用 JDK 17 或兼容版本。
 
 ```bash
-git clone https://github.com/jichuo1/MeguvizHook.git
+git clone https://github.com/Meguvizarchic/MeguvizHook.git
 cd MeguvizHook
-# 环境：JDK 17+（本地用 JDK 17，CI 用 27）、Android SDK platform android-37.2 + build-tools 37.0.0
-./gradlew :hook-dsl:test :hook-testing:test :sample-java-contracts:run :sample-kotlin-contracts:run
+
+./gradlew :hook-core:test :hook-dsl:test :hook-testing:test
 ./gradlew :backend-libxposed-101:testDebugUnitTest :backend-libxposed-102:testDebugUnitTest
-./gradlew apiCheck lint
+./gradlew :sample-java-contracts:run :sample-kotlin-contracts:run
+./gradlew apiCheck
 ./gradlew :backend-libxposed-101:assembleRelease :backend-libxposed-102:assembleRelease
-./gradlew :sample-module-101:assembleRelease :sample-module-102:assembleRelease
-./gradlew :sample-module-kotlin-102:assembleRelease
-./gradlew :sample-module-101:dependencies --configuration releaseRuntimeClasspath
-./gradlew :sample-module-102:dependencies --configuration releaseRuntimeClasspath
-./gradlew :sample-module-kotlin-102:dependencies --configuration releaseRuntimeClasspath
-./gradlew tasks --all
 ```
 
-当前真实结果：**90 tests / 0 failures**（67 fake/core + 13 DSL + 5 adapter-101 + 5 adapter-102），
-Java/Kotlin 样例分别输出 `SAMPLE_OK` 与 `KOTLIN_SAMPLE_OK`。证据由 JUnit XML 和实际入口输出生成，
-原始日志在 `work/evidence/logs/`。
+需要 Android SDK platform 37.2 和 build-tools 37.0.0。Windows 可使用 `gradlew.bat`。Android 的单元测试使用框架接口与平台桩，不等同于真实 Hook 或跨进程测试。
 
-## 语义要点（CONTRACT-001）
+从源码接入时，请参考 [Java 合同示例](sample-java-contracts/src/main/java/io/github/jichuo1/meguviz/hook/sample/java/JavaContractsSample.java)、[API101 模块](sample-module-101/) 和 [API102 模块](sample-module-102/)。示例中的目标、作用范围和框架生命周期由实际模块自行配置；fake backend 仅用于测试。
 
-- 参数形状 `NO_ARGS / READ_ARGS / ENTRY_SNAPSHOT / MUTABLE_ARGS / AROUND` 各自独立；
-  快照是**浅槽快照**，不深度复制对象。
-- 默认 `ErrorPolicy.PROPAGATE`：before 失败则原方法 0 次；原方法异常保持同一实例；
-  after 失败绝不重放原方法；around 每次调用至多一次 proceed；致命 VM 错误不被吞。
-- `MatchPolicy.ALL`：一个逻辑注册对应多个独立计划。逐项目标回执区分 `INSTALLED / FAILED /
-  ROLLED_BACK`；部分成功返回 `PARTIALLY_INSTALLED`，不承诺跨目标原子性；epoch 变化会回滚未发布项。
-- 单目标替换：同 id/owner/priority/target/loader/epoch 才可原子替换；102 使用 `replaceHook`，
-  失败保留旧代，旧 close 不卸载新代，in-flight 旧 plan 完成；101 不支持，ALL 不承诺原子替换。
-- 注册/关闭：logicalId 冲突不静默覆盖；部分注册须 close 后重试；close 拒绝新回调并逐项卸载，
-  不承诺物理卸载，不撤销 raw Member。
-- 普通回调路径本 SDK 新增 JNI=0、IPC=0；未选 native 新增 so=0；无默认 service/线程池/热重载。
+## 运行时合同
 
-详见 `docs/adr/ADR-0001-runtime-contract.md` 与 `docs/contracts/callback_contract.md`。
+- 入参快照只复制参数槽，不深拷贝对象；回调借用视图不可在回调结束后或跨线程使用。
+- 默认异常策略不会重放原方法；原方法异常的身份和致命 VM 错误按合同保留。
+- 多目标安装逐项返回回执，不承诺跨目标原子替换；单目标替换与关闭仍有框架能力和生命周期边界。
+- 显式异常诊断只记录调用方包装的回调，不是全局崩溃捕获；日志与堆栈可能包含敏感信息。
+- 批帧、压缩帧和 JSONL 是不同格式；未配对的旧接收端不能直接读取新格式。压缩帧的校验和不提供认证或保密。
 
-## 制品审计与未验证范围
+完整语义见 [回调合同](docs/contracts/callback_contract.md)、[运行时合同 ADR](docs/adr/ADR-0001-runtime-contract.md)、[Hook 身份作用域 ADR](docs/adr/ADR-0003-hook-identity-scope.md) 和 [API102 热重载](docs/hot-reload-102.md)。
 
-`work/hook/release_artifact_audit.json`（第二轮）、`work/hook/round3_artifact_recheck.json`（第三轮）
-与 `work/integration/android_consumer_audit.json`（第六轮）记录 APK/AAR 哈希和逐项静态检查：
+## 验证范围
 
-- 三个 R8 DEX 入口均真实存在，`java_init.list` 与入口 FQCN 一致；
-- Java-only release 无 libxposed、kotlin-stdlib、hook-dsl 或另一代 backend；Kotlin102 显式选择 DSL/stdlib；
-- 三个 APK 均无框架类定义、testing、service、native 或热重载引用；101 无 102 专有 API 引用。
+JVM 合同、两代后端的桩测试、公开 API 检查和受限 Android 制品构建已有覆盖；部分框架路径曾在隔离环境中做过功能检查。批量与压缩已通过本地边界和组合测试，但真实 Binder 身份、跨进程投递、进程重启后的可靠性及端到端性能仍需独立验证。项目尚未建立正式的设备性能资格，不承诺相对原生 API 的性能提升。
 
-**仍未验证**：旧 consumer 二进制链接兼容、真实 101/102 装载与执行、真实 API102 替换、
-R8 后设备可达性、真实类加载与跨模块优先级、多目标原子替换、service、热重载、native、性能阈值。
-task done ≠ release qualified。
+## 许可证
 
-文档导航：`docs/HANDOFF.md`（本轮移交与下一批任务）、`work/`（机器可读证据与原始日志）。
+见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。

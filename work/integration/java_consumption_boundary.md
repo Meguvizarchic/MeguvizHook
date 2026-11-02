@@ -1,44 +1,15 @@
-# INT-002：Java 消费编译/签名边界报告
+# Java 消费与依赖边界
 
-对象：HOOK-002 产出的公开 API（本报告不重复实现 API）。
+`hook-api` 和 `hook-core` 是纯 JVM 模块，构建为 Java 8 兼容字节码；Java 使用者不需要启用 Kotlin DSL、Android 运行时或代码生成器。两代 libxposed 后端是独立 Android 适配器，调用方按目标框架选择对应制品。
 
-## 1. 签名审计（基于实际字节码）
+## 公开 API 检查
 
-证据：`work/hook/api_dump_hook-api.txt`（383 行）、`work/hook/api_dump_hook-core.txt`（170 行），
-由 `javap -public` 对构建产物逐类生成。
+实际签名以 `work/hook/api_dump_hook-api.txt`、`work/hook/api_dump_hook-core.txt` 和 `work/hook/api_dump_hook-dsl.txt` 为准。运行 `./gradlew apiCheck` 检查构建产物与清单的一致性；这是当前签名快照核对，不自动证明旧制品的所有二进制兼容路径或 Android 运行行为。
 
-| 检查 | 结果 |
-|---|---|
-| 公开签名包含 libxposed 类型 | 无（dump 全文检索 0 命中） |
-| 包含 `android.*` / `androidx.*` 类型 | 无 |
-| 包含 Binder / JNI / Rust / Kotlin 类型 | 无 |
-| 包含其他 Meguviz 家族类型 | 无 |
-| 框架类型出现位置 | 仅 `backend-libxposed-101` / `backend-libxposed-102` 各自实现内部 |
+`sample-java-contracts` 展示纯 Java 消费；Android 样例分别通过手工模块入口接入对应代际。框架依赖的解析与运行时隔离按各模块的 Gradle 配置及 CI 检查判断。
 
-## 2. Java 独立消费验证
+## 可选能力
 
-- `hook-api`、`hook-core` 以 Java 8 字节码构建，不依赖 Android。
-- `sample-java-contracts` 在纯 JVM 上以 Java 消费并运行成功：输出
-  `SAMPLE_OK backend=fake-chain close=CLOSED`（日志 `round2-jvm-tests.log`），证明 Java 路径不需要
-  Kotlin DSL、KSP、协程或 Android 运行时。
-- `sample-module-101` 与 `sample-module-102` 都使用手工 Java 入口（`XposedModule` 子类 +
-  `java_init.list`），不依赖生成器；R8 DEX 中均审计到对应入口类定义。
-- `MatchPolicy.ALL` 新增 `TargetInstallReceipt` 与 `PARTIALLY_INSTALLED`，保持纯 Java 公开合同；
-  `hook-api`/`hook-core` API dump 无框架类型泄漏。
+热重载、异常诊断、批量传输和压缩均需要调用方明确配置；普通 Hook 路径不自动创建 service、后台线程或 IPC。API102 可选远程文件和 Binder 接入、发送确认及持久化边界见 [远程诊断说明](../../docs/remote-diagnostics-102.md)。项目不包含生产 native/JNI 模块。
 
-## 3. 互斥与装配
-
-- 两个 sample 的 `releaseRuntimeClasspath` 分别只含所选 backend；均不含 libxposed、
-  kotlin-stdlib 或另一代 backend。DEX/AAR 也无框架类定义，101 无 102 专有 API 引用。
-- `testImplementation` 中对应代际的 libxposed api 只用于 stub 映射夹具，不进入任何发布产物。
-
-## 4. 默认关闭项核查
-
-无 service、native、reload、trace、codegen、doctor 模块与初始化代码；诊断默认 `NONE`；
-APK 无 `.so`、无框架类。普通回调路径在源码层面无 JNI/IPC 调用点（热路径仅读 `BoundPlan`
-冻结字段并执行业务回调）。
-
-## 5. 未覆盖
-
-公开 API surface snapshot 与完整 lint 已由 QUAL-001 验证（见 `quality_gate_results.json`）。
-旧 consumer 二进制链接兼容、真实 101/102 运行时仍未覆盖，本切片不声明通过。
+设备上的框架加载、不同类加载器和版本组合、实际权限及性能，均不能由纯 JVM 消费测试推断。

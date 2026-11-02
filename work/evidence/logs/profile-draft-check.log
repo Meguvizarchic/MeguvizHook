@@ -1,7 +1,0 @@
-{
-  "mode": "draft",
-  "structure_valid": true,
-  "errors": [],
-  "release_qualified": false,
-  "limits": "Checks required fields only; does not verify logs, measurements or authorize release."
-}

@@ -10,7 +10,12 @@ local.properties
 *.jks
 captures/
 .externalNativeBuild/
-work/evidence/local/
+work/evidence/
+work/baseline.json
+work/hook/*.json
+work/integration/*.json
+__pycache__/
+*.pyc
 .env
 .env.*
 !.env.example

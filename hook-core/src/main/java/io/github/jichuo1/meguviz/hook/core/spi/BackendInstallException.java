@@ -1,6 +1,6 @@
 package io.github.jichuo1.meguviz.hook.core.spi;
 
-/** Installation failure reported by a backend, including an unsupported requested shape. */
+/** Installation or resolution failure. From {@link HookBackend#install}, no entry was installed. */
 public class BackendInstallException extends Exception {
     private static final long serialVersionUID = 1L;
 

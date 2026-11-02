@@ -40,11 +40,30 @@ if (!receipt.isInstalled()) {
 // 退役：CloseReport report = receipt.registration().close();
 ```
 
-- 非 AROUND 形状至少一个 before 或 after；`AROUND` 与 before/after 互斥（本版）。
+- 普通非 AROUND 形状至少一个 before 或 after；`AROUND` 与 before/after 互斥。显式
+  `replaceConstant(value)` 与所有回调互斥，并且只允许 NO_ARGS；常量在安装前按目标返回类型校验。
+- `replaceResultOnSuccess(value)` 仅在原参数调用下游一次并正常返回后替换为所给引用；原异常保持身份，
+  在途租约覆盖整个下游调用。它要求 NO_ARGS 且与其他回调／替换互斥；安装前校验所有目标的返回类型。
+  旧后端通过带 invocation 的普通分发回退；框架自身异常保护可能有另外的行为。
+- 支持融合常量通道的 101/102 后端将准入、取值和退出合为一次调用，但仍保留状态双检及在途计数；
+  常量通道缓存所属注册的共享计数器，保持原有两次状态读取和原子加减次序。
+  关闭后未准入时透传。未准入标记只按引用比较，常量与标记为同一对象、旧通道或需要调用帧时回退原路径。
+  异常保护策略不因此改变；SDK core 和后端需共享该接口与标记的类加载身份。
+- `READ_ARGS_VIEW` 为显式的只读借用视图，生命周期与普通回调一致；101/102 可直接使用框架不可变
+  参数列表，下游保持原始参数。它不改变现有 `READ_ARGS` 或 `ENTRY_SNAPSHOT`，也不保证框架零分配。
+- `replaceIfStringArgumentEquals(index, expected, result, observer)` 显式声明字符串槽匹配和常量返回，
+  与普通回调/其他替换互斥；匹配按 actual 在前比较，缺槽为 null。命中通知不能访问或修改调用帧，
+  未命中执行原方法一次；通知和原方法异常按原身份交给框架。安装前校验全部目标的参数与返回类型。
 - 描述符目标：`TargetSpec.descriptor(TargetKind.METHOD, "a.b.C", "run")
   .parameters("int").returning("void").match(MatchPolicy.UNIQUE).build()`。
   `parameters(null)` 表示任意重载，UNIQUE 下多匹配返回 `AMBIGUOUS_TARGET`。
+  构造器的 JVM 返回类型按 `void` 匹配：不指定返回类型或指定 `void` 均可匹配；
+  `java.lang.Void` 和其他类型不会匹配构造器。
 - `HookSpec` 默认：`NO_ARGS`、`ErrorPolicy.PROPAGATE`、优先级 50、进程过滤 all、无必需能力。
+- 显式 `ErrorPolicy.FRAMEWORK_PROTECTIVE` 需要 backend 声明 `FRAMEWORK_PROTECTIVE` 能力；101/102
+  将错误交由框架原生 PROTECTIVE 模式处理，SDK 不重放原方法。SDK 的多回调状态机及 fatal
+  交由框架后的结果不应被笼统视为与 BIL 所有 DSL 场景等价；缺失/未知能力会拒绝安装。
+  框架在 SDK hooker 退出后自行执行的回退下游不计入已结束的 SDK 在途租约。
 
 ## 3. 结果与回执
 
@@ -55,16 +74,34 @@ TEMPORARILY_UNAVAILABLE / FAILED`。`INSTALLED` 与 `PARTIALLY_INSTALLED` 携带
 
 `MatchPolicy.ALL` 的 `targets()` 按稳定解析顺序给出每个 `TargetInstallReceipt`：`INSTALLED / FAILED /
 ROLLED_BACK`。普通单项失败保留已成功项并返回 `PARTIALLY_INSTALLED`，不承诺跨目标原子性；全部失败
-返回 `FAILED` 且不发布注册；发布前 epoch 改变会关闭本次已安装项并返回 `STALE_IDENTITY`。
-部分注册再次用同 ID 安装会冲突，须先 close；已关闭代次不会永久阻止新代次安装。
+返回 `FAILED` 且不发布注册；发布前 loader 或 epoch 改变会关闭本次已安装项并返回 `STALE_IDENTITY`。
+`ROLLED_BACK` 表示已尝试关闭，并不保证入口恢复；回执包含聚合 close 结果。部分注册再次用同 ID
+安装会冲突，须先 close；同一环境中入口恢复为 `NOT_RESTORED` 或 `UNKNOWN` 时拒绝同 ID 重装，
+恢复为 `RESTORED` 则允许重试，即使物理制品仍驻留。没有已安装项的失败不会因回滚被隔离。
+隔离仅覆盖当前环境和 ID，不提供卸载重试或跨环境保护；close 保持幂等。
+
+单目标 replacement 的 `BackendInstallException` 表示后端保证未提交且旧 handle 有效；unchecked 异常、
+Error 或 null handle 表示结果未知；异常会原样传播，null 会引发异常，同时停止新旧 SDK 回调并在同一环境隔离该 ID，
+不会尝试卸载可能已失效的旧 handle。此状态不证明框架入口恢复或物理释放。
+backend 的 `BackendInstallException` 必须保证该次调用未安装入口，才可形成逐项失败回执。若 backend
+安装抛出运行时异常或 `Error`，core 尝试关闭已取得的句柄并传播异常；抛错调用未返回的句柄及其
+副作用无法确认，因此该 ID 在当前环境中隔离，即使已取得句柄的入口报告恢复也不会自动解除。
+安装完成后若环境发布或回执构造中断，core 通过独立 guard 保留注册、关闭已取得的句柄并隔离该 ID；
+这不保证隔离自身遭异步致命事件中断或无法分配必要状态时一定成功。
 
 `CloseReport`：状态（`CLOSED` 或 `RETIRED_RESIDENT`）、是否拒绝新回调、入口恢复、在途观察数、
 物理释放（默认 `NOT_CLAIMED`）。`close()` 幂等，不等待宿主调用，不撤销 raw Member。
+卸载抛出运行时异常时无法判断入口是否已恢复，报告 `UNKNOWN` 并记录失败。环境关闭时，注册抛出的
+非致命 `Error` 或未处理的运行时异常不会跳过后续注册：所有已知注册均尝试关闭，未确认入口仍保留
+引用，然后重抛首个 `Error`（若无 `Error` 则重抛首个未处理的运行时异常）。
+致命 VM 事件立即传播，后续注册不宣称已关闭。环境和注册关闭均不自动重试未知卸载。
 
 ## 4. 生命周期与借用规则
 
 - `HookInvocation` 仅在执行回调的线程、回调返回前有效；跨线程或过期访问抛
   `HookContractException`。重入获得独立 frame。
+- 单 after 且无 before 时在绑定期选用专用 channel 并复用该调用的 frame；独立结果槽与 invocation 均在回调退出时失效。
+  这不改变原方法、异常与诊断顺序，也不改变多回调各自的借用寿命。
 - `AroundInvocation.proceed()` 每次 invocation 至多一次；第二次、跨线程、回调后调用均为合同异常。
 - `entrySnapshot()` 是浅槽快照：数组复制、对象共享。
 - `HookRegistration.close()` 后到达框架入口的调用走 `passthrough`：原方法恰好一次，无 SDK 回调。
@@ -79,9 +116,9 @@ ROLLED_BACK`。普通单项失败保留已成功项并返回 `PARTIALLY_INSTALLE
 
 - `ChainSemantics` 非 `FRAMEWORK_CHAIN` 的 backend（classic/local-only）→ `UNSUPPORTED_CAPABILITY`。
 - 必需能力为 `UNSUPPORTED` 或 `UNKNOWN`（含未声明）→ `UNSUPPORTED_CAPABILITY`，UNKNOWN 不视为支持。
-- 101 backend 的 `ATOMIC_REPLACE` 与 `HOT_RELOAD` 明确为 UNSUPPORTED，不引用 102 专有 API。
+- 101 backend 支持同一框架入口内的 SDK 单目标 channel 原子切换；模块级 `HOT_RELOAD` 仍为
+  UNSUPPORTED，101 不引用 102 专有 API。API102 模块代际接入及调用方责任见 `docs/hot-reload-102.md`。
 
 ## 7. API dump
 
-`work/hook/api_dump.txt` 由 `javap` 对实际编译产物生成（见移交命令）。签名审计报告：
-`work/integration/java_consumption_boundary.md`。
+运行 `./gradlew apiCheck` 对照公开 API 清单；变更接口时应审查兼容性并更新对应清单。

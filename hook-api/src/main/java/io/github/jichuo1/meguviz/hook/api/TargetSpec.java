@@ -63,7 +63,8 @@ public abstract class TargetSpec {
      *
      * <p>{@code parameterTypeNames == null} means "any overload" and is therefore ambiguous under
      * {@link MatchPolicy#UNIQUE}. {@code returnTypeName == null} skips the static return check;
-     * when present it participates in matching and in the cache key.
+     * when present it participates in matching and in the cache key. A constructor is matched
+     * against {@code void}, consistent with its JVM descriptor; {@code java.lang.Void} is distinct.
      */
     public static final class DescriptorTarget extends TargetSpec {
         private final TargetKind kind;

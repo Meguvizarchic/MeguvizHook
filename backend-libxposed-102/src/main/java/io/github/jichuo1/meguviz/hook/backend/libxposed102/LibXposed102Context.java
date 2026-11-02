@@ -8,8 +8,8 @@ import java.util.Objects;
  * Install-time context supplied by the module entry: the process name reported by the framework,
  * the actual package class loader, and the code epoch of this module generation.
  *
- * <p>This slice has no hot reload, so the epoch is normally constant for the lifetime of the
- * process. A future hot-reload profile must advance it instead of reusing stale plans.
+ * <p>For module hot reload, create a new context for the new generation and advance the epoch;
+ * do not reuse plans or an environment from the previous module generation.
  */
 public final class LibXposed102Context implements BackendContext {
     private final String processName;

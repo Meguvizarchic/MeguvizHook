@@ -39,7 +39,8 @@ public final class ReflectiveMemberResolver implements MemberResolver {
         try {
             if (descriptor.kind() == TargetKind.CONSTRUCTOR) {
                 for (Constructor<?> constructor : type.getDeclaredConstructors()) {
-                    if (parametersMatch(constructor, descriptor)) {
+                    if (parametersMatch(constructor, descriptor)
+                            && typeNameMatches(void.class, descriptor.returnTypeName())) {
                         matches.add(constructor);
                     }
                 }
@@ -58,6 +59,8 @@ public final class ReflectiveMemberResolver implements MemberResolver {
                 }
             }
         } catch (SecurityException error) {
+            throw new BackendInstallException("cannot inspect " + descriptor.className() + ": " + error, error);
+        } catch (LinkageError error) {
             throw new BackendInstallException("cannot inspect " + descriptor.className() + ": " + error, error);
         }
 

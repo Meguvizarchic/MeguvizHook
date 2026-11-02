@@ -14,13 +14,23 @@ package io.github.jichuo1.meguviz.hook.api;
  *   <li>an {@code around} failure after {@code proceed()} never replays the original.</li>
  * </ul>
  *
- * <p>Fatal VM events ({@link VirtualMachineError}, {@link ThreadDeath}) are not ordinary callback
- * failures: they are always rethrown, never swallowed into diagnostics.
+ * <p>The SDK itself rethrows fatal VM events ({@link VirtualMachineError}, {@link ThreadDeath})
+ * rather than turning them into ordinary callback results or diagnostics. Under
+ * {@link #FRAMEWORK_PROTECTIVE}, the framework receives the throwable and its own protective
+ * policy determines what reaches the host; the SDK cannot promise fatal propagation there.
  *
  * <p>Protection concerns result/throwable slots and callback control state only. It never rolls
- * back host objects, argument object internals or external I/O side effects. Legacy facades that
- * need another behaviour must use a separately named preset; none is provided in this slice.
+ * back host objects, argument object internals or external I/O side effects.
  */
 public enum ErrorPolicy {
-    PROPAGATE
+    PROPAGATE,
+
+    /**
+     * Ask a capable framework to apply its own protective exception mode to the installed hook.
+     * The SDK still dispatches callbacks according to its contract and does not replay downstream.
+     * The framework, not the SDK, decides whether an escaped hooker failure is protected, including
+     * whether a fatal throwable reaches the host. This does not promise BIL's multi-callback DSL
+     * semantics, framework behavior on every implementation, or rollback of side effects.
+     */
+    FRAMEWORK_PROTECTIVE
 }

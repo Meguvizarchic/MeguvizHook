@@ -61,11 +61,26 @@ jobs:
             :sample-kotlin-contracts:run \
             :backend-libxposed-101:testDebugUnitTest \
             :backend-libxposed-102:testDebugUnitTest \
+            :device-benchmark-host:testDebugUnitTest \
+            :device-benchmark-module-101:testDebugUnitTest \
+            :device-benchmark-module-102:testDebugUnitTest \
+            :device-clock-diagnostic:testDebugUnitTest \
+            :device-cpubody-host:testDebugUnitTest \
+            :device-cpubody-module-101:testDebugUnitTest \
+            :device-cpubody-module-102:testDebugUnitTest \
             --no-daemon --console=plain
 
       - name: Check public API surfaces
         shell: bash
         run: ./gradlew apiCheck --no-daemon --console=plain
+
+      - name: Check device-cell log verification
+        shell: bash
+        run: python3 -m unittest discover -s tools/device-cell -p 'test_*.py'
+
+      - name: Check pilot record verification
+        shell: bash
+        run: python3 -m unittest discover -s tools/performance -p 'test_*.py'
 
       - name: Run full Android lint
         shell: bash
@@ -80,34 +95,38 @@ jobs:
             :sample-module-101:assembleRelease \
             :sample-module-102:assembleRelease \
             :sample-module-kotlin-102:assembleRelease \
+            :device-test-host:assembleRelease \
+            :device-test-module-101:assembleRelease \
+            :device-test-module-102:assembleRelease \
+            :device-test-host:assembleDeviceTest \
+            :device-test-module-101:assembleDeviceTest \
+            :device-test-module-102:assembleDeviceTest \
+            :device-benchmark-host:assembleRelease \
+            :device-benchmark-module-101:assembleRelease \
+            :device-benchmark-module-102:assembleRelease \
+            :device-benchmark-host:assembleDeviceTest \
+            :device-benchmark-module-101:assembleDeviceTest \
+            :device-benchmark-module-102:assembleDeviceTest \
+            :device-clock-diagnostic:assembleRelease \
+            :device-clock-diagnostic:assembleDeviceTest \
+            :device-cpubody-host:assembleRelease \
+            :device-cpubody-module-101:assembleRelease \
+            :device-cpubody-module-102:assembleRelease \
+            :device-cpubody-host:assembleDeviceTest \
+            :device-cpubody-module-101:assembleDeviceTest \
+            :device-cpubody-module-102:assembleDeviceTest \
             --no-daemon --console=plain
 
-      - name: Verify release dependency isolation
+      - name: Verify runtime dependency isolation
         shell: bash
         run: |
           set -euo pipefail
-          for module in sample-module-101 sample-module-102 sample-module-kotlin-102; do
-            deps="$(./gradlew ":${module}:dependencies" --configuration releaseRuntimeClasspath --no-daemon --console=plain)"
-            if grep -Eq 'io\.github\.libxposed:|hook-testing' <<<"${deps}"; then
-              echo "Framework/testing dependency leaked into ${module} release runtime" >&2
-              exit 1
-            fi
-            if [[ "${module}" == 'sample-module-101' ]]; then
-              other_backend='backend-libxposed-102'
-            else
-              other_backend='backend-libxposed-101'
-            fi
-            if grep -q "${other_backend}" <<<"${deps}"; then
-              echo "Other backend generation leaked into ${module}" >&2
-              exit 1
-            fi
-            if [[ "${module}" == 'sample-module-kotlin-102' ]]; then
-              grep -q 'hook-dsl' <<<"${deps}"
-              grep -q 'kotlin-stdlib' <<<"${deps}"
-            else
-              if grep -Eq 'hook-dsl|kotlin-stdlib' <<<"${deps}"; then
-                echo "Kotlin/DSL leaked into Java-only ${module}" >&2
-                exit 1
-              fi
-            fi
+          bash tools/ci/test_runtime_dependencies.sh
+          for module in sample-module-101 sample-module-102 sample-module-kotlin-102 device-test-host device-test-module-101 device-test-module-102 device-benchmark-host device-benchmark-module-101 device-benchmark-module-102 device-clock-diagnostic device-cpubody-host device-cpubody-module-101 device-cpubody-module-102; do
+            configurations=(releaseRuntimeClasspath)
+            case "$module" in device-test-*|device-benchmark-*|device-clock-diagnostic|device-cpubody-*) configurations+=(deviceTestRuntimeClasspath);; esac
+            for configuration in "${configurations[@]}"; do
+              deps="$(./gradlew ":${module}:dependencies" --configuration "$configuration" --no-daemon --console=plain)"
+              printf '%s\n' "$deps" | bash tools/ci/check_runtime_dependencies.sh "$module" "$configuration"
+            done
           done

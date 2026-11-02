@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MeguvizHook Test Host</string>
+    <string name="test_host_description">MeguvizHook test host\nFor controlled framework tests only</string>
+</resources>
