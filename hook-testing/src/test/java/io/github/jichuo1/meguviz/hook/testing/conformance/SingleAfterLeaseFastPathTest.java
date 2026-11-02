@@ -115,6 +115,7 @@ public class SingleAfterLeaseFastPathTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test public void caughtFatalInAfterStillPropagatesWithoutReplayingOriginal() {
         FakeBackend backend = FakeBackend.create();
         backend.onTarget(ADD, (self, args) -> 3);
@@ -133,6 +134,7 @@ public class SingleAfterLeaseFastPathTest {
         }
     }
 
+    @SuppressWarnings("removal")
     @Test public void diagnosticFailuresDoNotChangeTheExistingPrecedence() {
         for (boolean fatalSink : new boolean[]{false, true}) {
             FakeBackend backend = FakeBackend.create();

@@ -68,6 +68,7 @@ public class SingleBeforeLeaseFastPathTest {
         } finally { env.close(); }
     }
 
+    @SuppressWarnings("removal")
     @Test public void beforeFailureAndCaughtFatalNeverRunOriginal() throws Throwable {
         FakeBackend backend = FakeBackend.create();
         HookEnvironment env = HookEnvironment.create(backend);

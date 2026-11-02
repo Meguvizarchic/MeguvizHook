@@ -55,6 +55,7 @@ jobs:
         shell: bash
         run: |
           ./gradlew \
+            :hook-core:test \
             :hook-dsl:test \
             :hook-testing:test \
             :sample-java-contracts:run \

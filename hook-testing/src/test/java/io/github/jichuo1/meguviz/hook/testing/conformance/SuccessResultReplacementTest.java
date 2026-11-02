@@ -32,6 +32,7 @@ public class SuccessResultReplacementTest {
         } finally { env.close(); }
     }
 
+    @SuppressWarnings("removal")
     @Test public void originalFailureAndFatalKeepIdentityWithoutReplay() {
         for (Throwable original : new Throwable[]{new IllegalStateException("original"), new ThreadDeath()}) {
             FakeBackend backend = FakeBackend.create();
