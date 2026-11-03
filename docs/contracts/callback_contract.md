@@ -52,8 +52,8 @@ if (receipt.isInstalled()) {
   常量通道缓存所属注册的共享计数器，保持原有两次状态读取和原子加减次序。
   关闭后未准入时透传。未准入标记只按引用比较，常量与标记为同一对象、旧通道或需要调用帧时回退原路径。
   异常保护策略不因此改变；SDK core 和后端需共享该接口与标记的类加载身份。
-- `READ_ARGS_VIEW` 为显式的只读借用视图，生命周期与普通回调一致；101/102 可直接使用框架不可变
-  参数列表，下游保持原始参数。它不改变现有 `READ_ARGS` 或 `ENTRY_SNAPSHOT`，也不保证框架零分配。
+- `READ_ARGS_VIEW` 为显式的只读借用视图，生命周期与普通回调一致；101/102 按下标读取框架参数槽，
+  不复制参数列表，下游保持原始参数。它不改变现有 `READ_ARGS` 或 `ENTRY_SNAPSHOT`，也不保证框架零分配。
 - `replaceIfStringArgumentEquals(index, expected, result, observer)` 显式声明字符串槽匹配和常量返回，
   与普通回调/其他替换互斥；匹配按 actual 在前比较，缺槽为 null。命中通知不能访问或修改调用帧，
   未命中执行原方法一次；通知和原方法异常按原身份交给框架。安装前校验全部目标的参数与返回类型。
@@ -152,6 +152,7 @@ backend 的 `BackendInstallException` 必须保证该次调用未安装入口，
   `HookContractException`。重入获得独立 frame。
 - 单 after 且无 before 时在绑定期选用专用 channel 并复用该调用的 frame；独立结果槽与 invocation 均在回调退出时失效。
   这不改变原方法、异常与诊断顺序，也不改变多回调各自的借用寿命。
+- 有多个回调时，after 回调收到的 `invocation` 与 `result` 可能是同一借用对象；不要依赖二者的对象身份。
 - `AroundInvocation.proceed()` 每次 invocation 至多一次；第二次、跨线程、回调后调用均为合同异常。
 - `entrySnapshot()` 是浅槽快照：数组复制、对象共享。
 - 在 `around` 中需要保存某个时刻的参数槽时，可显式调用

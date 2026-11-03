@@ -7,8 +7,6 @@ import io.github.jichuo1.meguviz.hook.api.HookContractException;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 
-import java.util.List;
-
 /**
  * Hot-path state machine for one bound plan. It only reads the frozen plan and executes business
  * callbacks plus the required type/lifetime checks: no declaration re-parsing, no manager
@@ -35,17 +33,52 @@ final class Dispatcher {
     static DispatchResult dispatch(BoundPlan plan, BackendInvocation backend, DiagnosticsSink diagnostics) {
         InvocationFrame frame = new InvocationFrame(plan, backend);
         try {
-            if (plan.access() == ParameterAccess.AROUND) {
-                return dispatchAround(plan, frame);
-            }
-            BeforeCallback single = plan.singleBeforeOnly();
-            if (single != null) {
-                return dispatchSingleBefore(single, frame);
-            }
-            return dispatchBeforeAfter(plan, frame, diagnostics);
+            return DispatchResult.returned(run(plan, frame, diagnostics));
+        } catch (Throwable failure) {
+            // run() throws only the THREW outcome or a fatal VM event.
+            if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+            return DispatchResult.threw(failure);
         } finally {
             frame.invalidate();
         }
+    }
+
+    /**
+     * Same state machine as {@link #dispatch}, for the direct transport: returns the RETURNED value or
+     * throws the very throwable {@code dispatch} would report as THREW. Fatal VM events and failures
+     * while creating the frame propagate exactly as they do from {@code dispatch}.
+     */
+    static Object dispatchValue(BoundPlan plan, BackendInvocation backend, DiagnosticsSink diagnostics) throws Throwable {
+        InvocationFrame frame = new InvocationFrame(plan, backend);
+        // Catch locally and rethrow after invalidation instead of try/finally: same order and
+        // identity, but a compiler can keep the frame method-local (HotSpot then scalar-replaces it).
+        Object value;
+        Throwable thrown;
+        try {
+            value = run(plan, frame, diagnostics);
+            thrown = null;
+        } catch (Throwable failure) {
+            value = null;
+            thrown = failure;
+        }
+        frame.invalidate();
+        if (thrown != null) throw thrown;
+        return value;
+    }
+
+    /**
+     * Returns the RETURNED value or throws the THREW throwable; fatal VM events are thrown as well.
+     * Nothing else escapes: callback, downstream and diagnostics failures are all classified here.
+     */
+    private static Object run(BoundPlan plan, InvocationFrame frame, DiagnosticsSink diagnostics) throws Throwable {
+        if (plan.access() == ParameterAccess.AROUND) {
+            return runAround(plan, frame);
+        }
+        BeforeCallback single = plan.singleBeforeOnly();
+        if (single != null) {
+            return runSingleBefore(single, frame);
+        }
+        return runBeforeAfter(plan, frame, diagnostics);
     }
 
     /** Selected once by the registration when binding a sole after-only plan. */
@@ -62,11 +95,16 @@ final class Dispatcher {
     static Object dispatchSingleAfterValue(BoundPlan plan, AfterCallback callback,
                                            BackendInvocation backend, DiagnosticsSink diagnostics) throws Throwable {
         InvocationFrame frame = new InvocationFrame(plan, backend);
+        InvocationFrame.ResultSlot slot;
         try {
-            return dispatchSingleAfter(plan, callback, frame, diagnostics).dispatchValue();
-        } finally {
+            slot = dispatchSingleAfter(plan, callback, frame, diagnostics);
+        } catch (Throwable fatal) {
+            // Only fatal VM events escape the single-after state machine.
             frame.invalidate();
+            throw fatal;
         }
+        frame.invalidate();
+        return slot.dispatchValue();
     }
 
     /**
@@ -117,7 +155,7 @@ final class Dispatcher {
      * original method or by synchronous reentry. Internal dispatch state remains accessible only
      * through package-private methods that do not expose the expired invocation to consumers.
      */
-    private static DispatchResult dispatchSingleBefore(BeforeCallback callback, InvocationFrame frame) {
+    private static Object runSingleBefore(BeforeCallback callback, InvocationFrame frame) throws Throwable {
         try {
             callback.before(frame);
             frame.rethrowObservedFatal();
@@ -126,25 +164,22 @@ final class Dispatcher {
             if (TypeChecks.isFatal(failure)) {
                 throw TypeChecks.fatal(failure);
             }
-            return DispatchResult.threw(failure);
+            throw failure;
         } finally {
             frame.invalidate();
         }
-        if (frame.hasEarlyOutcomeForDispatch()) return frame.earlyDispatchResult();
-        try {
-            return DispatchResult.returned(frame.backend().proceed(frame.argsForProceed()));
-        } catch (Throwable failure) {
-            if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
-            return DispatchResult.threw(failure);
-        }
+        if (frame.hasEarlyOutcomeForDispatch()) return frame.earlyOutcome();
+        // A downstream throwable, fatal or not, propagates with its identity.
+        return frame.backend().proceed(frame.argsForProceed());
     }
 
-    private static DispatchResult dispatchBeforeAfter(BoundPlan plan, InvocationFrame frame, DiagnosticsSink diagnostics) {
-        // HookSpec freezes callbacks into an unmodifiable ArrayList at construction, so indexed
-        // iteration preserves the same order and early-stop semantics without an Iterator per call.
-        List<BeforeCallback> befores = plan.beforeCallbacks();
-        for (int i = 0, count = befores.size(); i < count; i++) {
-            BeforeCallback callback = befores.get(i);
+    private static Object runBeforeAfter(BoundPlan plan, InvocationFrame frame, DiagnosticsSink diagnostics)
+            throws Throwable {
+        // The plan freezes callbacks into arrays at bind time, so indexed iteration preserves the
+        // same order and early-stop semantics without a List or Iterator per call.
+        BeforeCallback[] befores = plan.befores();
+        for (int i = 0; i < befores.length; i++) {
+            BeforeCallback callback = befores[i];
             try {
                 InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
                 try {
@@ -159,27 +194,22 @@ final class Dispatcher {
                     throw TypeChecks.fatal(failure);
                 }
                 // Original not started: it must stay at zero executions.
-                return DispatchResult.threw(failure);
+                throw failure;
             }
-            if (frame.hasEarlyOutcome()) {
+            if (frame.hasEarlyOutcomeForDispatch()) {
                 break;
             }
         }
 
-        List<AfterCallback> afters = plan.afterCallbacks();
-        if (afters.isEmpty()) {
-            if (frame.hasEarlyOutcome()) return frame.earlyDispatchResult();
-            try {
-                return DispatchResult.returned(frame.backend().proceed(frame.argsForProceed()));
-            } catch (Throwable failure) {
-                if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
-                return DispatchResult.threw(failure);
-            }
+        AfterCallback[] afters = plan.afters();
+        if (afters.length == 0) {
+            if (frame.hasEarlyOutcomeForDispatch()) return frame.earlyOutcome();
+            return frame.backend().proceed(frame.argsForProceed());
         }
 
         InvocationFrame.ResultSlot slot = frame.resultSlot();
         Throwable originalFailure = null;
-        if (frame.hasEarlyOutcome()) {
+        if (frame.hasEarlyOutcomeForDispatch()) {
             frame.initializeEarlyResult(slot);
         } else {
             try {
@@ -194,11 +224,11 @@ final class Dispatcher {
         }
 
         Throwable firstAfterFailure = null;
-        for (int i = afters.size() - 1; i >= 0; i--) {
+        for (int i = afters.length - 1; i >= 0; i--) {
             try {
-                InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
+                InvocationFrame.AfterBorrow borrowed = frame.borrowAfter();
                 try {
-                    afters.get(i).after(borrowed, borrowed.result());
+                    afters[i].after(borrowed, borrowed);
                 } finally {
                     borrowed.invalidate();
                 }
@@ -235,16 +265,16 @@ final class Dispatcher {
                 }
             }
         }
-        return slot.dispatchResult();
+        return slot.dispatchValue();
     }
 
-    private static DispatchResult dispatchAround(BoundPlan plan, InvocationFrame frame) {
+    private static Object runAround(BoundPlan plan, InvocationFrame frame) throws Throwable {
         try {
             try {
                 // An around plan has exactly one callback, so its invocation frame itself is the
                 // sole borrow. The frame stays valid during proceed(), including reentry, and is
                 // expired at callback exit before any result processing or error handling.
-                plan.spec().aroundCallback().around(frame);
+                plan.aroundCallback().around(frame);
             } finally {
                 frame.invalidate();
             }
@@ -255,23 +285,20 @@ final class Dispatcher {
                 throw TypeChecks.fatal(failure);
             }
             // Even after a successful proceed the original is never replayed.
-            return DispatchResult.threw(failure);
+            throw failure;
         }
         if (frame.hasEarlyOutcomeForDispatch()) {
-            return frame.earlyDispatchResult();
+            return frame.earlyOutcome();
         }
         CallOutcome.State state = frame.proceedStateForDispatch();
-        if (state == CallOutcome.State.RETURNED || state == CallOutcome.State.THREW) {
-            return toDispatchResult(frame.proceedOutcome());
+        if (state == CallOutcome.State.RETURNED) {
+            return frame.proceedOutcome().value();
         }
-        return DispatchResult.threw(new HookContractException(
+        if (state == CallOutcome.State.THREW) {
+            throw frame.proceedOutcome().throwable();
+        }
+        throw new HookContractException(
                 "around callback of " + plan.id() + " returned without proceed() or an explicit outcome;"
-                        + " the original was not executed implicitly"));
-    }
-
-    private static DispatchResult toDispatchResult(CallOutcome outcome) {
-        return outcome.state() == CallOutcome.State.THREW
-                ? DispatchResult.threw(outcome.throwable())
-                : DispatchResult.returned(outcome.state() == CallOutcome.State.RETURNED ? outcome.value() : null);
+                        + " the original was not executed implicitly");
     }
 }

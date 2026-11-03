@@ -3,7 +3,14 @@ package io.github.jichuo1.meguviz.hook.core;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 import java.util.function.Function;
 
-/** Optional backend binding for the direct single-after transport. */
+/**
+ * Optional backend binding for the direct value transport of {@link DirectAfterDispatchChannel}
+ * (single-after and generic plan channels). Returns null for any other channel, which keeps the
+ * ordinary {@link DispatchChannel#dispatch} path. The bound function returns {@code notEntered}
+ * when the backend must run the original once without SDK callbacks; an application value that is
+ * itself {@code notEntered} or a {@link DispatchResult} is wrapped in {@link DispatchResult#returned}
+ * so the backend can tell them apart. Throwables, including fatal VM events, propagate unchanged.
+ */
 public final class CoreAfterBridge {
     private CoreAfterBridge() { }
 

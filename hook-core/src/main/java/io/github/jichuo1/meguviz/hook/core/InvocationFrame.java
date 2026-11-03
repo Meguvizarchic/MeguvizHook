@@ -10,10 +10,7 @@ import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Objects;
 
@@ -55,14 +52,38 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         if (access == ParameterAccess.READ_ARGS_VIEW) {
             // Only the explicitly read-only shape borrows the adapter's argument view.
             this.argsView = Objects.requireNonNull(backend.readOnlyArguments(), "readOnlyArguments");
-        } else if (access != ParameterAccess.NO_ARGS) {
-            // Materialized once per frame at entry; NO_ARGS never reaches this branch.
+        } else if (access == ParameterAccess.READ_ARGS) {
+            // The shape exists to read slots, so it materializes at entry: deferring would only add
+            // a branch, and keeps the frame easier to scalar-replace for JITs that can.
             this.args = backend.arguments();
-            if (access == ParameterAccess.ENTRY_SNAPSHOT) {
-                // Shallow slot copy: the array is copied, the argument objects are shared.
-                this.entrySnapshot = args.clone();
-            }
+        } else if (access == ParameterAccess.ENTRY_SNAPSHOT) {
+            // The snapshot is defined at entry, so this shape stays eager. Shallow slot copy: the
+            // array is copied, the argument objects are shared.
+            this.args = backend.arguments();
+            this.entrySnapshot = args.clone();
         }
+        // MUTABLE_ARGS and AROUND obtain the backend array on first slot access (see slots());
+        // NO_ARGS never does.
+    }
+
+    /** The backend argument array, obtained at most once per frame on the first slot access. */
+    private Object[] slots() {
+        Object[] current = args;
+        return current != null ? current : materializeSlots();
+    }
+
+    private Object[] materializeSlots() {
+        Object[] materialized;
+        try {
+            materialized = backend.arguments();
+        } catch (Error failure) {
+            // Runs inside a callback: a fatal VM event must stay fatal even if that callback
+            // catches it. Ordinary failures surface to the callback that touched the slots.
+            rejectFatal(failure);
+            throw failure;
+        }
+        args = Objects.requireNonNull(materialized, "arguments");
+        return materialized;
     }
 
     void invalidate() {
@@ -99,13 +120,20 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         }
     }
 
+    /**
+     * The array callbacks read and wrote, so downstream and every stage observe the same slots. If
+     * no MUTABLE_ARGS or AROUND callback touched the slots before downstream runs, null keeps the
+     * incoming arguments (always for NO_ARGS and READ_ARGS_VIEW); a later slot access then obtains
+     * them from the backend.
+     */
     Object[] argsForProceed() {
-        // null keeps incoming arguments for NO_ARGS and READ_ARGS_VIEW.
         return args;
     }
 
-    DispatchResult earlyDispatchResult() {
-        return earlyThrowable != null ? DispatchResult.threw(earlyThrowable) : DispatchResult.returned(earlyResult);
+    /** The explicit early outcome: returns the early result or throws the early throwable. */
+    Object earlyOutcome() throws Throwable {
+        if (earlyThrowable != null) throw earlyThrowable;
+        return earlyResult;
     }
 
     void initializeEarlyResult(ResultSlot slot) {
@@ -135,6 +163,13 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     BorrowedInvocation borrow() {
         check();
         return new BorrowedInvocation();
+    }
+
+    /** A distinct lease for one after callback that also serves as that callback's result view. */
+    AfterBorrow borrowAfter() {
+        // The dispatcher initializes the shared result slot before the first after callback.
+        check();
+        return new AfterBorrow();
     }
 
     void rethrowObservedFatal() {
@@ -173,15 +208,13 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public Object thisObject() {
         check();
-        Executable target = plan.target();
-        return target instanceof Method && !Modifier.isStatic(target.getModifiers())
-                ? backend.thisObject() : null;
+        return plan.isInstanceMethod() ? backend.thisObject() : null;
     }
 
     @Override
     public Object constructorReceiver() {
         check();
-        return plan.target() instanceof Constructor<?> ? backend.thisObject() : null;
+        return plan.isConstructor() ? backend.thisObject() : null;
     }
 
     @Override
@@ -205,7 +238,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public Object getArgument(int index) {
         requireReadable();
-        return plan.access() == ParameterAccess.READ_ARGS_VIEW ? argsView.get(index) : args[index];
+        return plan.access() == ParameterAccess.READ_ARGS_VIEW ? argsView.get(index) : slots()[index];
     }
 
     @Override
@@ -236,13 +269,13 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     public void setArgument(int index, Object value) {
         requireMutable();
         TypeChecks.checkArgumentValue(plan, index, value);
-        args[index] = value;
+        slots()[index] = value;
     }
 
     @Override
     public void setEarlyResult(Object value) {
         check();
-        TypeChecks.checkResultValue(plan.target(), value);
+        TypeChecks.checkResultValue(plan, value);
         earlyOutcomeSet = true;
         earlyResult = value;
         earlyThrowable = null;
@@ -294,15 +327,19 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         return proceedState;
     }
 
-    /** A distinct lease for one callback, sharing only the enclosing frame's invocation state. */
-    final class BorrowedInvocation implements AroundInvocation, EntrySnapshotInvocation, MutableArgsInvocation {
+    /**
+     * A distinct lease for one callback, sharing only the enclosing frame's invocation state. Before
+     * callbacks get exactly this type, which never implements {@link InvocationResult}, so a cast
+     * cannot reach the result slot.
+     */
+    class BorrowedInvocation implements AroundInvocation, EntrySnapshotInvocation, MutableArgsInvocation {
         private boolean active = true;
 
-        void invalidate() {
+        final void invalidate() {
             active = false;
         }
 
-        private void checkBorrow() {
+        final void checkBorrow() {
             if (!active) {
                 // Preserve frame-expired / wrong-thread precedence for an inactive borrow.
                 InvocationFrame.this.check();
@@ -310,13 +347,6 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
             }
             // Every public forwarding method validates the frame in its target method. Avoid a
             // duplicate owner-thread and validity check while this particular borrow is active.
-        }
-
-        InvocationResult result() {
-            checkBorrow();
-            // Unlike public forwards, constructing a result view has no validating target method.
-            InvocationFrame.this.check();
-            return new BorrowedResult();
         }
 
         @Override public HookId id() { checkBorrow(); return InvocationFrame.this.id(); }
@@ -337,15 +367,21 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         @Override public boolean hasEarlyOutcome() { checkBorrow(); return InvocationFrame.this.hasEarlyOutcome(); }
         @Override public CallOutcome proceed() { checkBorrow(); return InvocationFrame.this.proceed(); }
         @Override public CallOutcome.State proceedState() { checkBorrow(); return InvocationFrame.this.proceedState(); }
+    }
 
-        private final class BorrowedResult implements InvocationResult {
-            @Override public boolean hasReturned() { checkBorrow(); return resultSlot.hasReturned(); }
-            @Override public boolean hasThrown() { checkBorrow(); return resultSlot.hasThrown(); }
-            @Override public Object getResult() { checkBorrow(); return resultSlot.getResult(); }
-            @Override public Throwable getThrowable() { checkBorrow(); return resultSlot.getThrowable(); }
-            @Override public void setResult(Object value) { checkBorrow(); resultSlot.setResult(value); }
-            @Override public void setThrowable(Throwable throwable) { checkBorrow(); resultSlot.setThrowable(throwable); }
-        }
+    /**
+     * After-callback lease passed as both the invocation and the result argument. Merging the two
+     * views removes one object per after callback without widening any shape: an after callback
+     * already holds the result view, and before, around and frame views never implement
+     * {@link InvocationResult}. Both views expire together when the callback returns.
+     */
+    final class AfterBorrow extends BorrowedInvocation implements InvocationResult {
+        @Override public boolean hasReturned() { checkBorrow(); return resultSlot.hasReturned(); }
+        @Override public boolean hasThrown() { checkBorrow(); return resultSlot.hasThrown(); }
+        @Override public Object getResult() { checkBorrow(); return resultSlot.getResult(); }
+        @Override public Throwable getThrowable() { checkBorrow(); return resultSlot.getThrowable(); }
+        @Override public void setResult(Object value) { checkBorrow(); resultSlot.setResult(value); }
+        @Override public void setThrowable(Throwable throwable) { checkBorrow(); resultSlot.setThrowable(throwable); }
     }
 
     /** After-stage result slot. Initial state is the downstream or early outcome. */
@@ -408,7 +444,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         @Override
         public void setResult(Object value) {
             check();
-            TypeChecks.checkResultValue(plan.target(), value);
+            TypeChecks.checkResultValue(plan, value);
             initReturned(value);
         }
 

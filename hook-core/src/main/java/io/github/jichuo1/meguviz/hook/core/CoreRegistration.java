@@ -421,11 +421,28 @@ final class CoreRegistration implements HookRegistration {
         return CloseReport.PhysicalRelease.RELEASED;
     }
 
-    private final class PlanChannel implements DispatchChannel {
+    /**
+     * Generic plan channel (before callbacks, several callbacks, around). Backends that bind the
+     * optional {@link CoreAfterBridge} use {@link #dispatchDirect}; others keep {@link #dispatch}.
+     * Both run the same state machine under the same admission and in-flight lease.
+     */
+    private final class PlanChannel implements DirectAfterDispatchChannel {
         private final BoundPlan plan;
 
         private PlanChannel(BoundPlan plan) {
             this.plan = plan;
+        }
+
+        @Override
+        public Object dispatchDirect(BackendInvocation invocation) throws Throwable {
+            if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+            inFlight.incrementAndGet();
+            try {
+                if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+                return DirectAfterDispatchChannel.escape(Dispatcher.dispatchValue(plan, invocation, diagnostics));
+            } finally {
+                inFlight.decrementAndGet();
+            }
         }
 
         @Override

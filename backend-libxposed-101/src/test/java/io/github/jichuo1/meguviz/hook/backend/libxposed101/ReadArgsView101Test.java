@@ -24,7 +24,7 @@ import static org.junit.Assert.*;
 public class ReadArgsView101Test {
     public static int add(int left, int right) { return left + right; }
 
-    @Test public void viewUsesFrameworkListWithoutArrayAndProceedsWithIncomingArguments() throws Throwable {
+    @Test public void viewReadsSingleSlotsWithoutListCopyAndProceedsWithIncomingArguments() throws Throwable {
         Method target = getClass().getMethod("add", int.class, int.class);
         AtomicReference<XposedInterface.Hooker> hooker = new AtomicReference<XposedInterface.Hooker>();
         AtomicInteger reads = new AtomicInteger();
@@ -57,7 +57,8 @@ public class ReadArgsView101Test {
         });
         XposedInterface.Chain chain = proxy(XposedInterface.Chain.class, (object, method, args) -> {
             switch (method.getName()) {
-                case "getArgs": reads.incrementAndGet(); return values;
+                case "getArg": reads.incrementAndGet(); return values.get((Integer) args[0]);
+                case "getArgs": throw new AssertionError("the view must not copy through getArgs()");
                 case "proceed": assertEquals("view must not pass an argument array", 0, method.getParameterCount());
                     proceeds.incrementAndGet(); return 7;
                 default: throw new UnsupportedOperationException(method.getName());
@@ -72,7 +73,7 @@ public class ReadArgsView101Test {
                     .after((i, r) -> assertEquals(4, ((ReadArgsInvocation) i).getArgument(1))).build());
             assertTrue(receipt.toString(), receipt.isInstalled());
             assertEquals(7, hooker.get().intercept(chain));
-            assertEquals(1, reads.get());
+            assertEquals("one slot read per getArgument", 2, reads.get());
             assertEquals(1, proceeds.get());
         } finally { env.close(); }
     }
