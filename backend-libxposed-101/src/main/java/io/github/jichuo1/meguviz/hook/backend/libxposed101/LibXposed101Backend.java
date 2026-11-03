@@ -279,7 +279,7 @@ public final class LibXposed101Backend implements HookBackend {
         if (lookup.bind == null) return null;
         try {
             Object marker = new Object();
-            Object bound = lookup.bind.invoke(null, channel, marker, newChainAccessor(parameterCount));
+            Object bound = lookup.bind.invoke(null, channel, marker, FlyweightAccessors.create(parameterCount));
             if (bound == null) return null;
             if (!(bound instanceof java.util.function.Function)) {
                 throw new IllegalStateException("core returned an invalid chain binding");
@@ -295,9 +295,18 @@ public final class LibXposed101Backend implements HookBackend {
         }
     }
 
-    /** Cold and only reached once the lookup found the flyweight types, so older cores never load it. */
-    private static Object newChainAccessor(int parameterCount) {
-        return new ChainAccessor101(parameterCount);
+    /**
+     * The only code that names {@link ChainAccessor101}, kept out of this class: it runs only after
+     * the lookup found the flyweight types, and a core without them can then affect (for example in
+     * verification) just this cold holder, never the hot hooker paths of the backend class.
+     */
+    private static final class FlyweightAccessors {
+        private FlyweightAccessors() {
+        }
+
+        static Object create(int parameterCount) {
+            return new ChainAccessor101(parameterCount);
+        }
     }
 
     private static Object dispatchChain(ChainBinding binding, XposedInterface.Chain chain) throws Throwable {
