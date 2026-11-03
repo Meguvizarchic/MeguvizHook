@@ -608,6 +608,10 @@ final class io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher$Attempt$Sta
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher$Attempt$State[] values();
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher$Attempt$State valueOf(java.lang.String);
 }
+Compiled from "TraceBatchDispatcher.java"
+final class io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher$Completion extends java.util.concurrent.locks.AbstractQueuedSynchronizer implements java.lang.Runnable {
+  public void run();
+}
 Compiled from "TraceBatchPoller.java"
 public final class io.github.jichuo1.meguviz.hook.core.TraceBatchPoller implements java.lang.AutoCloseable {
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller start(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, long, long, java.util.concurrent.TimeUnit);

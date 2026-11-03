@@ -2,12 +2,12 @@ package io.github.jichuo1.meguviz.hook.core;
 
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 
 /** Opt-in scheduling of a single trace batch on a caller-owned executor. */
 public final class TraceBatchDispatcher {
@@ -33,7 +33,7 @@ public final class TraceBatchDispatcher {
         if (limit < 1) throw new IllegalArgumentException("limit must be positive");
         Attempt attempt = new Attempt(tracker, transport, limit);
         try {
-            executor.execute(attempt::run);
+            executor.execute(attempt.done);
         } catch (Throwable failure) {
             attempt.submissionFailed(failure);
             if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
@@ -53,7 +53,7 @@ public final class TraceBatchDispatcher {
         private CallbackExceptionTracker tracker;
         private CallbackExceptionTracker.BatchTransport transport;
         private final int limit;
-        private final CountDownLatch done = new CountDownLatch(1);
+        private final Completion done = new Completion(this);
         private State state = State.WAITING;
         private CallbackExceptionTracker.BatchAttempt result;
         private Throwable failure;
@@ -120,13 +120,13 @@ public final class TraceBatchDispatcher {
         }
 
         @Override public CallbackExceptionTracker.BatchAttempt get() throws InterruptedException, ExecutionException {
-            done.await();
+            done.acquireSharedInterruptibly(1);
             return outcome();
         }
 
         @Override public CallbackExceptionTracker.BatchAttempt get(long timeout, TimeUnit unit)
                 throws InterruptedException, ExecutionException, TimeoutException {
-            if (!done.await(timeout, unit)) throw new TimeoutException();
+            if (!done.tryAcquireSharedNanos(1, unit.toNanos(timeout))) throw new TimeoutException();
             return outcome();
         }
 
@@ -137,5 +137,34 @@ public final class TraceBatchDispatcher {
                 return result;
             }
         }
+    }
+
+    /**
+     * The task handed to the executor and the attempt's completion latch in one object (one
+     * allocation instead of a method reference, a CountDownLatch and its synchronizer). Waiting
+     * uses exactly CountDownLatch(1)'s calls (acquireSharedInterruptibly, tryAcquireSharedNanos
+     * with unit.toNanos), so interrupt, timeout and wake-up behaviour are the latch's. Unlike the
+     * latch's countDown, the state can only be cleared by {@link #countDown()} from the attempt's
+     * terminal transition: the public release methods inherited from the synchronizer only report
+     * it, so code holding the queued task cannot release a waiter early.
+     */
+    private static final class Completion extends AbstractQueuedSynchronizer implements Runnable {
+        private static final long serialVersionUID = 1L;
+        private final transient Attempt attempt;
+
+        Completion(Attempt attempt) {
+            this.attempt = attempt;
+            setState(1);
+        }
+
+        /** Called once, with the attempt's monitor held, when it becomes terminal. */
+        void countDown() {
+            setState(0);
+            releaseShared(1);
+        }
+
+        @Override protected int tryAcquireShared(int ignored) { return getState() == 0 ? 1 : -1; }
+        @Override protected boolean tryReleaseShared(int ignored) { return getState() == 0; }
+        @Override public void run() { attempt.run(); }
     }
 }

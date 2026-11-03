@@ -47,6 +47,13 @@ final class InterleavedCases {
                 () -> slicing.sendBatch(events),
             });
         }
+        // TraceBatchDispatcher.submit + get on the calling thread (inline or deferred executor).
+        for (String executor : new String[] {"inline", "deferred"}) {
+            for (String outcome : new String[] {"empty", "accepted"}) {
+                Dispatch d = new Dispatch("deferred".equals(executor), "accepted".equals(outcome));
+                cases.put("dispatch:" + executor + ":" + outcome, new InterleavedAb.Op[] {d::round1, d::current});
+            }
+        }
         // Harness calibration: both sides run the very same code, so B/A should be about 1.
         Shape calibration = new Shape("ascii0");
         cases.put("calibrate:round1-vs-round1", new InterleavedAb.Op[] {
@@ -58,6 +65,45 @@ final class InterleavedCases {
             () -> JsonLineTraceTransport.encode(calibration.event, true, 0).length,
         });
         return cases;
+    }
+
+    /** Same fixture as AbDispatcherBenchmark. */
+    static final class Dispatch {
+        private final boolean deferred;
+        private final boolean capture;
+        private final CallbackExceptionTracker tracker = new CallbackExceptionTracker("bench-dispatch", 16);
+        private final TraceFixtures.Producer producer = new TraceFixtures.Producer(tracker, "bench.dispatch.hook",
+                new TraceFixtures.SyntheticFailure("dispatch", 2));
+        private final CallbackExceptionTracker.BatchTransport transport = events -> events.size();
+        private Runnable kept;
+        private final java.util.concurrent.Executor run;
+
+        Dispatch(boolean deferred, boolean capture) {
+            this.deferred = deferred;
+            this.capture = capture;
+            this.run = deferred ? task -> kept = task : Runnable::run;
+        }
+
+        long round1() throws Exception {
+            if (capture) producer.capture();
+            Round1Transport.Attempt attempt = Round1Transport.submit(run, tracker, transport, 4);
+            if (deferred) runKept();
+            return attempt.get().acceptedCount();
+        }
+
+        long current() throws Exception {
+            if (capture) producer.capture();
+            io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher.Attempt attempt =
+                    io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher.submit(run, tracker, transport, 4);
+            if (deferred) runKept();
+            return attempt.get().acceptedCount();
+        }
+
+        private void runKept() {
+            Runnable task = kept;
+            kept = null;
+            task.run();
+        }
     }
 
     /** Same shapes as AbRound2EncodeBenchmark: message kind + maxFrames out of a 40-frame trace. */
