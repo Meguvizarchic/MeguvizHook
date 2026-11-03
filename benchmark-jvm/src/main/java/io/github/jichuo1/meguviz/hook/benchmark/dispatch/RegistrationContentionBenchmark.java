@@ -24,9 +24,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Thread scaling of one registration hit by 1, 2, 4 or 8 threads at once: every thread drives the
- * same channel (and therefore the same registration state and in-flight accounting) through its
- * own chain node. Callbacks and the modelled original write no shared state, so the only shared
- * writes are the SDK's own. Callback call sites are made megamorphic first ({@link ProfilePollution}).
+ * same channel (and therefore the same registration state and in-flight accounting) through a
+ * fresh chain node per call. Callbacks and the modelled original write no shared state, so the only
+ * shared writes are the SDK's own. B/op includes the modelled chain node unless the JIT removes it.
+ * Callback call sites are made megamorphic first ({@link ProfilePollution}).
  *
  * <p>Host JDK microbenchmark on an 8-vCPU (4 cores x 2 SMT) x86-64 host; not ART or device evidence.
  */
@@ -53,10 +54,19 @@ public class RegistrationContentionBenchmark {
     private HookEnvironment environment;
     private VectorLikeChain.Level hooker;
 
-    /** Per-thread chain node: its proceed bookkeeping must not become shared state. */
+    /**
+     * Per-thread arguments. Each call gets a fresh chain node, as Vector allocates one per call and
+     * hooker level: a node reused per thread is written on every proceed, and once the collector
+     * copies such long-lived nodes next to each other their lines are falsely shared between
+     * threads, which made unrelated forks differ by up to 5x.
+     */
     @State(Scope.Thread)
     public static class Caller {
-        final VectorLikeChain chain = new VectorLikeChain(null, DispatchTargets.arguments(), DispatchTargets.ADD);
+        final Object[] args = DispatchTargets.arguments();
+
+        VectorLikeChain chain() {
+            return new VectorLikeChain(null, args, DispatchTargets.ADD);
+        }
     }
 
     @Setup(org.openjdk.jmh.annotations.Level.Trial)
@@ -95,7 +105,7 @@ public class RegistrationContentionBenchmark {
         } else {
             hooker = adapter.hooker(backend.lastPlan(), channel);
         }
-        Object value = hooker.intercept(new Caller().chain);
+        Object value = hooker.intercept(new Caller().chain());
         if (!Integer.valueOf(expected).equals(value)) throw new IllegalStateException(shape + " returned " + value);
     }
 
@@ -106,21 +116,21 @@ public class RegistrationContentionBenchmark {
 
     @Benchmark @Threads(1)
     public Object threads1(Caller caller) throws Throwable {
-        return hooker.intercept(caller.chain);
+        return hooker.intercept(caller.chain());
     }
 
     @Benchmark @Threads(2)
     public Object threads2(Caller caller) throws Throwable {
-        return hooker.intercept(caller.chain);
+        return hooker.intercept(caller.chain());
     }
 
     @Benchmark @Threads(4)
     public Object threads4(Caller caller) throws Throwable {
-        return hooker.intercept(caller.chain);
+        return hooker.intercept(caller.chain());
     }
 
     @Benchmark @Threads(8)
     public Object threads8(Caller caller) throws Throwable {
-        return hooker.intercept(caller.chain);
+        return hooker.intercept(caller.chain());
     }
 }
