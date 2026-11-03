@@ -23,7 +23,7 @@
 |---|---|---|
 | NO_ARGS | 不调用 backend 的 `arguments()`；参数读取抛 `HookContractException` | `InvocationFrame` 构造分支 |
 | READ_ARGS | 仅当前线程、当前回调内读取；逃逸/跨线程抛合同异常 | `InvocationFrame.check()` |
-| READ_ARGS_VIEW | 显式借用入口只读参数视图，回调结束即不可访问；保留原参数下传，不承诺深拷贝或框架零分配 | `BackendInvocation.readOnlyArguments()` |
+| READ_ARGS_VIEW | 显式借用入口只读参数视图，回调结束即不可访问；保留原参数下传，不承诺深拷贝或框架零分配 | `BackendInvocation.readOnlyArguments()`；flyweight 传输为 `ChainAccessor.argument` |
 | ENTRY_SNAPSHOT | 进入注册时的**浅槽快照**：复制数组、共享对象；不深拷贝、不回滚对象内部 | `args.clone()` |
 | MUTABLE_ARGS | 写入经 primitive/引用/null 校验，对下游 continuation 生效；首次访问参数槽时获取后端参数数组，下游前已获取则传给下游 | `InvocationFrame`、`TypeChecks` |
 | AROUND | 与 before/after 互斥（本版）；continuation at-most-once | `Dispatcher.dispatchAround` |
@@ -151,11 +151,13 @@ callback 失败分别分类；本切片无 native 路径。
 - 在途数只用于报告：准入仍由“状态读、计数加、状态再读”线性化，close 不等待它。close（以及
   替换、隔离生成的报告）在注册离开 `INSTALLED` 之后读取计数。读取期间没有调用进入或退出时，
   它恰好等于未结束的 SDK 租约数（含尚未完成状态再读的试探性计数）；与进出并发时它不是原子
-  快照：读取全程在途的租约一定计入，读取期间进入或退出的租约可能计入也可能不计入（每个调用
-  线程至多一个），结果从不为负。计数无争用时是单个共享字；某次计数加观察到另一租约仍在途
-  （另一线程或同线程重入）后，该注册改用按线程选择的填充计数单元。在一次通道调用内完成的
-  租约总在同一位置加减；拆分式 `tryEnter`/`exit` 在单元表发布前进入、发布后退出的租约，由
-  “先读单元、后读共享字”的读取顺序保证不会只计退出而漏计进入。
+  快照：读取全程在途的租约一定计入，读取期间进入或退出的租约可能计入也可能不计入（每个线程
+  至多为其当时的重入深度），结果从不为负。这些并发界限要求拆分式 `tryEnter`/`exit` 在同一线程
+  调用（框架 continuation 总是如此）；跨线程调用时静止总数仍然精确。计数无争用时是单个共享字；
+  某次计数加观察到另一租约仍在途（另一线程或同线程重入）后只记下争用，之后的某次进入在自身
+  计数之前发布按线程选择的填充计数单元表，所以分配失败或栈溢出不会留下未配对的计数。在一次
+  通道调用内完成的租约总在同一位置加减；拆分式租约若在单元表发布前进入、发布后退出，由“先读
+  单元、后读共享字”的读取顺序保证不会只计退出而漏计进入。
 - 关闭或未发布安装的回滚若入口恢复为 `NOT_RESTORED/UNKNOWN`，当前环境保留句柄并拒绝同 ID
   重装；`RESTORED` 可重试，即使物理制品仍驻留。回滚回执包含聚合关闭结果，`ROLLED_BACK` 仅表示
   已尝试关闭。隔离不跨环境或 ID，幂等 close 不提供卸载重试。

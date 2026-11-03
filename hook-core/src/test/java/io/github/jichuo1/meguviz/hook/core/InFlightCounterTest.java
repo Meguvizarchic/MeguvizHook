@@ -14,9 +14,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.*;
 
 /**
- * Contention-adaptive in-flight counter: uncontended leases stay on one word, the first overlap
- * publishes the cell table, every concurrent sum is non-negative and bounded by the leases that
- * were open around the read, and a quiescent sum is exact.
+ * Contention-adaptive in-flight counter: uncontended leases stay on one word, an overlap marks the
+ * counter and the next lease publishes the cell table before it increments anything, every
+ * concurrent sum is non-negative and bounded by the leases that were open around the read, and a
+ * quiescent sum is exact.
  */
 public class InFlightCounterTest {
     private static final int WORKERS = 8;
@@ -49,9 +50,11 @@ public class InFlightCounterTest {
         InFlightCounter counter = new InFlightCounter();
         int outer = counter.enter();
         int reentrant = counter.enter();
-        assertTrue("an increment that sees another open lease publishes the table", counter.inflated());
-        assertEquals("the inflating lease stays where it was counted", InFlightCounter.SHARED, reentrant);
+        assertTrue("an increment that sees another open lease marks the counter", counter.inflationPending());
+        assertFalse("no allocation follows an increment", counter.inflated());
+        assertEquals("the overlapping lease stays where it was counted", InFlightCounter.SHARED, reentrant);
         int striped = counter.enter();
+        assertTrue("the next lease publishes the table before its own increment", counter.inflated());
         assertNotEquals(InFlightCounter.SHARED, striped);
         assertEquals(3, counter.sum());
         counter.exit(striped);
@@ -161,6 +164,109 @@ public class InFlightCounterTest {
         }
         if (failure.get() != null) throw failure.get();
         assertEquals(0, counter.sum());
+    }
+
+    @Test public void readOrderNeverShowsADepartureWithoutItsArrival() {
+        // A split lease enters on the shared word while no table exists and exits on its thread's
+        // cell after publication, all while one read is in progress. Reading the table and cells
+        // first, then the shared word, can only over-count that lease; the reverse order sees -1.
+        InFlightCounter counter = new InFlightCounter();
+        long observed = counter.rawSum(() -> {
+            counter.enter();
+            counter.exit(counter.enter());
+            counter.exit(counter.enter());
+            counter.exitUntracked();
+        });
+        assertTrue(counter.inflated());
+        assertEquals("the in-read lease counted at most once, never as departed", 1L, observed);
+        assertEquals(0L, counter.rawSum());
+
+        InFlightCounter striped = new InFlightCounter();
+        int held = striped.enter();
+        striped.exit(striped.enter());
+        int cell = striped.enter();
+        striped.exit(cell);
+        assertTrue(striped.inflated());
+        long withHeld = striped.rawSum(() -> {
+            striped.enter();
+            striped.exitUntracked();
+            striped.exit(striped.enter());
+        });
+        assertEquals("a lease held for the whole read is counted", 1L, withHeld);
+        striped.exit(held);
+        assertEquals(0L, striped.rawSum());
+    }
+
+    @Test public void nestedLeasesOfOneThreadMayAllCountDuringARead() {
+        // The concurrent upper bound is per thread its nesting depth, not one.
+        InFlightCounter counter = new InFlightCounter();
+        int[] leases = new int[3];
+        long observed = counter.rawSum(() -> {
+            for (int depth = 0; depth < leases.length; depth++) leases[depth] = counter.enter();
+        });
+        assertTrue(observed >= 0 && observed <= leases.length);
+        for (int depth = leases.length - 1; depth >= 0; depth--) counter.exit(leases[depth]);
+        assertEquals(0L, counter.rawSum());
+    }
+
+    @Test public void splitExitOnAnotherThreadKeepsQuiescentTotalsExact() throws Throwable {
+        InFlightCounter counter = new InFlightCounter();
+        counter.exit(counter.enter());
+        int first = counter.enter();
+        counter.exit(counter.enter());
+        counter.exit(counter.enter());
+        counter.exit(first);
+        assertTrue(counter.inflated());
+        AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+        for (int i = 0; i < 100; i++) {
+            Thread entering = daemon("split-enter", failure, counter::enter);
+            entering.start();
+            entering.join();
+            Thread exiting = daemon("split-exit", failure, counter::exitUntracked);
+            exiting.start();
+            exiting.join();
+        }
+        if (failure.get() != null) throw failure.get();
+        assertEquals(0L, counter.rawSum());
+    }
+
+    @Test public void stackOverflowAroundTheFirstInflationLeaksNoLease() throws Throwable {
+        for (boolean pending : new boolean[]{false, true}) {
+            for (int trial = 0; trial < 40; trial++) {
+                InFlightCounter counter = new InFlightCounter();
+                int outer = counter.enter();
+                if (pending) {
+                    counter.exit(counter.enter());
+                    assertTrue(counter.inflationPending());
+                }
+                int[] lease = {Integer.MIN_VALUE};
+                AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+                Thread diver = new Thread(null, () -> {
+                    try {
+                        dive(counter, lease);
+                    } catch (Throwable error) {
+                        failure.set(error);
+                    }
+                }, "dive", 256 * 1024);
+                diver.start();
+                diver.join(30_000);
+                if (failure.get() != null) throw failure.get();
+                assertNotEquals("the edge lease was eventually taken", Integer.MIN_VALUE, lease[0]);
+                counter.exit(lease[0]);
+                counter.exit(outer);
+                assertEquals("pending=" + pending + " trial=" + trial, 0L, counter.rawSum());
+            }
+        }
+    }
+
+    /** Recurses to the stack limit, then takes one lease as close to the edge as it succeeds. */
+    private static void dive(InFlightCounter counter, int[] lease) {
+        try {
+            dive(counter, lease);
+        } catch (StackOverflowError overflow) {
+            if (lease[0] != Integer.MIN_VALUE) return;
+            lease[0] = counter.enter();
+        }
     }
 
     private interface Body {

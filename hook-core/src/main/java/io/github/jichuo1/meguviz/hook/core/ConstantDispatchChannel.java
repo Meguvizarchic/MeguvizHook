@@ -10,7 +10,10 @@ package io.github.jichuo1.meguviz.hook.core;
  * in-flight reporting semantics as {@link #dispatch}. Backends that do not recognize this optional
  * interface continue to use {@code dispatch(null)} because {@link #requiresInvocation()} defaults
  * to false. A channel overriding that method to return true is not eligible for this fast path;
- * the backend must supply an ordinary invocation and use {@link #dispatch} instead.
+ * the backend must supply an ordinary invocation and use {@link #dispatch} instead. Call
+ * {@link #exit()} on the thread that called tryEnter, as a framework continuation does: the
+ * concurrent bounds of the reported in-flight count rely on it; a quiescent count stays exact
+ * either way.
  */
 public interface ConstantDispatchChannel extends DispatchChannel {
     @Override

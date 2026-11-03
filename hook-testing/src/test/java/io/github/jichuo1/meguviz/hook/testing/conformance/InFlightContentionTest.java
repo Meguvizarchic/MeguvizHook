@@ -30,8 +30,8 @@ import static org.junit.Assert.*;
 /**
  * In-flight accounting of one registration hit by many threads. The count is only reported: it is
  * exact when nothing enters or exits while close reads it, never negative, and while calls keep
- * entering and leaving it lies between the leases held throughout and those plus one per caller.
- * Admission stays decided by the registration state.
+ * entering and leaving it lies between the leases held throughout and those plus one per
+ * non-reentrant caller thread. Admission stays decided by the registration state.
  */
 public final class InFlightContentionTest {
     private static final Executable ADD = TestSupport.method("add", int.class, int.class);

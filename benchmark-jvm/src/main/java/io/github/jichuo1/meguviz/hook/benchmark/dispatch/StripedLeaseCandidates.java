@@ -51,18 +51,23 @@ final class StripedLeaseCandidates {
         }
     }
 
-    /** Uses XADD on the shared word and inflates once an increment observes another lease. */
+    /**
+     * Uses XADD on the shared word; an increment that observes another lease only marks the state as
+     * pending, and the next lease publishes the table before it increments (the core's design).
+     */
     static final class OverlapFirst extends AtomicInteger {
         private static final long serialVersionUID = 1L;
+        private static final AtomicIntegerArray PENDING = new AtomicIntegerArray(0);
         private transient volatile AtomicIntegerArray cells;
+        private transient volatile AtomicIntegerArray table;
 
         int enter() {
             AtomicIntegerArray striped = cells;
             if (striped == null) {
-                if (getAndIncrement() == 0) return 0;
-                inflate();
+                if (getAndIncrement() != 0) cells = PENDING;
                 return 0;
             }
+            if (striped == PENDING) striped = inflate();
             int slot = slot();
             striped.getAndIncrement(slot);
             return slot;
@@ -70,11 +75,14 @@ final class StripedLeaseCandidates {
 
         void exit(int slot) {
             if (slot == 0) decrementAndGet();
-            else cells.getAndDecrement(slot);
+            else table.getAndDecrement(slot);
         }
 
-        private synchronized void inflate() {
-            if (cells == null) cells = new AtomicIntegerArray((CELLS + 1) * STRIDE);
+        private synchronized AtomicIntegerArray inflate() {
+            AtomicIntegerArray current = table;
+            if (current == null) table = current = new AtomicIntegerArray((CELLS + 1) * STRIDE);
+            cells = current;
+            return current;
         }
     }
 }
