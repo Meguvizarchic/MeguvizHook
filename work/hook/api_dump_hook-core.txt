@@ -109,6 +109,7 @@ public final class io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$S
 Compiled from "CallbackExceptionTracker.java"
 public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker {
   public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker(java.lang.String, int);
+  public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker(java.lang.String, int, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$CaptureSignal);
   public io.github.jichuo1.meguviz.hook.api.BeforeCallback before(io.github.jichuo1.meguviz.hook.api.BeforeCallback);
   public io.github.jichuo1.meguviz.hook.api.AfterCallback after(io.github.jichuo1.meguviz.hook.api.AfterCallback, boolean);
   public io.github.jichuo1.meguviz.hook.api.AroundCallback around(io.github.jichuo1.meguviz.hook.api.AroundCallback);
@@ -144,6 +145,10 @@ public interface io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Ba
   public abstract int sendBatch(java.util.List<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event>) throws java.lang.Exception;
 }
 Compiled from "CallbackExceptionTracker.java"
+public interface io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$CaptureSignal {
+  public abstract void recordQueued();
+}
+Compiled from "CallbackExceptionTracker.java"
 public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event {
   public java.lang.String source();
   public io.github.jichuo1.meguviz.hook.api.HookId hookId();
@@ -151,6 +156,13 @@ public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$
   public long timeNanos();
   public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage stage();
   public java.lang.Throwable failure();
+}
+Compiled from "CallbackExceptionTracker.java"
+final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$PrefixCheck extends java.util.AbstractCollection<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event> {
+  public boolean add(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event);
+  public java.util.Iterator<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event> iterator();
+  public int size();
+  public boolean add(java.lang.Object);
 }
 Compiled from "CallbackExceptionTracker.java"
 public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage> {
@@ -427,9 +439,6 @@ public final class io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport im
   public static byte[] encode(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event, boolean, int);
 }
 Compiled from "JsonLineTraceTransport.java"
-class io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$1 {
-}
-Compiled from "JsonLineTraceTransport.java"
 public interface io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter {
   public abstract void writeRecord(byte[]) throws java.lang.Exception;
 }
@@ -601,6 +610,7 @@ public final class io.github.jichuo1.meguviz.hook.core.TraceBatchPoller implemen
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller startDraining(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, int, long, long, java.util.concurrent.TimeUnit);
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller startDraining(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, int, long, long, java.util.concurrent.TimeUnit, io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$Clock);
   public boolean resume();
+  public boolean requestPoll();
   public synchronized io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$State state();
   public synchronized boolean inFlight();
   public synchronized io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchAttempt lastAttempt();
