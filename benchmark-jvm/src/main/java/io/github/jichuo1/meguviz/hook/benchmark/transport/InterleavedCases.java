@@ -25,7 +25,7 @@ final class InterleavedCases {
         // Hand-off to a writer: round-1 copy path against the current sender with a sliced writer.
         Round1Transport.RecordWriter consume = record -> sink = record.length;
         JsonLineTraceTransport.SlicedRecordWriter consumeSlice = (buffer, offset, length) -> sink = length;
-        for (String shape : new String[] {"none0", "ascii8", "unicode8"}) {
+        for (String shape : new String[] {"none0", "ascii0", "ascii8", "unicode0", "unicode8", "cjk0"}) {
             Shape s = new Shape(shape);
             JsonLineTraceTransport transport = new JsonLineTraceTransport(consumeSlice, s.includeMessage, s.maxFrames);
             cases.put("send-slice:" + shape, new InterleavedAb.Op[] {
