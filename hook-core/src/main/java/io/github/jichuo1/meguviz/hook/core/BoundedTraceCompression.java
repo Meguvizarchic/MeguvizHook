@@ -507,7 +507,10 @@ public final class BoundedTraceCompression {
 
     /**
      * Rejects unknown formats, bad bounds, trailing bytes, expansion beyond the limit and CRC
-     * errors. A bounded snapshot is used for header validation and payload decoding.
+     * errors. Each input byte is read once: header fields into locals, then a RAW payload straight
+     * into the returned plaintext (which is what the checksum covers) or a compressed payload into
+     * a bounded snapshot before inflation. Concurrent mutation of the input cannot separate the
+     * validated header and checksum from the returned bytes; the input is not retained.
      */
     public byte[] decode(byte[] frame) throws IOException {
         return decodeInternal(frame, null);
@@ -517,8 +520,7 @@ public final class BoundedTraceCompression {
         if (frame == null || frame.length < HEADER_BYTES || frame.length > maxFrameBytes) {
             throw new IOException("invalid trace frame size");
         }
-        frame = frame.clone();
-        ByteBuffer header = ByteBuffer.wrap(frame).order(ByteOrder.BIG_ENDIAN);
+        ByteBuffer header = ByteBuffer.wrap(frame, 0, HEADER_BYTES).order(ByteOrder.BIG_ENDIAN);
         if (header.getInt() != MAGIC || (header.get() & 255) != VERSION) throw new IOException("trace frame version");
         int method = header.get() & 255;
         if (header.getShort() != 0 || (method != RAW && method != ZLIB && method != TRACE_SCHEMA)) {
@@ -533,8 +535,12 @@ public final class BoundedTraceCompression {
         if (method != RAW && (plainLength == 0 || payloadLength == 0)) throw new IOException("empty compressed trace");
         byte[] plain = new byte[plainLength];
         if (method == RAW) {
+            // The single payload copy is the snapshot: the checksum below covers exactly these bytes.
             System.arraycopy(frame, HEADER_BYTES, plain, 0, plainLength);
         } else {
+            // Compressed payloads keep the bounded snapshot: native inflation consumes the input
+            // incrementally across several calls and must see one stable byte sequence.
+            frame = frame.clone();
             Inflater inflater = session == null ? new Inflater() : session.inflater();
             Throwable primary = null;
             try { inflate(frame, method, plain, inflater); }

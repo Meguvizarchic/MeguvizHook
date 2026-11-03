@@ -71,23 +71,26 @@ public final class BatchTraceTransport {
      * Validation happens before the single batch callback, which should transfer the whole batch
      * to a bounded receiver queue. The callback can have partial side effects before throwing.
      * Its return is not proof of durable storage, uniqueness, peer identity or valid JSON contents.
+     * Each input byte is read once (header and length words into a private length table, record
+     * bytes into independent arrays), so a later or concurrent change to the caller's array cannot
+     * separate validation from the delivered records; the input array itself is not retained.
      */
     public static JsonLineTraceTransport.RecordWriter receiver(BatchWriter writer,
                                                                int maxFrameBytes, int maxRecords) {
-        return receiverInternal(writer, maxFrameBytes, maxRecords, true);
+        return receiverInternal(writer, maxFrameBytes, maxRecords);
     }
 
     /**
      * Pair compression decoding and batch parsing on a caller-owned worker. This accepts the same
      * frames and invokes the writer under the same conditions as
      * {@code codec.decodingWriter(receiver(writer, maxFrameBytes, maxRecords))}. The decoder's
-     * newly created plaintext stays internal, so it does not need a second whole-frame snapshot;
-     * each record passed to the writer remains an independent byte array. The input wire frame is
-     * still snapshotted and validated by the codec. Normal return is not a durability guarantee.
+     * newly created plaintext stays internal; each record passed to the writer remains an
+     * independent byte array. The codec validates the wire frame from a single read of each byte.
+     * Normal return is not a durability guarantee.
      */
     public static JsonLineTraceTransport.RecordWriter compressedReceiver(BoundedTraceCompression codec,
             BatchWriter writer, int maxFrameBytes, int maxRecords) {
-        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords, false);
+        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords);
         return Objects.requireNonNull(codec, "codec").decodingWriter(receiver);
     }
 
@@ -97,7 +100,7 @@ public final class BatchTraceTransport {
      */
     public static JsonLineTraceTransport.RecordWriter compressedSessionReceiver(BoundedTraceCompression.Session session,
             BatchWriter writer, int maxFrameBytes, int maxRecords) {
-        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords, false);
+        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords);
         return Objects.requireNonNull(session, "session").decodingWriter(receiver);
     }
 
@@ -108,12 +111,12 @@ public final class BatchTraceTransport {
      */
     public static JsonLineTraceTransport.RecordWriter compressedSerializedReceiver(
             BoundedTraceCompression.SerializedSession session, BatchWriter writer, int maxFrameBytes, int maxRecords) {
-        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords, false);
+        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords);
         return Objects.requireNonNull(session, "session").decodingWriter(receiver);
     }
 
     private static JsonLineTraceTransport.RecordWriter receiverInternal(BatchWriter writer,
-            int maxFrameBytes, int maxRecords, boolean snapshot) {
+            int maxFrameBytes, int maxRecords) {
         Objects.requireNonNull(writer, "writer");
         checkBounds(maxFrameBytes, maxRecords);
         return incoming -> {
@@ -121,32 +124,35 @@ public final class BatchTraceTransport {
             if (incoming.length < HEADER_BYTES || incoming.length > maxFrameBytes) {
                 throw new IllegalArgumentException("invalid batch frame");
             }
-            // Only paired codec output is known to be a fresh array with no external references.
-            byte[] frame = snapshot ? incoming.clone() : incoming;
-            if (readInt(frame, 0) != MAGIC) throw new IllegalArgumentException("invalid batch frame");
-            int count = readInt(frame, 4);
-            if (count < 1 || count > maxRecords || count > (frame.length - HEADER_BYTES) / 5) {
+            // Every input byte is read exactly once: header and length words into locals/lengths,
+            // record bytes into their own arrays. Validation and output therefore use one
+            // consistent view, as with a whole-frame snapshot, without copying the frame twice.
+            if (readInt(incoming, 0) != MAGIC) throw new IllegalArgumentException("invalid batch frame");
+            int count = readInt(incoming, 4);
+            if (count < 1 || count > maxRecords || count > (incoming.length - HEADER_BYTES) / 5) {
                 throw new IllegalArgumentException("invalid batch count");
             }
             // First pass rejects truncation, overflow and trailing data before allocating records.
+            int[] lengths = new int[count];
             int position = HEADER_BYTES;
             for (int i = 0; i < count; i++) {
-                if (frame.length - position < 4) throw new IllegalArgumentException("truncated batch");
-                int length = readInt(frame, position);
+                if (incoming.length - position < 4) throw new IllegalArgumentException("truncated batch");
+                int length = readInt(incoming, position);
                 position += 4;
-                if (length < 1 || length > frame.length - position) {
+                if (length < 1 || length > incoming.length - position) {
                     throw new IllegalArgumentException("invalid batch record length");
                 }
+                lengths[i] = length;
                 position += length;
             }
-            if (position != frame.length) throw new IllegalArgumentException("trailing batch data");
+            if (position != incoming.length) throw new IllegalArgumentException("trailing batch data");
             List<byte[]> records = new ArrayList<byte[]>(count);
             position = HEADER_BYTES;
             for (int i = 0; i < count; i++) {
-                int length = readInt(frame, position);
+                int length = lengths[i];
                 position += 4;
                 byte[] record = new byte[length];
-                System.arraycopy(frame, position, record, 0, length);
+                System.arraycopy(incoming, position, record, 0, length);
                 position += length;
                 records.add(record);
             }

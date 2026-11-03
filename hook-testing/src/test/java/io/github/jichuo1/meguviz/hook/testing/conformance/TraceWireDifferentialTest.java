@@ -427,6 +427,37 @@ public final class TraceWireDifferentialTest {
         assertTrue("valid frames " + accepted, accepted > 500);
     }
 
+    @Test public void receiverStaysConsistentWhileTheCallerMutatesItsArray() throws Exception {
+        Random random = new Random(SEED + 4);
+        byte[] frame = randomFrame(random);
+        java.util.concurrent.atomic.AtomicBoolean running = new java.util.concurrent.atomic.AtomicBoolean(true);
+        byte[] original = frame.clone();
+        Thread mutator = new Thread(() -> {
+            Random noise = new Random(7);
+            while (running.get()) {
+                int at = noise.nextInt(frame.length);
+                frame[at] = noise.nextBoolean() ? original[at] : (byte) noise.nextInt(256);
+            }
+        }, "batch-frame-mutator");
+        mutator.start();
+        try {
+            for (int i = 0; i < 20000; i++) {
+                List<List<byte[]>> batches = new ArrayList<List<byte[]>>();
+                try {
+                    BatchTraceTransport.receiver(batches::add, 65536, 1024).writeRecord(frame);
+                } catch (IllegalArgumentException rejected) {
+                    continue; // Any other exception type (e.g. an index error) fails the test.
+                }
+                int total = 8;
+                for (byte[] record : batches.get(0)) total += 4 + record.length;
+                assertEquals("records must match the validated lengths", frame.length, total);
+            }
+        } finally {
+            running.set(false);
+            mutator.join();
+        }
+    }
+
     private static byte[] randomFrame(Random random) {
         int count = 1 + random.nextInt(6);
         List<byte[]> records = new ArrayList<byte[]>();
