@@ -225,4 +225,5 @@ TraceBatchPoller poller = TraceBatchPoller.startDraining(
   周期句柄，不包括到期评估。
 
 宿主测量（JDK 17 x86-64，不是 ART 或设备证据）见 [传输优化第二轮](research/transport-round-2.md)：
-轮询 5 ms、等待 20 ms、门槛 16 的单条记录，配合 `CaptureSignal` 时 p50 由约 22.7 ms 降到约 20.2 ms。
+轮询 5 ms、等待 20 ms、门槛 16 的单条记录，配合 `CaptureSignal` 时 p50 由约 22.7 ms 降到约 20.1 ms，
+p99 由约 25.2 ms 降到约 20.5 ms。
