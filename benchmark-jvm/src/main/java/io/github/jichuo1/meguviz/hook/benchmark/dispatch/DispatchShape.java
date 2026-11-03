@@ -64,6 +64,18 @@ public enum DispatchShape {
         @Override HookSpec.Builder configure(HookSpec.Builder builder) {
             return builder.around(invocation -> invocation.proceed());
         }
+    },
+    /** Same work as BEFORE_READ_ARGS_VIEW through the typed builder method (one narrowing adapter). */
+    TYPED_BEFORE_ARGS(7) {
+        @Override HookSpec.Builder configure(HookSpec.Builder builder) {
+            return builder.beforeArgs(invocation -> Sink.SINK.value = invocation.getArgument(0));
+        }
+    },
+    /** Same work as BEFORE_MUTABLE_SET through the typed builder method. */
+    TYPED_BEFORE_MUTABLE_SET(9) {
+        @Override HookSpec.Builder configure(HookSpec.Builder builder) {
+            return builder.beforeMutableArgs(invocation -> invocation.setArgument(0, FIVE));
+        }
     };
 
     static final Integer FIVE = 5;

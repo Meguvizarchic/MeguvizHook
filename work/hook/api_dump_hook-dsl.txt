@@ -58,7 +58,10 @@ public final class io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl {
   public io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl(io.github.jichuo1.meguviz.hook.api.HookSpec$Builder);
   public final void access(io.github.jichuo1.meguviz.hook.api.ParameterAccess);
   public final void before(io.github.jichuo1.meguviz.hook.api.BeforeCallback);
+  public final void beforeArgs(io.github.jichuo1.meguviz.hook.api.ArgsBeforeCallback);
+  public final void beforeMutableArgs(io.github.jichuo1.meguviz.hook.api.MutableArgsBeforeCallback);
   public final void after(io.github.jichuo1.meguviz.hook.api.AfterCallback);
+  public final void afterArgs(io.github.jichuo1.meguviz.hook.api.ArgsAfterCallback);
   public final void around(io.github.jichuo1.meguviz.hook.api.AroundCallback);
   public final void replaceConstant(java.lang.Object);
   public final void replaceIfStringArgumentEquals(int, java.lang.String, java.lang.Object, io.github.jichuo1.meguviz.hook.api.MatchObserver);

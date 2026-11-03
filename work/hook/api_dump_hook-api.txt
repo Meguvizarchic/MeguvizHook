@@ -2,6 +2,14 @@ Compiled from "AfterCallback.java"
 public interface io.github.jichuo1.meguviz.hook.api.AfterCallback {
   public abstract void after(io.github.jichuo1.meguviz.hook.api.HookInvocation, io.github.jichuo1.meguviz.hook.api.InvocationResult) throws java.lang.Throwable;
 }
+Compiled from "ArgsAfterCallback.java"
+public interface io.github.jichuo1.meguviz.hook.api.ArgsAfterCallback {
+  public abstract void after(io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation, io.github.jichuo1.meguviz.hook.api.InvocationResult) throws java.lang.Throwable;
+}
+Compiled from "ArgsBeforeCallback.java"
+public interface io.github.jichuo1.meguviz.hook.api.ArgsBeforeCallback {
+  public abstract void before(io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation) throws java.lang.Throwable;
+}
 Compiled from "AroundCallback.java"
 public interface io.github.jichuo1.meguviz.hook.api.AroundCallback {
   public abstract void around(io.github.jichuo1.meguviz.hook.api.AroundInvocation) throws java.lang.Throwable;
@@ -206,7 +214,10 @@ public final class io.github.jichuo1.meguviz.hook.api.HookSpec$Builder {
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder(io.github.jichuo1.meguviz.hook.api.HookId, io.github.jichuo1.meguviz.hook.api.HookOwner, io.github.jichuo1.meguviz.hook.api.TargetSpec);
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder access(io.github.jichuo1.meguviz.hook.api.ParameterAccess);
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder before(io.github.jichuo1.meguviz.hook.api.BeforeCallback);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder beforeArgs(io.github.jichuo1.meguviz.hook.api.ArgsBeforeCallback);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder beforeMutableArgs(io.github.jichuo1.meguviz.hook.api.MutableArgsBeforeCallback);
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder after(io.github.jichuo1.meguviz.hook.api.AfterCallback);
+  public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder afterArgs(io.github.jichuo1.meguviz.hook.api.ArgsAfterCallback);
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder around(io.github.jichuo1.meguviz.hook.api.AroundCallback);
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder replaceConstant(java.lang.Object);
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder replaceResultOnSuccess(java.lang.Object);
@@ -242,6 +253,10 @@ public final class io.github.jichuo1.meguviz.hook.api.MatchPolicy extends java.l
   public static final io.github.jichuo1.meguviz.hook.api.MatchPolicy ALL;
   public static io.github.jichuo1.meguviz.hook.api.MatchPolicy[] values();
   public static io.github.jichuo1.meguviz.hook.api.MatchPolicy valueOf(java.lang.String);
+}
+Compiled from "MutableArgsBeforeCallback.java"
+public interface io.github.jichuo1.meguviz.hook.api.MutableArgsBeforeCallback {
+  public abstract void before(io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation) throws java.lang.Throwable;
 }
 Compiled from "MutableArgsInvocation.java"
 public interface io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation extends io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation {
@@ -380,6 +395,28 @@ Compiled from "TargetSpec.java"
 public final class io.github.jichuo1.meguviz.hook.api.TargetSpec$MemberTarget extends io.github.jichuo1.meguviz.hook.api.TargetSpec {
   public java.lang.reflect.Executable executable();
   public java.lang.String toString();
+}
+Compiled from "TypedCallbacks.java"
+final class io.github.jichuo1.meguviz.hook.api.TypedCallbacks {
+}
+Compiled from "TypedCallbacks.java"
+interface io.github.jichuo1.meguviz.hook.api.TypedCallbacks$Adapter {
+  public abstract java.lang.Object delegate();
+}
+Compiled from "TypedCallbacks.java"
+final class io.github.jichuo1.meguviz.hook.api.TypedCallbacks$MutableBefore implements io.github.jichuo1.meguviz.hook.api.BeforeCallback,io.github.jichuo1.meguviz.hook.api.TypedCallbacks$Adapter {
+  public void before(io.github.jichuo1.meguviz.hook.api.HookInvocation) throws java.lang.Throwable;
+  public java.lang.Object delegate();
+}
+Compiled from "TypedCallbacks.java"
+final class io.github.jichuo1.meguviz.hook.api.TypedCallbacks$ReadAfter implements io.github.jichuo1.meguviz.hook.api.AfterCallback,io.github.jichuo1.meguviz.hook.api.TypedCallbacks$Adapter {
+  public void after(io.github.jichuo1.meguviz.hook.api.HookInvocation, io.github.jichuo1.meguviz.hook.api.InvocationResult) throws java.lang.Throwable;
+  public java.lang.Object delegate();
+}
+Compiled from "TypedCallbacks.java"
+final class io.github.jichuo1.meguviz.hook.api.TypedCallbacks$ReadBefore implements io.github.jichuo1.meguviz.hook.api.BeforeCallback,io.github.jichuo1.meguviz.hook.api.TypedCallbacks$Adapter {
+  public void before(io.github.jichuo1.meguviz.hook.api.HookInvocation) throws java.lang.Throwable;
+  public java.lang.Object delegate();
 }
 Compiled from "CodeEpoch.java"
 public final class io.github.jichuo1.meguviz.hook.api.identity.CodeEpoch {

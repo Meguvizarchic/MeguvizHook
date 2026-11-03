@@ -1,8 +1,11 @@
 package io.github.jichuo1.meguviz.hook.dsl
 
 import io.github.jichuo1.meguviz.hook.api.AfterCallback
+import io.github.jichuo1.meguviz.hook.api.ArgsAfterCallback
+import io.github.jichuo1.meguviz.hook.api.ArgsBeforeCallback
 import io.github.jichuo1.meguviz.hook.api.AroundCallback
 import io.github.jichuo1.meguviz.hook.api.BeforeCallback
+import io.github.jichuo1.meguviz.hook.api.MutableArgsBeforeCallback
 import io.github.jichuo1.meguviz.hook.api.Capability
 import io.github.jichuo1.meguviz.hook.api.ErrorPolicy
 import io.github.jichuo1.meguviz.hook.api.HookId
@@ -260,8 +263,29 @@ public class HookSpecDsl internal constructor(
         delegate.before(callback)
     }
 
+    /**
+     * Read arguments without a cast: `beforeArgs { log(it.getArgument(0)) }`. Selects
+     * READ_ARGS_VIEW unless [access] was called; an explicit shape must be readable.
+     */
+    public fun beforeArgs(callback: ArgsBeforeCallback) {
+        delegate.beforeArgs(callback)
+    }
+
+    /**
+     * Rewrite arguments without a cast: `beforeMutableArgs { it.setArgument(0, "x") }`. Selects
+     * MUTABLE_ARGS unless [access] was called; an explicit shape must be MUTABLE_ARGS.
+     */
+    public fun beforeMutableArgs(callback: MutableArgsBeforeCallback) {
+        delegate.beforeMutableArgs(callback)
+    }
+
     public fun after(callback: AfterCallback) {
         delegate.after(callback)
+    }
+
+    /** Read arguments and the result without a cast; shape selection follows [beforeArgs]. */
+    public fun afterArgs(callback: ArgsAfterCallback) {
+        delegate.afterArgs(callback)
     }
 
     public fun around(callback: AroundCallback) {
