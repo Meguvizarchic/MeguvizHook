@@ -8,6 +8,8 @@ import io.github.jichuo1.meguviz.hook.api.HookSpec;
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment;
+import io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel;
+import io.github.jichuo1.meguviz.hook.core.DispatchResult;
 import io.github.libxposed.api.XposedInterface;
 
 import org.junit.Before;
@@ -18,9 +20,13 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -150,6 +156,95 @@ public class LibXposed102BackendTest {
         assertEquals(1, framework.unhookCalls.get());
     }
 
+    @Test
+    public void forceReplaceIdenticalConstantTransfersOwnershipThroughReplaceHook() throws Throwable {
+        HookSpec spec = new HookSpec.Builder(HookId.of("adapter102.force"), HookOwner.of("adapter-test"),
+                TargetSpec.ofMember(sampleTarget())).replaceConstant(99).build();
+        HookRegistration old = TestSupport.install(environment, spec);
+
+        RegistrationReceipt replaced = environment.forceReplace(spec);
+        assertTrue(replaced.toString(), replaced.isInstalled());
+        assertTrue(replaced.generation() > old.generation());
+        assertEquals(1, framework.installCalls.get());
+        assertEquals(1, framework.replaceCalls.get());
+        old.close();
+        assertEquals(0, framework.unhookCalls.get());
+        assertEquals(99, framework.invokeHook(sampleTarget(), null, 1, 2));
+        replaced.registration().close();
+        assertEquals(1, framework.unhookCalls.get());
+    }
+
+    @Test
+    public void directAfterPreservesReservedResultsAndClosedPassthrough() throws Throwable {
+        Method target = SampleTargets.class.getMethod("objectValue");
+        Object marker = DirectAfterDispatchChannel.NOT_ENTERED;
+        Object escaped = DirectAfterDispatchChannel.escape(marker);
+        Object[] values = {null, new Object(), marker, escaped,
+                DirectAfterDispatchChannel.escape(escaped), DispatchResult.passthrough()};
+        AtomicInteger callbacks = new AtomicInteger();
+        for (int i = 0; i < values.length; i++) {
+            Object expected = values[i];
+            HookRegistration registration = TestSupport.install(environment,
+                    HookSpec.forMember("adapter102.after." + i, "adapter-test", target)
+                    .after((invocation, result) -> { callbacks.incrementAndGet(); result.setResult(expected); }).build());
+            boolean direct = false;
+            for (java.lang.reflect.Field field : framework.hooker.getClass().getDeclaredFields()) {
+                if (field.getType().getSimpleName().equals("AfterBinding")) direct = true;
+            }
+            assertTrue("direct route must be selected", direct);
+            Object downstream = new Object();
+            framework.proceedResult = downstream;
+            assertSame(expected, framework.invokeHook(target, null));
+            registration.close();
+            assertSame(downstream, framework.invokeHook(target, null));
+        }
+        assertEquals(values.length, callbacks.get());
+        assertEquals(values.length * 2, framework.proceedCalls.get());
+    }
+
+    @Test
+    public void directAfterCloseKeepsAnAdmittedCallbackAndBypassesNewCalls() throws Throwable {
+        Method target = SampleTargets.class.getMethod("objectValue");
+        Object original = new Object();
+        Object changed = new Object();
+        framework.proceedResult = original;
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger callbacks = new AtomicInteger();
+        AtomicReference<Object> observed = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        HookRegistration registration = TestSupport.install(environment,
+                HookSpec.forMember("adapter102.after.inflight", "adapter-test", target)
+                        .after((invocation, result) -> {
+                            callbacks.incrementAndGet();
+                            entered.countDown();
+                            if (!release.await(5, TimeUnit.SECONDS)) throw new AssertionError("after timed out");
+                            result.setResult(changed);
+                        }).build());
+        Thread worker = new Thread(() -> {
+            try { observed.set(framework.invokeHook(target, null)); }
+            catch (Throwable error) { failure.set(error); }
+        }, "direct-after-inflight");
+        worker.setDaemon(true);
+        try {
+            worker.start();
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            CloseReport report = registration.close();
+            assertTrue(report.newCallbacksRejected());
+            assertEquals(1, report.inFlightAtClose());
+            assertSame(original, framework.invokeHook(target, null));
+        } finally {
+            release.countDown();
+            worker.join(5000);
+            environment.close();
+        }
+        assertFalse(worker.isAlive());
+        assertNull(failure.get());
+        assertSame(changed, observed.get());
+        assertEquals(1, callbacks.get());
+        assertEquals(2, framework.proceedCalls.get());
+    }
+
     /** Small fixture holder: target methods live outside the framework stub. */
     public static final class SampleTargets {
         private SampleTargets() {
@@ -158,6 +253,8 @@ public class LibXposed102BackendTest {
         public static int add(int left, int right) {
             return left + right;
         }
+
+        public static Object objectValue() { return null; }
     }
 
     /** Minimal Java proxy stub of the 102 API surface used by the adapter. */

@@ -56,6 +56,7 @@ jobs:
         run: |
           ./gradlew \
             :hook-core:test \
+            :hook-ref-bridge:test \
             :hook-dsl:test \
             :hook-testing:test \
             :sample-java-contracts:run \

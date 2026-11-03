@@ -2,6 +2,8 @@ package io.github.jichuo1.meguviz.hook.testing.conformance;
 
 import io.github.jichuo1.meguviz.hook.api.HookContractException;
 import io.github.jichuo1.meguviz.hook.api.HookInvocation;
+import io.github.jichuo1.meguviz.hook.api.HookRegistration;
+import io.github.jichuo1.meguviz.hook.api.CloseReport;
 import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation;
@@ -10,6 +12,9 @@ import io.github.jichuo1.meguviz.hook.testing.FakeBackend;
 import org.junit.Test;
 
 import java.lang.reflect.Executable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.*;
@@ -84,5 +89,50 @@ public class SingleBeforeLeaseFastPathTest {
             assertSame(fatal, TestSupport.capture(() -> backend.call(ADD, null, 1, 0)));
             assertEquals(0, backend.originalCallCount(ADD));
         } finally { env.close(); }
+    }
+
+    @Test public void closingDuringDownstreamPreservesSingleBeforeLeaseAndBypassesNewCalls() throws Throwable {
+        FakeBackend backend = FakeBackend.create();
+        HookEnvironment env = HookEnvironment.create(backend);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger callbacks = new AtomicInteger();
+        AtomicReference<HookInvocation> borrowed = new AtomicReference<HookInvocation>();
+        AtomicReference<Object> value = new AtomicReference<Object>();
+        AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+        backend.onTarget(ADD, (self, args) -> {
+            if ((Integer) args[0] == 1) {
+                entered.countDown();
+                if (!release.await(5, TimeUnit.SECONDS)) throw new AssertionError("downstream timed out");
+            }
+            return (Integer) args[0] + (Integer) args[1];
+        });
+        HookRegistration registration = TestSupport.installOrFail(env,
+                TestSupport.spec("single.before.close", ADD).before(invocation -> {
+                    borrowed.set(invocation);
+                    callbacks.incrementAndGet();
+                }).build());
+        Thread worker = new Thread(() -> {
+            try { value.set(backend.call(ADD, null, 1, 2)); }
+            catch (Throwable error) { failure.set(error); }
+        }, "single-before-downstream");
+        worker.setDaemon(true);
+        try {
+            worker.start();
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            assertThrows(HookContractException.class, () -> borrowed.get().target());
+            CloseReport report = registration.close();
+            assertTrue(report.newCallbacksRejected());
+            assertEquals(1, report.inFlightAtClose());
+            assertEquals(2, backend.call(ADD, null, 0, 2));
+            assertEquals(1, callbacks.get());
+        } finally {
+            release.countDown();
+            worker.join(5000);
+            env.close();
+        }
+        assertFalse(worker.isAlive());
+        assertNull(failure.get());
+        assertEquals(3, value.get());
     }
 }

@@ -19,6 +19,20 @@ public interface HookInvocation {
     /** Receiver, or {@code null} for static targets and constructors. */
     Object thisObject();
 
+    /**
+     * Returns the constructor receiver supplied by the backend, or {@code null} for other targets,
+     * when unavailable, or for an older implementation that does not provide it. Availability and
+     * identity depend on the backend; a non-null value does not establish that construction has
+     * completed successfully. It may be uninitialized or only partially initialized, including
+     * when downstream execution is skipped or fails. The usual borrowed-invocation thread and
+     * callback lifetime rules still apply. Callers control any retention of the returned object.
+     *
+     * <p>The default supplies a null fallback for an implementation that does not override it.
+     * Callers must use an API version that declares this method; as with other default methods,
+     * conflicting interface defaults may require an explicit override.
+     */
+    default Object constructorReceiver() { return null; }
+
     ParameterAccess access();
 
     /** Thread that owns this borrowed invocation. */

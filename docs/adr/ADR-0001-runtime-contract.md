@@ -25,7 +25,7 @@
 | READ_ARGS | 仅当前线程、当前回调内读取；逃逸/跨线程抛合同异常 | `InvocationFrame.check()` |
 | READ_ARGS_VIEW | 显式借用入口只读参数视图，回调结束即不可访问；保留原参数下传，不承诺深拷贝或框架零分配 | `BackendInvocation.readOnlyArguments()` |
 | ENTRY_SNAPSHOT | 进入注册时的**浅槽快照**：复制数组、共享对象；不深拷贝、不回滚对象内部 | `args.clone()` |
-| MUTABLE_ARGS | 写入经 primitive/引用/null 校验，对下游 continuation 生效 | `TypeChecks` |
+| MUTABLE_ARGS | 写入经 primitive/引用/null 校验，对下游 continuation 生效；入口获取后端参数数组并传给下游 | `InvocationFrame`、`TypeChecks` |
 | AROUND | 与 before/after 互斥（本版）；continuation at-most-once | `Dispatcher.dispatchAround` |
 
 同一 invocation 不可跨线程重用；每个回调收到独立借用视图，其 invocation 和结果槽在该回调返回后
@@ -38,6 +38,9 @@ frame，不共享 ThreadLocal 可变数组。独立视图引入的分配成本�
 `READ_ARGS_VIEW` 是新增的显式选择，不改变 `READ_ARGS` 和 `ENTRY_SNAPSHOT` 的现有行为。
 101/102 使用框架不可变参数列表，旧后端默认复制数组回退；对象本身仍共享。视图不是可持久化快照，
 也不承诺底层框架没有分配。框架继续使用原参数执行下游，而不是替换为 SDK 的数组。
+
+`MUTABLE_ARGS` 在入口获取后端的参数数组；如果执行下游，即使回调没有写入也会传入同一数组。
+后端未承诺此数组独占，回调在各阶段读取同一组参数槽；参数对象自身不会被深拷贝。
 
 `HookSpec.Builder.replaceConstant(value)` 显式声明独占的常量替换，不能与回调或非 NO_ARGS 形状
 组合。解析后在安装任何目标前校验返回类型，使用调用方提供的同一对象引用；执行仍受注册状态、
@@ -123,6 +126,17 @@ callback 失败分别分类；本切片无 native 路径。
 - 重复安装前核对已安装 plan 的 loader 与 code epoch；身份不一致返回 `STALE_IDENTITY`，保留旧代供
   调用方 close。安装使用固定的 loader 与 epoch，并在解析和发布前检查身份；安装期间发现变化则回滚。
   这些是采样检查，backend 未提供跨组件原子身份快照时，不保证最后一次检查后身份不会再变化。
+- 同一线程在 `install`、`adopt` 或 `replace` 的外部回调中再次修改同一 ID 时，入口在调用
+  backend 前抛出 `IllegalStateException`；不同 ID 的嵌套仍可进行。上述事务中同步重入
+  `environment.close()` 也在改变关闭状态前抛出该异常；其他线程的 close 仍等待事务释放环境锁。
+  后端执行替换期间，同步重入旧 `HookRegistration.close()` 会在卸载旧入口前被拒绝。如果
+  拒绝异常从后端外逸，沿用未检查异常可能已产生副作用的隔离合同，不宣称回滚成功。
+  后端正在卸载同一注册时同步重入该注册的 `close()` 同样明确拒绝，不返回尚未生成的空报告；
+  若首次卸载已被致命事件中断，后续一次性 close 仍不重试或伪造完成报告。普通注册关闭在
+  注册监视器内认领句柄，在锁外执行卸载并在锁内发布最终报告；其他线程的重复关闭等待报告。
+  后端不得同步等待另一线程完成同一注册的关闭，否则仍会互等。
+  现有安装、替换、回滚和环境关闭也可能在持环境锁时调用 resolver 或 backend；这些外部
+  实现不得同步等待另一线程调用同一 environment，否则可能形成跨线程锁等待环。
 - `close()` 不持锁等待宿主调用：竞态调用要么沿旧不可变 plan 完成，要么收到
   `DispatchResult.passthrough()` 由原方法恰好执行一次。
 - `CloseReport` 分别声明：是否拒绝新回调、入口恢复（`RESTORED/NOT_RESTORED/UNKNOWN`）、
@@ -152,18 +166,28 @@ callback 失败分别分类；本切片无 native 路径。
 
 - `HookEnvironment.replace(HookSpec)` 只替换当前同 `HookId` 的完整单目标注册；不隐式 install，
   不接受 partial、`MatchPolicy.ALL`、不同 owner/priority/errorPolicy/resolved executable，也不允许跨 loader/epoch。
+- `forceReplace(HookSpec)` 显式要求生成新代：即使计划语义完全相同也执行同一原子替换流程，
+  返回新注册，旧注册关闭不会卸载新代。它不放宽上述任何校验，也不将失败改成 close+install；
+  普通 `replace` 仍对相同语义返回 `ALREADY_INSTALLED`，不会无故创建新代。
 - 后端必须声明 `ATOMIC_REPLACE=SUPPORTED_IN_DECLARED_CELL`，UNKNOWN 不得视为支持。102 使用
   框架 `replaceHook`；101 保留一个框架入口，在 SDK 内原子切换单目标 channel，不提供框架原生替换。
 - `BackendHandle.replace` 的返回点是提交点：返回非 null 新 handle 后旧 handle 失效，卸载所有权转移
   到新 generation；`BackendInstallException` 必须保证未提交且旧 handle 仍有效。unchecked 异常、Error
   或 null 返回意味着结果未知，不得转换成旧代仍有效的失败回执。禁止 close+install 或 install+close 模拟。
-- replace 与 registration.close 使用同一 registration monitor 串行化，与 environment 操作使用固定
-  environment→registration 锁序。旧 close 幂等返回 superseded 报告，不得删除新 handle。
+- replace 与同一 registration 的 close 在注册监视器内竞争认领；一旦 close 开始卸载，replace
+  会观察到 `RETIRING` 而不会接管句柄。替换本身仍以环境→注册的锁序执行。
+  普通环境关闭先在环境监视器内标记并快照，再在锁外逐个关闭注册，不同注册可并行直接关闭。
+  关闭尚在进行时，`activeRegistrationCount()` 可能观察到尚未从注册表移除的条目；它不能作为
+  关闭完成或框架实际卸载完成的凭据。
+  调用者已持有环境或注册监视器时，外层锁不会由 SDK 释放，仍可能形成锁环。后端不得同步等待
+  需要当前持有的环境或注册监视器的其他线程。旧 close 幂等返回 superseded 报告，不得删除新 handle。
+- 关闭进行中，其他线程的重复环境关闭等待首次关闭完成；若关闭过程中后端同步等待另一个线程的
+  环境关闭调用返回，仍可能互等。直接卸载线程重入正在等待其注册的环境关闭时不会自我等待。
 - 旧 in-flight snapshot 继续使用不可变旧 plan 完成，替换不等待业务回调；未进入旧 channel 的旧
   snapshot 按 PASSTHROUGH 处理。新 generation 使用新 plan/channel，不继承旧 in-flight 计数。
 - 后端成功后不再执行可能返回普通失败的检查；epoch/loader 验证必须在提交前完成。回滚不假装能
   通过卸载新 hook 恢复旧 hook。真实 102 框架替换仍需要独立设备资格。
-- 替换结果未知时，在旧注册 monitor 内令新旧 channel 拒绝新 SDK 回调，保留已取得的引用且不对可能
+- 替换结果未知时，在旧注册监视器内令新旧 channel 拒绝新 SDK 回调，保留已取得的引用且不对可能
   已失效的旧 handle 执行 unhook；原 unchecked/Error 按 fatal 优先级传播，旧 close 返回入口 UNKNOWN。
   同一 environment 的该 ID 被隔离，不提供对未知 handle 的卸载或跨 environment 保护；已进入的调用
   可以继续完成，不证明物理卸载或框架入口恢复。

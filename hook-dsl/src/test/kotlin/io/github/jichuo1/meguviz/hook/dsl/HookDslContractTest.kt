@@ -11,9 +11,12 @@ import io.github.jichuo1.meguviz.hook.api.HookId
 import io.github.jichuo1.meguviz.hook.api.HookOwner
 import io.github.jichuo1.meguviz.hook.api.HookSpec
 import io.github.jichuo1.meguviz.hook.api.MatchPolicy
+import io.github.jichuo1.meguviz.hook.api.MatchObserver
 import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess
 import io.github.jichuo1.meguviz.hook.api.ProcessFilter
+import io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation
+import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt
 import io.github.jichuo1.meguviz.hook.api.TargetKind
 import io.github.jichuo1.meguviz.hook.api.TargetSpec
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment
@@ -26,6 +29,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Method
+import java.util.concurrent.atomic.AtomicReference
 
 class HookDslContractTest {
     private val add: Method = Fixtures::class.java.getMethod(
@@ -33,6 +37,235 @@ class HookDslContractTest {
         Int::class.javaPrimitiveType,
         Int::class.javaPrimitiveType,
     )
+
+    @Test
+    fun nullableArgumentReadKeepsBoundsBorrowAndFailureSemantics() {
+        val concat = Fixtures::class.java.getMethod("concat", String::class.java, String::class.java)
+        val backend = FakeBackend.create()
+        backend.onTarget(concat) { _, _ -> "original" }
+        val retained = AtomicReference<ReadArgsInvocation>()
+        HookEnvironment.create(backend).use { environment ->
+            val receipt = environment.install("nullable.args", "kotlin-test", concat) {
+                access(ParameterAccess.READ_ARGS_VIEW)
+                before { invocation ->
+                    val args = invocation as ReadArgsInvocation
+                    retained.set(args)
+                    assertNull(args.argumentOrNull(-1))
+                    assertEquals("left", args.argumentOrNull(0))
+                    assertNull(args.argumentOrNull(1))
+                    assertNull(args.argumentOrNull(2))
+                    assertNull(args.argumentOrNull(Int.MAX_VALUE))
+
+                    val failure = IllegalStateException("valid slot failed")
+                    val broken = object : ReadArgsInvocation by args {
+                        override fun getArgument(index: Int): Any? = throw failure
+                    }
+                    assertSame(failure, assertThrows(IllegalStateException::class.java) { broken.argumentOrNull(0) })
+
+                    val crossThread = AtomicReference<Throwable>()
+                    val worker = Thread {
+                        try { args.argumentOrNull(-1) } catch (failure: Throwable) { crossThread.set(failure) }
+                    }
+                    worker.start()
+                    worker.join(5000)
+                    assertTrue("cross-thread check should finish", !worker.isAlive)
+                    assertTrue(crossThread.get() is HookContractException)
+                }
+            }
+            assertTrue(receipt.isInstalled)
+            assertEquals("original", backend.call(concat, null, "left", null))
+            assertThrows(HookContractException::class.java) { retained.get().argumentOrNull(-1) }
+            assertThrows(HookContractException::class.java) { retained.get().argumentOrNull(0) }
+        }
+
+        val emptyTarget = Fixtures::class.java.getMethod("noArguments")
+        val emptyBackend = FakeBackend.create()
+        emptyBackend.onTarget(emptyTarget) { _, _ -> 42L }
+        HookEnvironment.create(emptyBackend).use { environment ->
+            val receipt = environment.install("nullable.empty", "kotlin-test", emptyTarget) {
+                access(ParameterAccess.READ_ARGS_VIEW)
+                before { invocation -> assertNull((invocation as ReadArgsInvocation).argumentOrNull(0)) }
+            }
+            assertTrue(receipt.isInstalled)
+            assertEquals(42L, emptyBackend.call(emptyTarget, null))
+        }
+    }
+
+    @Test
+    fun ownerScopeReusesCallbacksAndReturnsOriginalReceipts() {
+        val backend = backendWithAdd()
+        val environment = HookEnvironment.create(backend)
+        val owner = environment.forOwner("bil-hook-pilot")
+        val callback = BeforeCallback { invocation -> invocation.setEarlyResult(77) }
+        try {
+            val spec = owner.spec("pilot.title", add) { before(callback) }
+            assertEquals("bil-hook-pilot", spec.owner().value())
+            assertSame(callback, spec.beforeCallbacks().single())
+            val first = owner.install("pilot.title", add) { before(callback) }
+            assertTrue(first.isInstalled)
+            val repeated = owner.install("pilot.title", add) { before(callback) }
+            assertEquals(RegistrationReceipt.Status.ALREADY_INSTALLED, repeated.status())
+            assertEquals(1, backend.installCount())
+            assertEquals(77, backend.call(add, null, 1, 2))
+            assertEquals(0, backend.originalCallCount(add))
+            assertEquals(0, backend.argumentMaterializationCount())
+            val replacement = owner.replace("pilot.title", add) { replaceConstant(88) }
+            assertTrue(replacement.isInstalled)
+            assertEquals(88, backend.call(add, null, 1, 2))
+            assertTrue(first.registration().close().newCallbacksRejected())
+            assertEquals(88, backend.call(add, null, 1, 2))
+            assertTrue(replacement.registration().close().newCallbacksRejected())
+        } finally { environment.close() }
+        assertEquals(RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+            owner.install("pilot.closed", add) { replaceConstant(1) }.status())
+        assertThrows(IllegalArgumentException::class.java) { environment.forOwner("  ") }
+    }
+
+    @Test
+    fun forcedReplacementConveniencesKeepGenerationOwnershipAndCapabilityChecks() {
+        val backend = backendWithAdd()
+        HookEnvironment.create(backend).use { environment ->
+            val owner = environment.forOwner("module")
+            val callback = BeforeCallback { it.setEarlyResult(77) }
+            val first = owner.install("forced", add) { before(callback) }
+            assertTrue(first.isInstalled)
+            assertEquals(RegistrationReceipt.Status.ALREADY_INSTALLED,
+                owner.replace("forced", add) { before(callback) }.status())
+
+            val memberTarget = member(add)
+            val firstReplacement = owner.forceReplace("forced", add) { before(callback) }
+            val secondReplacement = owner.forceReplace("forced", memberTarget) { before(callback) }
+            val thirdReplacement = environment.forceReplace("forced", "module", add) { before(callback) }
+            val last = environment.forceReplace("forced", "module", memberTarget) { before(callback) }
+            val generations = listOf(first, firstReplacement, secondReplacement, thirdReplacement, last)
+            assertTrue(generations.all { it.isInstalled })
+            assertTrue(generations.zipWithNext().all { (a, b) -> a.generation() < b.generation() })
+            assertEquals(4, backend.replaceCount())
+            first.registration().close()
+            assertEquals(77, backend.call(add, null, 1, 2))
+            backend.withCapability(Capability.ATOMIC_REPLACE,
+                io.github.jichuo1.meguviz.hook.api.CapabilityResult.unsupported("fake", "off"))
+            assertEquals(RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY,
+                owner.forceReplace("forced", add) { before(callback) }.status())
+            assertEquals(77, backend.call(add, null, 1, 2))
+            last.registration().close()
+        }
+    }
+
+    @Test
+    fun classDescriptorsUseTypeNamesAndPreserveZeroArgumentDistinction() {
+        val intType = Int::class.javaPrimitiveType!!
+        val target = method(Fixtures::class, "add") {
+            parameterTypes(intType, intType)
+            returning(intType)
+        }
+        assertEquals(Fixtures::class.java.name, target.className())
+        assertEquals(listOf("int", "int"), target.parameterTypeNames())
+        assertEquals("int", target.returnTypeName())
+        assertEquals(emptyList<String>(), method(Fixtures::class.java, "missing") { parameterTypes() }.parameterTypeNames())
+        assertNull(method(Fixtures::class.java, "missing").parameterTypeNames())
+        assertEquals(StringBuilder::class.java.name, constructor(StringBuilder::class) {
+            parameterTypes(String::class.java)
+        }.className())
+
+        val backend = backendWithAdd()
+        HookEnvironment.create(backend).use { environment ->
+            val receipt = environment.forOwner("typed-descriptor").install("typed.add", target) {
+                replaceConstant(55)
+            }
+            assertTrue(receipt.isInstalled)
+            assertEquals(55, backend.call(add, null, 1, 2))
+            assertEquals(0, backend.originalCallCount(add))
+        }
+    }
+
+    @Test
+    fun kotlinTypeTokensDistinguishPrimitiveBoxedAndZeroArguments() {
+        val primitive = method(Fixtures::class, "add") {
+            parameterTypes(Int::class, Int::class)
+            returning(Int::class)
+        }
+        assertEquals(listOf("int", "int"), primitive.parameterTypeNames())
+        assertEquals("int", primitive.returnTypeName())
+
+        val boxed = method(Fixtures::class, "add") {
+            parameterTypes(Int::class.javaObjectType)
+            returning(Int::class.javaObjectType)
+        }
+        assertEquals(listOf("java.lang.Integer"), boxed.parameterTypeNames())
+        assertEquals("java.lang.Integer", boxed.returnTypeName())
+        assertEquals(emptyList<String>(), method(Fixtures::class, "none") { parameterTypes() }.parameterTypeNames())
+        assertNull(method(Fixtures::class, "none").parameterTypeNames())
+        assertEquals("kotlin.Unit", method(Fixtures::class, "none") { returning(Unit::class) }.returnTypeName())
+
+        val backend = backendWithAdd()
+        HookEnvironment.create(backend).use { environment ->
+            val receipt = environment.forOwner("kotlin-types").install("kotlin.types", primitive) {
+                replaceConstant(7)
+            }
+            assertTrue(receipt.isInstalled)
+            assertEquals(7, backend.call(add, null, 1, 2))
+            assertEquals(0, backend.originalCallCount(add))
+        }
+    }
+
+    @Test
+    fun rawMemberExtensionsKeepFailureAndReplacementSemantics() {
+        val backend = backendWithAdd()
+        HookEnvironment.create(backend).use { environment ->
+            val first = environment.install("direct.member", "sample", add) { replaceConstant(10) }
+            assertTrue(first.isInstalled)
+            val updated = environment.replace("direct.member", "sample", add) { replaceResultOnSuccess(20) }
+            assertTrue(updated.isInstalled)
+            assertEquals(20, backend.call(add, null, 1, 2))
+            assertEquals(1, backend.originalCallCount(add))
+            val missing = environment.forOwner("sample").install("direct.missing", method(Fixtures::class, "absent")) {
+                replaceConstant(1)
+            }
+            assertEquals(RegistrationReceipt.Status.TARGET_MISSING, missing.status())
+        }
+    }
+
+    @Test
+    fun constantReplacementUsesTheJavaContractAndDoesNotProceed() {
+        val backend = backendWithAdd()
+        HookEnvironment.create(backend).use { environment ->
+            val receipt = environment.install("sample.kotlin.constant", "kotlin-sample", member(add)) {
+                replaceConstant(42)
+            }
+            assertTrue(receipt.isInstalled)
+            assertEquals(42, backend.call(add, null, 1, 2))
+            assertEquals(0, backend.originalCallCount(add))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            hook("sample.kotlin.constant.conflict", "kotlin-sample", member(add)) {
+                replaceConstant(42)
+                before { }
+            }
+        }
+    }
+
+    @Test
+    fun conditionalReplacementPreservesObserverAndProceedsOnMiss() {
+        val concat = Fixtures::class.java.getMethod("concat", String::class.java, String::class.java)
+        val backend = FakeBackend.create()
+        backend.onTarget(concat) { _, args -> (args[0] as String) + (args[1] as String) }
+        var matches = 0
+        val observer = MatchObserver { matches++ }
+        HookEnvironment.create(backend).use { environment ->
+            val spec = hook("sample.kotlin.conditional", "kotlin-sample", member(concat)) {
+                replaceIfStringArgumentEquals(0, "match", "fixed", observer)
+            }
+            assertEquals(ParameterAccess.READ_ARGS_VIEW, spec.access())
+            assertSame(observer, spec.stringArgumentCondition().observer())
+            assertTrue(environment.install(spec).isInstalled)
+            assertEquals("fixed", backend.call(concat, null, "match", "x"))
+            assertEquals(1, matches)
+            assertEquals(0, backend.originalCallCount(concat))
+            assertEquals("missx", backend.call(concat, null, "miss", "x"))
+            assertEquals(1, backend.originalCallCount(concat))
+        }
+    }
 
     @Test
     fun successResultRunsOriginalAndRejectsMixedCallbacks() {
@@ -172,6 +405,37 @@ class HookDslContractTest {
         assertEquals(ProcessFilter.all(), spec.processFilter())
         assertEquals(HookSpec.DEFAULT_PRIORITY, spec.priority())
         assertTrue(spec.requiredCapabilities().isEmpty())
+    }
+
+    @Test
+    fun typedHookReusesIdentityTargetAndCallback() {
+        val id = HookId.of("typed.identity")
+        val owner = HookOwner.of("typed-owner")
+        val target = member(add)
+        var calls = 0
+        val callback = BeforeCallback { invocation ->
+            calls++
+            invocation.setEarlyResult(77)
+        }
+        val configured = hook(id, owner, target) { before(callback) }
+        val resolved = hook(id, owner, add) { before(callback) }
+        val builder = HookSpec.Builder(id, owner, target).before(callback).build()
+
+        assertSame(id, configured.id())
+        assertSame(owner, configured.owner())
+        assertSame(target, configured.target())
+        assertSame(callback, configured.beforeCallbacks().single())
+        assertSame(add, (resolved.target() as TargetSpec.MemberTarget).executable())
+        assertTrue(configured.hasSameSemantics(builder))
+        assertTrue(resolved.hasSameSemantics(builder))
+
+        val backend = backendWithAdd()
+        HookEnvironment.create(backend).use { environment ->
+            assertTrue(environment.install(resolved).isInstalled)
+            assertEquals(77, backend.call(add, null, 1, 2))
+            assertEquals(1, calls)
+            assertEquals(0, backend.originalCallCount(add))
+        }
     }
 
     @Test

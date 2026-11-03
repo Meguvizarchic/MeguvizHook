@@ -10,12 +10,12 @@ import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModuleInterface;
 
+import java.lang.reflect.Executable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Explicit, callback-scoped access to the old handles supplied by API 102 hot reload.
@@ -30,8 +30,10 @@ public final class LibXposed102ReloadSession implements AutoCloseable {
     private final LibXposed102Backend backend;
     private final List<XposedInterface.HookHandle> oldHandles;
     private final List<Token> tokens = new ArrayList<Token>();
-    private final Set<XposedInterface.HookHandle> issued =
-            Collections.newSetFromMap(new IdentityHashMap<XposedInterface.HookHandle, Boolean>());
+    // One identity index tracks both membership and issuance; no repeated list scans.
+    private IdentityHashMap<XposedInterface.HookHandle, Boolean> handleStates =
+            new IdentityHashMap<XposedInterface.HookHandle, Boolean>();
+    private volatile boolean closeRequested;
     private boolean closed;
 
     public LibXposed102ReloadSession(LibXposed102Backend backend, XposedModuleInterface.HotReloadedParam param) {
@@ -39,10 +41,8 @@ public final class LibXposed102ReloadSession implements AutoCloseable {
         Objects.requireNonNull(param, "param");
         List<XposedInterface.HookHandle> handles = Objects.requireNonNull(param.getOldHookHandles(), "oldHookHandles");
         oldHandles = new ArrayList<XposedInterface.HookHandle>(handles);
-        Set<XposedInterface.HookHandle> unique =
-                Collections.newSetFromMap(new IdentityHashMap<XposedInterface.HookHandle, Boolean>());
         for (XposedInterface.HookHandle handle : oldHandles) {
-            if (handle == null || !unique.add(handle)) {
+            if (handle == null || handleStates.put(handle, Boolean.FALSE) != null) {
                 throw new IllegalArgumentException("old hook handle list contains null or duplicate identity");
             }
         }
@@ -50,7 +50,7 @@ public final class LibXposed102ReloadSession implements AutoCloseable {
 
     /** Returns a snapshot of this callback's framework handles for explicit caller mapping. */
     public synchronized List<XposedInterface.HookHandle> oldHandles() {
-        if (closed) throw new IllegalStateException("reload session is closed");
+        if (closed || closeRequested) throw new IllegalStateException("reload session is closed or closing requested");
         return Collections.unmodifiableList(new ArrayList<XposedInterface.HookHandle>(oldHandles));
     }
 
@@ -68,28 +68,40 @@ public final class LibXposed102ReloadSession implements AutoCloseable {
      * The new plan must use the same policy because replaceHook preserves the old exception mode.
      */
     public synchronized BackendAdoption adoption(XposedInterface.HookHandle handle, ErrorPolicy expectedOldPolicy) {
-        if (closed) throw new IllegalStateException("reload session is closed");
+        if (closed || closeRequested) throw new IllegalStateException("reload session is closed or closing requested");
         Objects.requireNonNull(handle, "handle");
         Objects.requireNonNull(expectedOldPolicy, "expectedOldPolicy");
         if (expectedOldPolicy != ErrorPolicy.PROPAGATE && expectedOldPolicy != ErrorPolicy.FRAMEWORK_PROTECTIVE) {
             throw new IllegalArgumentException("unsupported old framework exception policy");
         }
-        boolean found = false;
-        for (XposedInterface.HookHandle old : oldHandles) {
-            if (old == handle) { found = true; break; }
-        }
-        if (!found) throw new IllegalArgumentException("handle is not from this reload callback");
-        if (!issued.add(handle)) throw new IllegalStateException("handle already issued in this session");
+        Boolean issued = handleStates.get(handle);
+        if (issued == null) throw new IllegalArgumentException("handle is not from this reload callback");
+        if (issued) throw new IllegalStateException("handle already issued in this session");
+        handleStates.put(handle, Boolean.TRUE);
         Token token = new Token(handle, expectedOldPolicy);
         tokens.add(token);
         return token;
     }
 
+    /**
+     * Request closure without acquiring the session monitor, waiting for an admitted operation,
+     * touching framework handles, or scheduling cleanup. An operation that has already passed its
+     * request check may still finish, including a framework replacement. A later {@link #close()}
+     * must be coordinated independently and completed before the hot-reload callback returns.
+     * Repeated requests are harmless; a request alone does not clear or release retained handles.
+     */
+    public void requestClose() { closeRequested = true; }
+
+    /** True after a closure request or after synchronized close is claimed, not proof of cleanup. */
+    public boolean isCloseRequested() { return closeRequested; }
+
     @Override
     public synchronized void close() {
+        closeRequested = true;
         closed = true;
         oldHandles.clear();
-        issued.clear();
+        // A closed session may itself be retained by the caller; release the index table too.
+        handleStates = null;
         for (Token token : tokens) token.old = null;
         tokens.clear();
     }
@@ -115,15 +127,28 @@ public final class LibXposed102ReloadSession implements AutoCloseable {
                 if (closed || attempted) {
                     throw new IllegalStateException("reload token expired or already attempted; handle state is unknown");
                 }
+                if (closeRequested) {
+                    // No target check or framework replacement has run on this attempt.
+                    throw new BackendInstallException("reload session close is requested; adoption was not attempted");
+                }
                 if (plan.spec().errorPolicy() != expectedOldPolicy) {
                     throw new BackendInstallException("new policy must match the caller-declared old framework policy");
                 }
-                if (!plan.target().equals(old.getExecutable())) {
+                XposedInterface.HookHandle handle = old;
+                Executable oldTarget = handle.getExecutable();
+                // A framework getter can synchronously reenter this session. A nested attempt may
+                // already have committed, so never report it as a known-uncommitted rejection.
+                if (attempted) {
+                    throw new IllegalStateException("reload token was attempted during target inspection; outcome is unknown");
+                }
+                if (closed || old != handle) {
+                    throw new BackendInstallException("reload session closed during target inspection; adoption was not attempted");
+                }
+                if (!plan.target().equals(oldTarget)) {
                     throw new BackendInstallException("old handle target does not match the new plan");
                 }
                 // Consume before invoking the framework: a throw or null may follow a commit.
                 attempted = true;
-                XposedInterface.HookHandle handle = old;
                 old = null;
                 XposedInterface.HookHandle next = handle.replaceHook(LibXposed102Backend.hooker(plan, channel));
                 if (next == null) {

@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -41,7 +42,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * Ordinary per-target failure does not roll back successful siblings: the result is explicitly
  * PARTIALLY_INSTALLED and no cross-target atomicity is claimed. An identity change is different: every
  * entry installed by the unpublished attempt is closed and no stale registration is published.
- * There is no resolution cache, so no stale negative lookup can be reused.
+ * Ordinary installation has no resolution cache. The explicit preparation API retains a bounded
+ * positive snapshot for one checked commit, never a reusable negative lookup.
  */
 public final class HookEnvironment implements AutoCloseable {
     private final HookBackend backend;
@@ -49,12 +51,19 @@ public final class HookEnvironment implements AutoCloseable {
     private final DiagnosticsSink diagnostics;
     private final Map<HookId, CoreRegistration> registrations = new LinkedHashMap<HookId, CoreRegistration>();
     private final Set<HookId> interruptedInstalls = new HashSet<HookId>();
+    // The monitor is reentrant: reject same-id mutation before invoking any external code.
+    private final Set<HookId> activeMutations = new HashSet<HookId>();
+    private final ThreadLocal<Set<HookId>> activePreparations = new ThreadLocal<Set<HookId>>();
+    // Preserve the former monitor-based reentry rejection while external checks run outside it.
+    private final ThreadLocal<Boolean> preparationCheckActive = new ThreadLocal<Boolean>();
     // Independent of registrations: it remains reachable if publishing there fails before/after put.
     private final Map<HookId, CoreRegistration> interruptedInstallPublications = new LinkedHashMap<HookId, CoreRegistration>();
     // Anchors both generations until publication; retained for an indeterminate replacement.
     private final Map<HookId, CoreRegistration> interruptedReplacements = new LinkedHashMap<HookId, CoreRegistration>();
     private final AtomicLong generations = new AtomicLong(1L);
+    private final AtomicBoolean closeRequested = new AtomicBoolean();
     private boolean closed;
+    private Thread closeOwner;
 
     private HookEnvironment(HookBackend backend, MemberResolver resolver, DiagnosticsSink diagnostics) {
         this.backend = Objects.requireNonNull(backend, "backend");
@@ -66,6 +75,11 @@ public final class HookEnvironment implements AutoCloseable {
         return new HookEnvironment(backend, new ReflectiveMemberResolver(), DiagnosticsSink.NONE);
     }
 
+    /** Create an environment with a custom resolver and the default no-op diagnostics sink. */
+    public static HookEnvironment create(HookBackend backend, MemberResolver resolver) {
+        return create(backend, resolver, DiagnosticsSink.NONE);
+    }
+
     public static HookEnvironment create(HookBackend backend, MemberResolver resolver, DiagnosticsSink diagnostics) {
         return new HookEnvironment(backend, resolver, diagnostics);
     }
@@ -74,8 +88,280 @@ public final class HookEnvironment implements AutoCloseable {
         return backend.capabilities();
     }
 
+    /**
+     * Install with a per-environment, per-id reentry guard. A synchronous nested mutation of the
+     * same id throws before invoking the backend; different ids may be nested. A backend or
+     * resolver must not synchronously close this environment during an active mutation.
+     */
     public synchronized RegistrationReceipt install(HookSpec spec) {
-        return installInternal(spec, null);
+        return guardedInstall(spec, null);
+    }
+
+    /**
+     * Install with the same ordering and receipt as {@link #install(HookSpec)}, while explicitly
+     * retaining a checked exception thrown by the member resolver for this request. No diagnostic
+     * sink or other callback is invoked by this method. A stale-identity receipt can also carry
+     * the exception that occurred before the identity check. Unchecked and fatal failures, including
+     * failures from the identity check itself, propagate as they do for ordinary installation.
+     *
+     * <p>The returned object can retain a throwable graph, sensitive details and class loaders. The
+     * caller owns its retention and should release it after inspection. A null resolution failure
+     * says nothing about other failure stages or whether installation succeeded.
+     */
+    public synchronized InstallResolutionResult installWithResolutionDiagnostics(HookSpec spec) {
+        ResolutionFailureCapture capture = new ResolutionFailureCapture();
+        RegistrationReceipt receipt = guardedInstall(spec, null, null, capture);
+        return new InstallResolutionResult(receipt, capture.failure);
+    }
+
+    /** Caller-owned result of an installation with explicit resolver-failure capture. */
+    public static final class InstallResolutionResult {
+        private final RegistrationReceipt receipt;
+        private final BackendInstallException resolutionFailure;
+
+        private InstallResolutionResult(RegistrationReceipt receipt, BackendInstallException resolutionFailure) {
+            this.receipt = receipt;
+            this.resolutionFailure = resolutionFailure;
+        }
+
+        public RegistrationReceipt receipt() { return receipt; }
+
+        /** Exact checked resolver failure, or null when this attempt did not catch one. */
+        public BackendInstallException resolutionFailure() { return resolutionFailure; }
+    }
+
+    private static final class ResolutionFailureCapture {
+        private BackendInstallException failure;
+    }
+
+
+    /**
+     * Explicit opt-in only: the caller must ensure the resolver, context and all providers can run
+     * concurrently. CLOSED includes a pending close request and does not prove backend cleanup.
+     */
+    public enum PreparationStatus {
+        READY, CLOSED, FILTERED, UNSUPPORTED, TARGET_UNSUPPORTED, NOT_FOUND_NOW,
+        TOO_MANY, INVALID_RESULT, STALE_IDENTITY, RESOLUTION_FAILED, IDENTITY_CHECK_FAILED
+    }
+
+    /** The status is a preparation outcome, not an installation receipt. */
+    public static final class Preparation {
+        private final PreparationStatus status;
+        private final PreparedInstall prepared;
+        private final Throwable failure;
+        private final Throwable checkFailure;
+        private Preparation(PreparationStatus status, PreparedInstall prepared, Throwable failure) {
+            this(status, prepared, failure, null);
+        }
+        private Preparation(PreparationStatus status, PreparedInstall prepared, Throwable failure, Throwable checkFailure) {
+            this.status = status; this.prepared = prepared; this.failure = failure; this.checkFailure = checkFailure;
+        }
+        public PreparationStatus status() { return status; }
+        public PreparedInstall prepared() { return prepared; }
+        public Throwable failure() { return failure; }
+        public Throwable checkFailure() { return checkFailure; }
+    }
+
+    private static Preparation notReady(PreparationStatus status) {
+        return new Preparation(status, null, null);
+    }
+
+    private static final class PreparedPayload {
+        final HookEnvironment owner;
+        final HookSpec spec;
+        final ClassLoader loader;
+        final long epoch;
+        final List<Executable> candidates;
+        PreparedPayload(HookEnvironment owner, HookSpec spec, ClassLoader loader, long epoch,
+                        List<Executable> candidates) {
+            this.owner = owner; this.spec = spec; this.loader = loader; this.epoch = epoch;
+            this.candidates = candidates;
+        }
+    }
+
+    /** A single-use, caller-owned handle. Closing it abandons the prepared candidate references. */
+    public static final class PreparedInstall implements AutoCloseable {
+        private final Object lock = new Object();
+        private PreparedPayload payload;
+        private PreparedInstall(PreparedPayload payload) { this.payload = payload; }
+
+        /** Claim once, then revalidate and publish under the originating environment's lock. */
+        public RegistrationReceipt commit() {
+            PreparedPayload claimed;
+            synchronized (lock) {
+                if (payload == null) throw new IllegalStateException("prepared install already consumed or closed");
+                claimed = payload;
+                payload = null;
+            }
+            return claimed.owner.commitPrepared(claimed);
+        }
+
+        /** Does not interrupt a commit that has already claimed this handle. */
+        @Override public void close() { synchronized (lock) { payload = null; } }
+    }
+
+    private synchronized RegistrationReceipt commitPrepared(PreparedPayload prepared) {
+        if (prepared.owner != this) throw new IllegalArgumentException("wrong environment");
+        return guardedInstall(prepared.spec, null, prepared);
+    }
+
+    /**
+     * Resolve on the caller's thread without holding the environment lock. Calling this method is
+     * explicit acceptance of concurrent resolver, backend context and provider invocations. No
+     * thread, queue, retry, timeout, negative cache or cross-target atomicity is supplied. Context,
+     * capability, resolver or provider calls may already have started when close() wins; their
+     * effects and the sampled preparation result are not an atomic snapshot. This method never calls
+     * backend.install; caller-provided context, resolver or provider code may reenter and install.
+     *
+     * <p>The upper bound applies only to this method's retained copy; a resolver may itself allocate
+     * or enumerate more. Results stay bound to this exact spec, environment, loader and epoch.
+     */
+    public Preparation prepareConcurrently(HookSpec spec, int maxCandidates) {
+        if (Thread.holdsLock(this)) {
+            throw new IllegalStateException("cannot prepare while holding the environment monitor");
+        }
+        if (Boolean.TRUE.equals(preparationCheckActive.get())) {
+            throw new IllegalStateException("cannot recursively prepare during preparation checks");
+        }
+        Objects.requireNonNull(spec, "spec");
+        if (maxCandidates < 1 || maxCandidates > 4096) throw new IllegalArgumentException("candidate limit must be 1..4096");
+        if (!(spec.target() instanceof TargetSpec.DescriptorTarget)) return notReady(PreparationStatus.TARGET_UNSUPPORTED);
+        HookId id = spec.id();
+        Set<HookId> active = activePreparations.get();
+        if (active != null && active.contains(id)) throw new IllegalStateException("recursive preparation for hook id " + id);
+        boolean newSet = active == null;
+        if (newSet) active = new HashSet<HookId>();
+        boolean registered = false;
+        try {
+            if (newSet) activePreparations.set(active);
+            // Establish the finally cleanup before mutating the set; removal is harmless if add fails.
+            registered = true;
+            active.add(id);
+            return prepareConcurrentInternal(spec, maxCandidates);
+        } finally {
+            if (registered) active.remove(id);
+            if (active.isEmpty()) activePreparations.remove();
+        }
+    }
+
+    private Preparation prepareConcurrentInternal(HookSpec spec, int maxCandidates) {
+        final long epoch;
+        final ClassLoader loader;
+        Boolean previousCheck = preparationCheckActive.get();
+        try {
+            preparationCheckActive.set(Boolean.TRUE);
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            io.github.jichuo1.meguviz.hook.core.spi.BackendContext processContext = backend.context();
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            String processName = processContext.processName();
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            boolean matches = spec.processFilter().matches(processName);
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            if (!matches) return notReady(PreparationStatus.FILTERED);
+            for (Capability capability : spec.requiredCapabilities()) {
+                BackendCapabilities capabilities = backend.capabilities();
+                if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+                CapabilityResult answer = capabilities.lookup(capability);
+                if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+                if (!answer.isSupportedInDeclaredCell()) {
+                    return notReady(PreparationStatus.UNSUPPORTED);
+                }
+            }
+            if (spec.errorPolicy() == ErrorPolicy.FRAMEWORK_PROTECTIVE) {
+                BackendCapabilities capabilities = backend.capabilities();
+                if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+                CapabilityResult answer = capabilities.lookup(Capability.FRAMEWORK_PROTECTIVE);
+                if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+                if (!answer.isSupportedInDeclaredCell()) return notReady(PreparationStatus.UNSUPPORTED);
+            }
+            BackendCapabilities capabilities = backend.capabilities();
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            ChainSemantics chain = capabilities.chainSemantics();
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            if (chain != ChainSemantics.FRAMEWORK_CHAIN) return notReady(PreparationStatus.UNSUPPORTED);
+            io.github.jichuo1.meguviz.hook.core.spi.BackendContext epochContext = backend.context();
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            epoch = epochContext.codeEpoch();
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            io.github.jichuo1.meguviz.hook.core.spi.BackendContext loaderContext = backend.context();
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            loader = loaderContext.classLoader();
+            if (preparationClosed()) return notReady(PreparationStatus.CLOSED);
+            PreparationStatus beforeResolve = preparationIdentityStatus(loader, epoch);
+            if (beforeResolve != null) return notReady(beforeResolve);
+        } finally {
+            if (previousCheck == null) preparationCheckActive.remove();
+            else preparationCheckActive.set(previousCheck);
+        }
+        final List<Executable> resolved;
+        try {
+            resolved = resolver.resolve((TargetSpec.DescriptorTarget) spec.target(), loader);
+        } catch (BackendInstallException failure) {
+            final PreparationStatus identity;
+            try { identity = preparationIdentityStatus(loader, epoch); }
+            catch (Throwable checkFailure) { return preparationRecheckFailure(failure, checkFailure); }
+            synchronized (this) {
+                if (closed || closeRequested.get()) return new Preparation(PreparationStatus.CLOSED, null, failure);
+                if (identity != null) return new Preparation(identity, null, failure);
+                return new Preparation(PreparationStatus.RESOLUTION_FAILED, null, failure);
+            }
+        }
+        List<Executable> snapshot = new ArrayList<Executable>();
+        PreparationStatus rejected = resolved == null ? PreparationStatus.INVALID_RESULT : null;
+        if (resolved != null) {
+            for (Executable candidate : resolved) {
+                if (candidate == null) { rejected = PreparationStatus.INVALID_RESULT; break; }
+                if (snapshot.size() == maxCandidates) { rejected = PreparationStatus.TOO_MANY; break; }
+                snapshot.add(candidate);
+            }
+        }
+        if (rejected == null && snapshot.isEmpty()) rejected = PreparationStatus.NOT_FOUND_NOW;
+        List<Executable> immutable = Collections.unmodifiableList(snapshot);
+        final PreparationStatus identity;
+        try { identity = preparationIdentityStatus(loader, epoch); }
+        catch (Throwable checkFailure) { return preparationRecheckFailure(null, checkFailure); }
+        synchronized (this) {
+            if (closed || closeRequested.get()) return notReady(PreparationStatus.CLOSED);
+            if (identity != null) return notReady(identity);
+            if (rejected != null) return notReady(rejected);
+            return new Preparation(PreparationStatus.READY,
+                    new PreparedInstall(new PreparedPayload(this, spec, loader, epoch, immutable)), null);
+        }
+    }
+
+    /** Fatal recheck errors take priority over a checked query error. */
+    private Preparation preparationRecheckFailure(Throwable original, Throwable checkFailure) {
+        if (TypeChecks.isFatal(checkFailure)) {
+            if (original != null) suppressPreservingFatal(checkFailure, original);
+            throw TypeChecks.fatal(checkFailure);
+        }
+        return new Preparation(preparationClosed() ? PreparationStatus.CLOSED : PreparationStatus.IDENTITY_CHECK_FAILED,
+                null, original, checkFailure);
+    }
+
+    /** Short state read only; no caller-provided code runs under the monitor. */
+    private synchronized boolean preparationClosed() { return closed || closeRequested.get(); }
+
+    /** Each context observation runs outside the monitor; a sampled close wins over stale identity. */
+    private PreparationStatus preparationIdentityStatus(ClassLoader loader, long epoch) {
+        Boolean previousCheck = preparationCheckActive.get();
+        try {
+            preparationCheckActive.set(Boolean.TRUE);
+            if (preparationClosed()) return PreparationStatus.CLOSED;
+            io.github.jichuo1.meguviz.hook.core.spi.BackendContext current = backend.context();
+            if (preparationClosed()) return PreparationStatus.CLOSED;
+            ClassLoader observed = current.classLoader();
+            if (preparationClosed()) return PreparationStatus.CLOSED;
+            if (observed != loader) return PreparationStatus.STALE_IDENTITY;
+            current = backend.context();
+            if (preparationClosed()) return PreparationStatus.CLOSED;
+            long observedEpoch = current.codeEpoch();
+            if (preparationClosed()) return PreparationStatus.CLOSED;
+            return observedEpoch != epoch ? PreparationStatus.STALE_IDENTITY : null;
+        } finally {
+            if (previousCheck == null) preparationCheckActive.remove();
+            else preparationCheckActive.set(previousCheck);
+        }
     }
 
     /**
@@ -90,16 +376,47 @@ public final class HookEnvironment implements AutoCloseable {
      * id is quarantined. The old framework entry may or may not have been replaced.
      */
     public synchronized RegistrationReceipt adopt(HookSpec spec, BackendAdoption adoption) {
-        return installInternal(spec, Objects.requireNonNull(adoption, "adoption"));
+        return guardedInstall(spec, Objects.requireNonNull(adoption, "adoption"));
     }
 
-    private RegistrationReceipt installInternal(HookSpec spec, BackendAdoption adoption) {
+    private RegistrationReceipt guardedInstall(HookSpec spec, BackendAdoption adoption) {
+        return guardedInstall(spec, adoption, null);
+    }
+
+    private RegistrationReceipt guardedInstall(HookSpec spec, BackendAdoption adoption, PreparedPayload prepared) {
+        return guardedInstall(spec, adoption, prepared, null);
+    }
+
+    private RegistrationReceipt guardedInstall(HookSpec spec, BackendAdoption adoption, PreparedPayload prepared,
+                                                ResolutionFailureCapture capture) {
+        HookId id = checkMutation(spec);
+        try {
+            activeMutations.add(id);
+            return installInternal(spec, adoption, prepared, capture);
+        }
+        finally { activeMutations.remove(id); }
+    }
+
+    private HookId checkMutation(HookSpec spec) {
+        HookId id = Objects.requireNonNull(spec, "spec").id();
+        if (activeMutations.contains(id)) {
+            throw new IllegalStateException("reentrant mutation for hook id " + id);
+        }
+        return id;
+    }
+
+    private RegistrationReceipt installInternal(HookSpec spec, BackendAdoption adoption, PreparedPayload prepared,
+                                                 ResolutionFailureCapture capture) {
         Objects.requireNonNull(spec, "spec");
         HookId id = spec.id();
         String backendId = backend.id();
         if (closed) {
             return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
                     backendId, -1L, "environment is closed");
+        }
+        if (closeRequested.get()) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+                    backendId, -1L, "environment close is requested");
         }
         if (adoption != null && adoption.backend() != backend) {
             return RegistrationReceipt.of(id, RegistrationReceipt.Status.CONFLICT,
@@ -166,12 +483,20 @@ public final class HookEnvironment implements AutoCloseable {
                     backendId, previous.generation(), "previous registration has a different loader or code epoch; close before retry");
         }
         List<Executable> candidates;
-        if (spec.target() instanceof TargetSpec.MemberTarget) {
+        if (prepared != null) {
+            if (prepared.owner != this || prepared.spec != spec) throw new IllegalArgumentException("wrong prepared install");
+            if (prepared.loader != loaderBefore || prepared.epoch != epochBefore) {
+                return RegistrationReceipt.of(id, RegistrationReceipt.Status.STALE_IDENTITY,
+                        backendId, -1L, "prepared loader or code epoch changed; plan discarded");
+            }
+            candidates = prepared.candidates;
+        } else if (spec.target() instanceof TargetSpec.MemberTarget) {
             candidates = Collections.singletonList(((TargetSpec.MemberTarget) spec.target()).executable());
         } else {
             try {
                 candidates = resolver.resolve((TargetSpec.DescriptorTarget) spec.target(), loaderBefore);
             } catch (BackendInstallException failure) {
+                if (capture != null) capture.failure = failure;
                 if (identityChanged(loaderBefore, epochBefore)) {
                     return RegistrationReceipt.of(id, RegistrationReceipt.Status.STALE_IDENTITY,
                             backendId, -1L, "loader or code epoch changed during resolution; plan discarded");
@@ -226,6 +551,10 @@ public final class HookEnvironment implements AutoCloseable {
             }
             if (sameTargets(existing, targets) && existing.plan().spec().hasSameSemantics(spec)
                     && existing.isComplete()) {
+                if (existing.state() != RegistrationState.INSTALLED) {
+                    return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+                            backendId, existing.generation(), "registration closed during install resolution");
+                }
                 return RegistrationReceipt.of(id, RegistrationReceipt.Status.ALREADY_INSTALLED,
                         backendId, existing.generation(), "identical registration already installed");
             }
@@ -250,12 +579,15 @@ public final class HookEnvironment implements AutoCloseable {
             // Anchor the new generation before the external operation may commit.
             interruptedInstallPublications.put(id, registration);
         }
-        for (BoundPlan plan : plans) {
+        for (int index = 0; index < plans.size(); index++) {
+            BoundPlan plan = plans.get(index);
+            boolean backendReturned = false;
             try {
                 BackendHandle handle = Objects.requireNonNull(adoption == null
-                                ? backend.install(plan, registration.channel(plan))
-                                : adoption.replace(plan, registration.channel(plan)),
+                                ? backend.install(plan, registration.channel(plan, index))
+                                : adoption.replace(plan, registration.channel(plan, index)),
                         "backend returned a null install handle; installation outcome is unknown");
+                backendReturned = true;
                 if (adoption == null) {
                     registration.bind(plan, handle);
                 } else {
@@ -264,15 +596,37 @@ public final class HookEnvironment implements AutoCloseable {
                 targetReceipts.add(TargetInstallReceipt.installed(plan.target()));
                 installed++;
             } catch (BackendInstallException failure) {
-                targetReceipts.add(TargetInstallReceipt.failed(plan.target(), failure.getMessage()));
-            } catch (RuntimeException failure) {
+                if (backendReturned) {
+                    // The declared no-commit promise applies to the backend call, not later work.
+                    if (adoption == null) quarantineInterruptedInstall(id, registration, failure, false);
+                    else retireAdoptionAfterFailure(registration, failure);
+                    throw TypeChecks.rethrow(failure);
+                }
+                try {
+                    targetReceipts.add(TargetInstallReceipt.failed(plan.target(), failure.getMessage()));
+                } catch (Throwable diagnosticFailure) {
+                    // This target is guaranteed uncommitted, but earlier targets may be bound.
+                    // Do not let an overridden getMessage() bypass their cleanup and isolation.
+                    suppressPreservingFatal(diagnosticFailure, failure);
+                    if (adoption == null) {
+                        quarantineInstallPublication(id, registration, diagnosticFailure);
+                    } else {
+                        // Adoption is single-target and the checked failure guarantees no commit.
+                        try { interruptedInstallPublications.remove(id); }
+                        catch (Throwable anchorFailure) {
+                            if (TypeChecks.isFatal(anchorFailure) && !TypeChecks.isFatal(diagnosticFailure)) {
+                                suppressPreservingFatal(anchorFailure, diagnosticFailure);
+                                throw TypeChecks.fatal(anchorFailure);
+                            }
+                            suppressPreservingFatal(diagnosticFailure, anchorFailure);
+                        }
+                    }
+                    throw TypeChecks.rethrow(diagnosticFailure);
+                }
+            } catch (Throwable failure) {
                 if (adoption == null) quarantineInterruptedInstall(id, registration, failure, false);
-                else registration.retireUnpublishedAdoption();
-                throw failure;
-            } catch (Error failure) {
-                if (adoption == null) quarantineInterruptedInstall(id, registration, failure, false);
-                else registration.retireUnpublishedAdoption();
-                throw failure;
+                else retireAdoptionAfterFailure(registration, failure);
+                throw TypeChecks.rethrow(failure);
             }
         }
 
@@ -286,14 +640,10 @@ public final class HookEnvironment implements AutoCloseable {
         final boolean identityChangedAfterInstall;
         try {
             identityChangedAfterInstall = identityChanged(loaderBefore, epochBefore);
-        } catch (RuntimeException failure) {
+        } catch (Throwable failure) {
             if (adoption == null) quarantineInterruptedInstall(id, registration, failure, false);
-            else registration.retireUnpublishedAdoption();
-            throw failure;
-        } catch (Error failure) {
-            if (adoption == null) quarantineInterruptedInstall(id, registration, failure, false);
-            else registration.retireUnpublishedAdoption();
-            throw failure;
+            else retireAdoptionAfterFailure(registration, failure);
+            throw TypeChecks.rethrow(failure);
         }
         if (identityChangedAfterInstall) {
             if (adoption != null) {
@@ -305,12 +655,9 @@ public final class HookEnvironment implements AutoCloseable {
             final CloseReport closeReport;
             try {
                 closeReport = registration.close();
-            } catch (RuntimeException failure) {
+            } catch (Throwable failure) {
                 quarantineInterruptedInstall(id, registration, failure, true);
-                throw failure;
-            } catch (Error failure) {
-                quarantineInterruptedInstall(id, registration, failure, true);
-                throw failure;
+                throw TypeChecks.rethrow(failure);
             }
             if (installed > 0 && closeReport.entryRestoration() != CloseReport.EntryRestoration.RESTORED) {
                 // Keep ownership of the closed handles and forbid reuse of this id in this environment.
@@ -346,14 +693,23 @@ public final class HookEnvironment implements AutoCloseable {
             registrations.put(id, registration);
             interruptedInstallPublications.remove(id);
             return receipt;
-        } catch (RuntimeException failure) {
+        } catch (Throwable failure) {
             if (adoption == null) quarantineInstallPublication(id, registration, failure);
-            else registration.retireUnpublishedAdoption();
-            throw failure;
-        } catch (Error failure) {
-            if (adoption == null) quarantineInstallPublication(id, registration, failure);
-            else registration.retireUnpublishedAdoption();
-            throw failure;
+            else retireAdoptionAfterFailure(registration, failure);
+            throw TypeChecks.rethrow(failure);
+        }
+    }
+
+    /** Keep a possibly adopted handle quarantined without replacing an earlier fatal failure. */
+    private static void retireAdoptionAfterFailure(CoreRegistration registration, Throwable primary) {
+        try {
+            registration.retireUnpublishedAdoption();
+        } catch (Throwable cleanupFailure) {
+            if (TypeChecks.isFatal(cleanupFailure) && !TypeChecks.isFatal(primary)) {
+                suppressPreservingFatal(cleanupFailure, primary);
+                throw TypeChecks.fatal(cleanupFailure);
+            }
+            suppressPreservingFatal(primary, cleanupFailure);
         }
     }
 
@@ -454,12 +810,42 @@ public final class HookEnvironment implements AutoCloseable {
      * partial registrations and implicit close+install are deliberately not supported.
      */
     public synchronized RegistrationReceipt replace(HookSpec spec) {
+        return guardedReplace(spec, false);
+    }
+
+    /**
+     * Atomically replaces the existing single-target registration even when its full semantics
+     * are identical. Unlike an idempotent {@link #replace(HookSpec)}, a successful call publishes
+     * a new registration and retires the previous one, so closing the old registration cannot
+     * unhook the new generation. All target, owner, priority, error-policy, loader, epoch and
+     * backend-capability checks of {@code replace} still apply; this never falls back to a
+     * non-atomic close and reinstall. Already admitted callbacks retain their original generation.
+     * A failed or indeterminate backend replacement keeps the same contracts as {@code replace}.
+     */
+    public synchronized RegistrationReceipt forceReplace(HookSpec spec) {
+        return guardedReplace(spec, true);
+    }
+
+    private RegistrationReceipt guardedReplace(HookSpec spec, boolean evenIfIdentical) {
+        HookId id = checkMutation(spec);
+        try {
+            activeMutations.add(id);
+            return replaceInternal(spec, evenIfIdentical);
+        }
+        finally { activeMutations.remove(id); }
+    }
+
+    private RegistrationReceipt replaceInternal(HookSpec spec, boolean evenIfIdentical) {
         Objects.requireNonNull(spec, "spec");
         HookId id = spec.id();
         String backendId = backend.id();
         if (closed) {
             return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
                     backendId, -1L, "environment is closed");
+        }
+        if (closeRequested.get()) {
+            return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+                    backendId, -1L, "environment close is requested");
         }
         CoreRegistration interruptedPublication = interruptedInstallPublications.get(id);
         if (interruptedPublication != null) {
@@ -576,7 +962,13 @@ public final class HookEnvironment implements AutoCloseable {
             return RegistrationReceipt.of(id, RegistrationReceipt.Status.FAILED,
                     backendId, existing.generation(), invalidConstant);
         }
-        if (previous.spec().hasSameSemantics(spec)) {
+        if (!evenIfIdentical && previous.spec().hasSameSemantics(spec)) {
+            // Resolver/context callbacks can close the old registration reentrantly. The volatile
+            // state read is the linearization point and does not acquire the registration monitor.
+            if (existing.state() != RegistrationState.INSTALLED) {
+                return RegistrationReceipt.of(id, RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE,
+                        backendId, existing.generation(), "registration closed during replacement resolution");
+            }
             return RegistrationReceipt.of(id, RegistrationReceipt.Status.ALREADY_INSTALLED,
                     backendId, existing.generation(), "identical replacement registration already installed");
         }
@@ -591,7 +983,14 @@ public final class HookEnvironment implements AutoCloseable {
                         backendId, existing.generation(), "previous registration is no longer installed");
             }
             // This guard is recorded before the backend may commit and remains on unknown outcomes.
-            interruptedReplacements.put(id, existing);
+            try {
+                interruptedReplacements.put(id, existing);
+            } catch (Throwable failure) {
+                // The backend has not been invoked. A possibly written anchor remains conservative,
+                // but the unused replacement must not be kept through pendingReplacement.
+                existing.finishPreparedReplacement();
+                throw TypeChecks.rethrow(failure);
+            }
             try {
                 existing.replaceWith(plan, registration);
                 RegistrationReceipt receipt = RegistrationReceipt.withTargets(id, RegistrationReceipt.Status.INSTALLED,
@@ -602,19 +1001,38 @@ public final class HookEnvironment implements AutoCloseable {
                 existing.finishPreparedReplacement();
                 return receipt;
             } catch (BackendInstallException failure) {
+                if (existing.replacementOutcomeUnknown() || existing.state() != RegistrationState.INSTALLED) {
+                    // A failure after the backend commit cannot claim the old handle is valid.
+                    existing.retireInterruptedPublication(registration, failure);
+                    throw TypeChecks.rethrow(failure);
+                }
                 // This checked failure guarantees that the backend did not commit the replacement.
-                registration.close();
+                try {
+                    registration.close();
+                } catch (Throwable cleanupFailure) {
+                    // The new registration has no returned handle. Keep the old generation valid
+                    // and clear the pre-commit guard, even if local cleanup itself fails.
+                    suppressPreservingFatal(cleanupFailure, failure);
+                    try {
+                        existing.finishPreparedReplacement();
+                        interruptedReplacements.remove(id);
+                    } catch (Throwable anchorFailure) {
+                        if (TypeChecks.isFatal(anchorFailure) && !TypeChecks.isFatal(cleanupFailure)) {
+                            suppressPreservingFatal(anchorFailure, cleanupFailure);
+                            throw TypeChecks.fatal(anchorFailure);
+                        }
+                        suppressPreservingFatal(cleanupFailure, anchorFailure);
+                    }
+                    throw TypeChecks.rethrow(cleanupFailure);
+                }
                 existing.finishPreparedReplacement();
                 interruptedReplacements.remove(id);
                 return RegistrationReceipt.withTargets(id, RegistrationReceipt.Status.FAILED,
                         backendId, existing.generation(), "backend replacement failed: " + failure.getMessage(), null,
                         Collections.singletonList(TargetInstallReceipt.failed(target, failure.getMessage())));
-            } catch (RuntimeException failure) {
+            } catch (Throwable failure) {
                 existing.retireInterruptedPublication(registration, failure);
-                throw failure;
-            } catch (Error failure) {
-                existing.retireInterruptedPublication(registration, failure);
-                throw failure;
+                throw TypeChecks.rethrow(failure);
             }
         }
     }
@@ -661,56 +1079,179 @@ public final class HookEnvironment implements AutoCloseable {
         return null;
     }
 
+    /**
+     * Request shutdown without waiting for the environment or registration monitors. This only
+     * closes the gate for subsequent operations: it never invokes the backend, stops installed
+     * callbacks, schedules work or waits for already admitted operations. A caller-owned worker
+     * must later invoke {@link #close()} to perform cleanup. Repeated requests are harmless.
+     */
+    public void requestClose() { closeRequested.set(true); }
+
+    /** True after a shutdown request or after an ordinary close has been claimed, not proof of cleanup. */
+    public boolean isCloseRequested() { return closeRequested.get(); }
+
     public synchronized int activeRegistrationCount() {
         return registrations.size();
     }
 
-    /** Closes every registration; non-fatal failures do not skip other registrations. */
+    /**
+     * Marks the environment closed under its monitor, then uninstalls outside that monitor.
+     * Calls reentering while already holding the monitor retain the legacy synchronous path.
+     * An interrupt already present at entry or observed after a registration close is restored
+     * on exit, even if a later backend clears it. Backend code can still consume an interrupt
+     * entirely within one call before the environment observes it.
+     */
     @Override
-    public synchronized void close() {
-        if (closed) {
+    public void close() {
+        if (Thread.holdsLock(this)) {
+            closeUnderMonitor();
             return;
         }
-        closed = true;
-        List<Throwable> failures = new ArrayList<Throwable>();
-        List<HookId> restored = new ArrayList<HookId>();
-        Error firstError = null;
-        for (Map.Entry<HookId, CoreRegistration> entry : registrations.entrySet()) {
+        Map<HookId, CoreRegistration> snapshot;
+        Thread current = Thread.currentThread();
+        boolean interrupted = current.isInterrupted();
+        boolean ownsClose = false;
+        try {
+            synchronized (this) {
+                if (closed) {
+                    awaitCloseCompletion();
+                    return;
+                }
+                if (!activeMutations.isEmpty() || anyClosingOn(current)) {
+                    throw new IllegalStateException("cannot close environment during a reentrant mutation or registration close");
+                }
+                snapshot = new LinkedHashMap<HookId, CoreRegistration>(registrations);
+                // The ownership claim is protected by the outer finally even if publication fails.
+                ownsClose = true;
+                closeOwner = current;
+                closeRequested.set(true);
+                closed = true;
+            }
+            List<Throwable> failures = new ArrayList<Throwable>();
+            List<HookId> restored = new ArrayList<HookId>();
+            Error firstError = null;
+            for (Map.Entry<HookId, CoreRegistration> entry : snapshot.entrySet()) {
+                try {
+                    CloseReport report = entry.getValue().close();
+                    if (report != null && report.entryRestoration() == CloseReport.EntryRestoration.RESTORED) {
+                        restored.add(entry.getKey());
+                    }
+                } catch (RuntimeException failure) {
+                    failures.add(failure);
+                } catch (Error failure) {
+                    if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+                    failures.add(failure);
+                    if (firstError == null) firstError = failure;
+                } finally {
+                    if (current.isInterrupted()) interrupted = true;
+                }
+            }
+            synchronized (this) {
+                for (HookId id : restored) registrations.remove(id);
+                if (registrations.isEmpty()) interruptedInstalls.clear();
+            }
+            if (!failures.isEmpty()) {
+                Throwable primary = firstError == null ? failures.get(0) : firstError;
+                for (Throwable failure : failures) suppressPreservingFatal(primary, failure);
+                if (firstError != null) throw firstError;
+                throw (RuntimeException) primary;
+            }
+        } finally {
             try {
-                CloseReport report = entry.getValue().close();
-                if (report != null && report.entryRestoration() == CloseReport.EntryRestoration.RESTORED) {
-                    restored.add(entry.getKey());
+                if (ownsClose) {
+                    synchronized (this) {
+                        if (closeOwner == current) {
+                            closeOwner = null;
+                            notifyAll();
+                        }
+                    }
                 }
-            } catch (RuntimeException failure) {
-                failures.add(failure);
-            } catch (Error failure) {
-                if (TypeChecks.isFatal(failure)) {
-                    throw TypeChecks.fatal(failure);
-                }
-                failures.add(failure);
-                if (firstError == null) {
-                    firstError = failure;
-                }
+            } finally {
+                if (interrupted) current.interrupt();
             }
         }
-        for (HookId id : restored) {
-            registrations.remove(id);
-        }
-        if (!failures.isEmpty()) {
-            Throwable primary = firstError == null ? failures.get(0) : firstError;
-            for (Throwable failure : failures) {
-                suppressPreservingFatal(primary, failure);
-            }
-            // Retain the registrations and handles when a close did not finish cleanly. close()
-            // remains one-shot; it does not silently retry an uncertain backend uninstall.
-            if (firstError != null) {
-                throw firstError;
-            }
-            throw (RuntimeException) primary;
-        }
-        if (registrations.isEmpty()) {
-            interruptedInstalls.clear();
-        }
-        // Retain any quarantined replacement handles while this environment remains reachable.
     }
+
+    /** Called under this environment's monitor; reads only volatile owner fields. */
+    private boolean anyClosingOn(Thread thread) {
+        for (CoreRegistration registration : registrations.values()) {
+            if (registration.closingOn(thread)) return true;
+        }
+        return false;
+    }
+
+    /** Called under this monitor; wait releases all reentrant holds until completion. */
+    private void awaitCloseCompletion() {
+        Thread current = Thread.currentThread();
+        // An uninstall owner must not await an environment close waiting for that registration.
+        if (closeOwner == current || anyClosingOn(current)) return;
+        boolean interrupted = false;
+        while (closeOwner != null) {
+            try { wait(); }
+            catch (InterruptedException failure) { interrupted = true; }
+        }
+        if (interrupted) current.interrupt();
+    }
+
+    /** Legacy reentrant close; the caller already owns this monitor. */
+    private void closeUnderMonitor() {
+        Thread current = Thread.currentThread();
+        boolean interrupted = current.isInterrupted();
+        try {
+            if (closed) {
+                awaitCloseCompletion();
+                return;
+            }
+            if (!activeMutations.isEmpty() || anyClosingOn(current)) {
+                throw new IllegalStateException("cannot close environment during a reentrant install, adoption or replacement");
+            }
+            closeRequested.set(true);
+            closed = true;
+            List<Throwable> failures = new ArrayList<Throwable>();
+            List<HookId> restored = new ArrayList<HookId>();
+            Error firstError = null;
+            for (Map.Entry<HookId, CoreRegistration> entry : registrations.entrySet()) {
+                try {
+                    CloseReport report = entry.getValue().close();
+                    if (report != null && report.entryRestoration() == CloseReport.EntryRestoration.RESTORED) {
+                        restored.add(entry.getKey());
+                    }
+                } catch (RuntimeException failure) {
+                    failures.add(failure);
+                } catch (Error failure) {
+                    if (TypeChecks.isFatal(failure)) {
+                        throw TypeChecks.fatal(failure);
+                    }
+                    failures.add(failure);
+                    if (firstError == null) {
+                        firstError = failure;
+                    }
+                } finally {
+                    if (current.isInterrupted()) interrupted = true;
+                }
+            }
+            for (HookId id : restored) {
+                registrations.remove(id);
+            }
+            if (!failures.isEmpty()) {
+                Throwable primary = firstError == null ? failures.get(0) : firstError;
+                for (Throwable failure : failures) {
+                    suppressPreservingFatal(primary, failure);
+                }
+                // Retain the registrations and handles when a close did not finish cleanly. close()
+                // remains one-shot; it does not silently retry an uncertain backend uninstall.
+                if (firstError != null) {
+                    throw firstError;
+                }
+                throw (RuntimeException) primary;
+            }
+            if (registrations.isEmpty()) {
+                interruptedInstalls.clear();
+            }
+            // Retain any quarantined replacement handles while this environment remains reachable.
+        } finally {
+            if (interrupted) current.interrupt();
+        }
+    }
+
 }

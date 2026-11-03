@@ -6,7 +6,11 @@ plugins {
 
 subprojects {
     group = "io.github.jichuo1.meguviz.hook"
-    version = "0.1.0-SNAPSHOT"
+    val requestedVersion = providers.gradleProperty("mavenVersion").orElse("0.1.0-SNAPSHOT").get()
+    require(requestedVersion.matches(Regex("[A-Za-z0-9][A-Za-z0-9._+-]*"))) {
+        "mavenVersion must be a valid single Maven version component"
+    }
+    version = requestedVersion
 }
 
 // Shared configuration for the pure JVM modules. No Android, framework, Binder, JNI or Rust types
@@ -35,3 +39,4 @@ configure(listOf(project(":hook-api"), project(":hook-core"), project(":hook-dsl
 }
 
 apply(from = "gradle/api-tasks.gradle.kts")
+apply(from = "gradle/publication.gradle.kts")

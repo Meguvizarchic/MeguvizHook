@@ -1,6 +1,6 @@
 package io.github.jichuo1.meguviz.hook.core;
 
-import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -22,6 +22,7 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
 
     private static final int FIELD_CHARS = 128;
     private static final int MESSAGE_CHARS = 512;
+    private static final String HEX = "0123456789abcdef";
     private final RecordWriter writer;
     private final boolean includeMessage;
     private final int maxFrames;
@@ -47,12 +48,12 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
     public static byte[] encode(CallbackExceptionTracker.Event event, boolean includeMessage, int maxFrames) {
         Objects.requireNonNull(event, "event");
         if (maxFrames < 0 || maxFrames > 32) throw new IllegalArgumentException("maxFrames must be 0..32");
-        StringBuilder text = new StringBuilder();
-        text.append("{\"version\":1,");
+        Utf8 text = new Utf8();
+        text.appendAscii("{\"version\":1,");
         field(text, "source", event.source(), FIELD_CHARS);
         text.append(','); field(text, "hook", event.hookId().value(), FIELD_CHARS);
-        text.append(",\"generation\":").append(event.generation());
-        text.append(",\"timeNanos\":").append(event.timeNanos());
+        text.appendAscii(",\"generation\":").append(event.generation());
+        text.appendAscii(",\"timeNanos\":").append(event.timeNanos());
         text.append(','); field(text, "stage", event.stage().name(), FIELD_CHARS);
         text.append(','); field(text, "type", event.failure().getClass().getName(), FIELD_CHARS);
         if (includeMessage) {
@@ -65,9 +66,9 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
                 messageError = true;
             }
             text.append(','); field(text, "message", message, MESSAGE_CHARS);
-            if (messageError) text.append(",\"messageError\":true");
+            if (messageError) text.appendAscii(",\"messageError\":true");
         }
-        text.append(",\"frames\":[");
+        text.appendAscii(",\"frames\":[");
         boolean framesTruncated = false;
         boolean framesCollected = false;
         boolean framesError = false;
@@ -90,7 +91,7 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
                     if (i != 0) text.append(',');
                     StackTraceElement frame = frames[i];
                     if (frame == null) {
-                        text.append("null");
+                        text.appendAscii("null");
                         framesMalformed = true;
                         continue;
                     }
@@ -98,22 +99,22 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
                     field(text, "class", frame.getClassName(), FIELD_CHARS);
                     text.append(','); field(text, "method", frame.getMethodName(), FIELD_CHARS);
                     text.append(','); field(text, "file", frame.getFileName(), FIELD_CHARS);
-                    text.append(",\"line\":").append(frame.getLineNumber()).append('}');
+                    text.appendAscii(",\"line\":").append(frame.getLineNumber()).append('}');
                 }
             }
         }
-        text.append("],\"framesCollected\":").append(framesCollected);
-        if (framesCollected) text.append(",\"framesTruncated\":").append(framesTruncated);
-        if (framesError) text.append(",\"framesError\":true");
-        if (framesMalformed) text.append(",\"framesMalformed\":true");
-        text.append("}\n");
-        return text.toString().getBytes(StandardCharsets.UTF_8);
+        text.appendAscii("],\"framesCollected\":").append(framesCollected);
+        if (framesCollected) text.appendAscii(",\"framesTruncated\":").append(framesTruncated);
+        if (framesError) text.appendAscii(",\"framesError\":true");
+        if (framesMalformed) text.appendAscii(",\"framesMalformed\":true");
+        text.appendAscii("}\n");
+        return text.finish();
     }
 
-    private static void field(StringBuilder text, String name, String value, int maxChars) {
-        text.append('"').append(name).append("\":");
+    private static void field(Utf8 text, String name, String value, int maxChars) {
+        text.append('"').appendAscii(name).appendAscii("\":");
         if (value == null) {
-            text.append("null");
+            text.appendAscii("null");
             return;
         }
         text.append('"');
@@ -141,13 +142,82 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
             }
         }
         text.append('"');
-        if (value.length() > limit) text.append(",\"").append(name).append("Truncated\":true");
+        if (value.length() > limit) text.appendAscii(",\"").appendAscii(name).appendAscii("Truncated\":true");
     }
 
-    private static void unicode(StringBuilder text, char c) {
-        text.append("\\u");
-        String hex = Integer.toHexString(c);
-        for (int pad = hex.length(); pad < 4; pad++) text.append('0');
-        text.append(hex);
+    private static void unicode(Utf8 text, char c) {
+        text.appendAscii("\\u");
+        text.append(HEX.charAt((c >>> 12) & 15));
+        text.append(HEX.charAt((c >>> 8) & 15));
+        text.append(HEX.charAt((c >>> 4) & 15));
+        text.append(HEX.charAt(c & 15));
+    }
+
+    /** Per-call JSON byte emitter; no buffer is reused or shared across calls. */
+    private static final class Utf8 {
+        private byte[] bytes = new byte[16];
+        private int size;
+
+        private void reserve(int count) {
+            int required = size + count;
+            if (required < 0) throw new OutOfMemoryError("encoded trace too large");
+            if (required > bytes.length) {
+                int expanded = bytes.length * 2 + 2;
+                if (expanded < required) expanded = required;
+                if (expanded < 0) expanded = Integer.MAX_VALUE;
+                bytes = Arrays.copyOf(bytes, expanded);
+            }
+        }
+
+        Utf8 append(char c) {
+            if (c <= 0x7f) {
+                reserve(1); bytes[size++] = (byte) c;
+            } else if (c <= 0x7ff) {
+                reserve(2); bytes[size++] = (byte) (0xc0 | (c >>> 6));
+                bytes[size++] = (byte) (0x80 | (c & 0x3f));
+            } else if (c >= 0xd800 && c <= 0xdfff) {
+                // Current field() always escapes surrogate code units before appending them.
+                reserve(1); bytes[size++] = (byte) '?';
+            } else {
+                reserve(3); bytes[size++] = (byte) (0xe0 | (c >>> 12));
+                bytes[size++] = (byte) (0x80 | ((c >>> 6) & 0x3f));
+                bytes[size++] = (byte) (0x80 | (c & 0x3f));
+            }
+            return this;
+        }
+
+        // Current callers pass ASCII JSON literals/field names only. User text goes through
+        // field(), which escapes every surrogate before invoking append(char). This is not a
+        // general-purpose UTF-8 String encoder.
+        Utf8 appendAscii(String value) {
+            if (value == null) value = "null";
+            for (int i = 0; i < value.length(); i++) append(value.charAt(i));
+            return this;
+        }
+
+        Utf8 append(boolean value) { return appendAscii(value ? "true" : "false"); }
+        Utf8 append(int value) { return append((long) value); }
+
+        Utf8 append(long value) {
+            boolean negative = value < 0;
+            long n = negative ? value : -value; // Keeps Long.MIN_VALUE representable.
+            long cursor = n;
+            int digits = 1;
+            while (cursor <= -10) { cursor /= 10; digits++; }
+            reserve(digits + (negative ? 1 : 0));
+            if (negative) bytes[size++] = (byte) '-';
+            int end = size + digits;
+            int position = end;
+            while (n <= -10) {
+                long quotient = n / 10;
+                bytes[--position] = (byte) ('0' - (n - quotient * 10));
+                n = quotient;
+            }
+            bytes[--position] = (byte) ('0' - n);
+            size = end;
+            return this;
+        }
+
+        byte[] finish() { return size == bytes.length ? bytes : Arrays.copyOf(bytes, size); }
     }
 }

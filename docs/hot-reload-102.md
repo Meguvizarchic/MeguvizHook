@@ -71,6 +71,41 @@ public void onHotReloaded(HotReloadedParam param) {
 验证目标和旧代属性，不能按 `oldHandles()` 的序号匹配。对既没有唯一映射又不属于模块管理范围
 的 handle，不要擅自处理。
 
+接管期间，当前 session 会持有自己的监视器调用框架 handle 的检查和替换方法；`close()` 与
+`oldHandles()` 也需要该监视器。如果框架或调用方在替换中同步等待另一个线程关闭或查询同一
+session，就可能形成等待环。桌面 JVM 的受控框架替身已复现该交错，但尚不能据此判断真实
+框架的触发频率。调用方应避免这种跨线程同步等待，并在框架允许的生命周期内完成接管、再
+关闭 session；单独协调也不能保证消除调用方或框架自己的其他锁环。
+
+当前开发源码提供 `session.requestClose()`：它只设置关闭请求，不取得 session 监视器、不
+调用框架，也不安排后台任务。若被替换过程等待的线程只是需要提出关闭请求，可调用该方法并
+返回，由不处于该等待链的协调步骤在**框架回调返回前**等待已认领接管结束，再调用同步
+`session.close()`：
+
+```java
+// 被接管过程等待的线程：只请求，不在这里等待接管或调用 close()。
+session.requestClose();
+
+// 另一个合适的协调步骤：完成已认领接管后，仍须在 onHotReloaded 返回前执行。
+session.close();
+```
+
+`isCloseRequested()` 只表示已请求或同步关闭已认领，不能证明接管、引用释放或框架清理完成。
+请求先于准入时，后续 `oldHandles()` 和签发 token 会拒绝；未使用 token 通过 `env.adopt`
+尝试接管会得到明确未提交的 `FAILED` 回执，框架替换不会发生。请求若发生在操作通过准入
+检查后，该操作仍可能继续并完成，调用方须处理其真实回执和句柄。前述 `FAILED` 适用于已通过
+environment 其他前置检查、实际到达 token 准入检查的接管；其他阶段可能返回不同状态。
+`oldHandles()`、签发 token、
+接管及同步 `close()` 仍可能等待监视器；只有请求和查询请求标志自身不等待该监视器。
+不能在被接管过程等待的线程同步等待协调步骤，也不能让已认领操作跨出框架回调生命周期。
+此入口属于当前开发源码，不应假定已包含在既有发布制品中；它不能消除其他调用方、SDK 或
+框架锁形成的等待环。
+
+目标检查调用框架 handle 时，如果它同步重入并关闭了 session，而该令牌尚未发起替换，当前
+开发源码会将本次接管报告为确定未提交；若同一令牌已在嵌套调用中尝试替换，外层则按未知
+结果保守处理，不会再次调用替换。调用方仍须检查各次回执，不能把这一检查当成对任意框架
+重入的完整保证。
+
 ## 结果和失败处理
 
 - 成功接管只覆盖一个已解析目标：API102 `replaceHook` 保留原框架目标、优先级、异常处理模式和
@@ -89,6 +124,9 @@ public void onHotReloaded(HotReloadedParam param) {
   native 制品何时释放由运行时决定。不要把该功能表述成物理卸载保证。
 - session 是否只在框架回调内使用、目标的真实身份和模块资源是否清理完毕，最终都由调用方保证。
   保留 session/旧 handle 副本可能延长旧代对象的生命周期。
+- session 在开放期间保留按对象身份建立的旧 handle 索引，供归属和单次签发检查；该索引随旧
+  handle 数量增长，即使调用方只接管部分 handle 也会占用内存。`close()` 会释放 session 对
+  索引的引用；调用方自行持有的 `oldHandles()` 副本仍由其自行释放。
 
 上游合同见 [libxposed API102 生命周期](https://github.com/libxposed/api/blob/102.0.0/api/src/main/java/io/github/libxposed/api/XposedModuleInterface.java)
 和 [HookHandle 替换合同](https://github.com/libxposed/api/blob/102.0.0/api/src/main/java/io/github/libxposed/api/XposedInterface.java)。

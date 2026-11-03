@@ -10,7 +10,8 @@ package io.github.jichuo1.meguviz.hook.api;
  *   <li>{@link #READ_ARGS}: borrowed read access, valid on the invoking thread during the callback.</li>
  *   <li>{@link #ENTRY_SNAPSHOT}: shallow slot snapshot taken at entry; elements are shared, never
  *       deep-copied, and internal mutations of argument objects are not rolled back.</li>
- *   <li>{@link #MUTABLE_ARGS}: validated writes that become visible downstream.</li>
+ *   <li>{@link #MUTABLE_ARGS}: validated writes that become visible downstream. The adapter's
+ *       argument array is obtained at entry and, if the continuation runs, passed to it.</li>
  *   <li>{@link #AROUND}: continuation access; exclusive with before/after callbacks in this version.</li>
  *   <li>{@link #READ_ARGS_VIEW}: borrowed read-only argument view captured at entry. The SDK does
  *       not request an argument array from an adapter that provides a view. It is not an entry

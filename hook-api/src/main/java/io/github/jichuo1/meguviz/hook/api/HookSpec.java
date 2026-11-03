@@ -1,5 +1,6 @@
 package io.github.jichuo1.meguviz.hook.api;
 
+import java.lang.reflect.Executable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -17,6 +18,16 @@ import java.util.Set;
  */
 public final class HookSpec {
     public static final int DEFAULT_PRIORITY = 50;
+
+    /** Create a normal builder using validated logical identity and an explicit target. */
+    public static Builder builder(String id, String owner, TargetSpec target) {
+        return new Builder(HookId.of(id), HookOwner.of(owner), target);
+    }
+
+    /** Create a normal builder for an already resolved method or constructor. */
+    public static Builder forMember(String id, String owner, Executable target) {
+        return new Builder(HookId.of(id), HookOwner.of(owner), TargetSpec.ofMember(target));
+    }
 
     private final HookId id;
     private final HookOwner owner;
@@ -155,8 +166,9 @@ public final class HookSpec {
     }
 
     /**
-     * Full-semantics comparison used for idempotent reinstall. Callback identity is part of the
-     * semantics: a re-created lambda is a different registration, not an idempotent repeat.
+     * Full-semantics comparison used for idempotent reinstall. Callback and observer identity is
+     * part of the semantics. Re-evaluating a lambda does not guarantee the same object; retain and
+     * reuse the same instances when relying on idempotent installation.
      */
     public boolean hasSameSemantics(HookSpec other) {
         return other != null

@@ -2,6 +2,7 @@ package io.github.jichuo1.meguviz.hook.testing.conformance;
 
 import io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation;
 import io.github.jichuo1.meguviz.hook.api.HookContractException;
+import io.github.jichuo1.meguviz.hook.api.HookInvocation;
 import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation;
@@ -239,8 +240,10 @@ public class ParameterShapeTest {
         TestSupport.installOrFail(environment, TestSupport.spec("shape.constructor", constructor)
                 .around(invocation -> {
                     assertNull(invocation.thisObject());
+                    assertSame(receiver, invocation.constructorReceiver());
                     assertEquals(io.github.jichuo1.meguviz.hook.api.CallOutcome.State.RETURNED,
                             invocation.proceed().state());
+                    assertSame(receiver, invocation.constructorReceiver());
                 })
                 .build());
         try {
@@ -252,6 +255,51 @@ public class ParameterShapeTest {
     }
 
     @Test
+    public void constructorReceiverKeepsBorrowLifetimeAndEarlyOutcome() throws Throwable {
+        Executable target = io.github.jichuo1.meguviz.hook.testing.Fixtures.Constructed.class.getConstructor(int.class);
+        Object receiver = new io.github.jichuo1.meguviz.hook.testing.Fixtures.Constructed(3);
+        AtomicReference<HookInvocation> previous = new AtomicReference<HookInvocation>();
+        TestSupport.installOrFail(environment, TestSupport.spec("shape.constructor.borrowed", target)
+                .before(invocation -> {
+                    assertNull(invocation.thisObject());
+                    assertSame(receiver, invocation.constructorReceiver());
+                    previous.set(invocation);
+                    AtomicReference<Throwable> wrongThread = new AtomicReference<Throwable>();
+                    Thread other = new Thread(() -> wrongThread.set(
+                            TestSupport.capture(() -> invocation.constructorReceiver())));
+                    other.start();
+                    other.join();
+                    assertTrue(wrongThread.get() instanceof HookContractException);
+                    invocation.setEarlyResult(null);
+                })
+                .after((invocation, result) -> {
+                    assertSame(receiver, invocation.constructorReceiver());
+                    assertTrue(TestSupport.capture(() -> previous.get().constructorReceiver()) instanceof HookContractException);
+                    previous.set(invocation);
+                })
+                .build());
+        assertNull(backend.call(target, receiver, 3));
+        assertEquals(0, backend.originalCallCount(target));
+        assertTrue(TestSupport.capture(() -> previous.get().constructorReceiver()) instanceof HookContractException);
+    }
+
+    @Test
+    public void constructorReceiverCanBeUnavailableOrRemainVisibleAfterFailure() throws Throwable {
+        Executable target = io.github.jichuo1.meguviz.hook.testing.Fixtures.Constructed.class.getConstructor(int.class);
+        Object receiver = new io.github.jichuo1.meguviz.hook.testing.Fixtures.Constructed(3);
+        RuntimeException failure = new RuntimeException("constructor failed");
+        AtomicReference<Object> observed = new AtomicReference<Object>();
+        backend.onTarget(target, (self, args) -> { throw failure; });
+        TestSupport.installOrFail(environment, TestSupport.spec("shape.constructor.failure", target)
+                .after((invocation, result) -> observed.set(invocation.constructorReceiver()))
+                .build());
+        assertSame(failure, TestSupport.capture(() -> backend.call(target, receiver, 3)));
+        assertSame(receiver, observed.get());
+        assertSame(failure, TestSupport.capture(() -> backend.call(target, null, 3)));
+        assertNull(observed.get());
+    }
+
+    @Test
     public void staticTargetHidesBackendReceiverWithoutChangingDownstream() throws Throwable {
         Object receiver = new Object();
         backend.onTarget(NO_ARGS, (thisObject, args) -> {
@@ -259,8 +307,8 @@ public class ParameterShapeTest {
             return 42L;
         });
         TestSupport.installOrFail(environment, TestSupport.spec("shape.static.receiver", NO_ARGS)
-                .before(invocation -> assertNull(invocation.thisObject()))
-                .after((invocation, result) -> assertNull(invocation.thisObject()))
+                .before(invocation -> { assertNull(invocation.thisObject()); assertNull(invocation.constructorReceiver()); })
+                .after((invocation, result) -> { assertNull(invocation.thisObject()); assertNull(invocation.constructorReceiver()); })
                 .build());
         assertEquals(42L, backend.call(NO_ARGS, receiver));
         assertEquals(1, backend.originalCallCount(NO_ARGS));
@@ -275,8 +323,8 @@ public class ParameterShapeTest {
             return 7;
         });
         TestSupport.installOrFail(environment, TestSupport.spec("shape.instance.receiver", target)
-                .before(invocation -> assertSame(receiver, invocation.thisObject()))
-                .after((invocation, result) -> assertSame(receiver, invocation.thisObject()))
+                .before(invocation -> { assertSame(receiver, invocation.thisObject()); assertNull(invocation.constructorReceiver()); })
+                .after((invocation, result) -> { assertSame(receiver, invocation.thisObject()); assertNull(invocation.constructorReceiver()); })
                 .build());
         assertEquals(7, backend.call(target, receiver));
         assertEquals(1, backend.originalCallCount(target));

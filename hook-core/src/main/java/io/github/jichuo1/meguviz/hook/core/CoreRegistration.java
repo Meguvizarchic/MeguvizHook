@@ -37,6 +37,10 @@ final class CoreRegistration implements HookRegistration {
     // When replacement outcome is unknown, retain both plans/channels and any returned handle.
     private volatile CoreRegistration unknownReplacement;
     private CoreRegistration pendingReplacement;
+    // Same-thread monitor reentry must not unhook the old handle inside backend.replace().
+    private boolean replacingBackend;
+    private boolean closingInProgress;
+    private volatile Thread closeOwner;
     private BackendHandle uncertainOldHandle;
     private BackendHandle pendingReplacementHandle;
     // An adoption may have committed before publication; retain ownership even if binding fails.
@@ -54,8 +58,8 @@ final class CoreRegistration implements HookRegistration {
         this.diagnostics = diagnostics;
     }
 
-    DispatchChannel channel(BoundPlan plan) {
-        if (!plans.contains(plan)) {
+    DispatchChannel channel(BoundPlan plan, int index) {
+        if (index < 0 || index >= plans.size() || plans.get(index) != plan) {
             throw new IllegalArgumentException("plan does not belong to this registration");
         }
         if (plan.stringArgumentCondition() != null) return new ConditionalPlanChannel(plan);
@@ -119,7 +123,12 @@ final class CoreRegistration implements HookRegistration {
         }
         final BackendHandle replacementHandle;
         try {
-            replacementHandle = previousHandle.replace(plan, replacement.channel(plan));
+            try {
+                replacingBackend = true;
+                replacementHandle = previousHandle.replace(plan, replacement.channel(plan, 0));
+            } finally {
+                replacingBackend = false;
+            }
         } catch (BackendInstallException failure) {
             throw failure;
         } catch (RuntimeException failure) {
@@ -128,6 +137,10 @@ final class CoreRegistration implements HookRegistration {
         } catch (Error failure) {
             retireUnknownReplacement(replacement, previousHandle, failure);
             throw failure;
+        } catch (Throwable failure) {
+            // An undeclared checked failure can still follow a committed framework swap.
+            retireUnknownReplacement(replacement, previousHandle, failure);
+            throw TypeChecks.rethrow(failure);
         }
         try {
             if (replacementHandle == null) {
@@ -149,6 +162,10 @@ final class CoreRegistration implements HookRegistration {
         } catch (Error failure) {
             retireUnknownReplacement(replacement, previousHandle, failure);
             throw failure;
+        } catch (Throwable failure) {
+            // The backend already returned a replacement handle; publication is indeterminate.
+            retireUnknownReplacement(replacement, previousHandle, failure);
+            throw TypeChecks.rethrow(failure);
         }
     }
 
@@ -204,6 +221,8 @@ final class CoreRegistration implements HookRegistration {
         return handles.size() == plans.size();
     }
 
+    boolean closingOn(Thread thread) { return closeOwner == thread; }
+
     /** Null while close has not finished; callers must not assume entry restoration in that case. */
     CloseReport closeReport() {
         return lastCloseReport;
@@ -225,16 +244,55 @@ final class CoreRegistration implements HookRegistration {
     }
 
     @Override
-    public synchronized CloseReport close() {
-        if (!closeOnce.compareAndSet(false, true)) {
-            return lastCloseReport;
+    public CloseReport close() {
+        Thread current = Thread.currentThread();
+        boolean claimed = false;
+        boolean interrupted = false;
+        try {
+            Map<BoundPlan, BackendHandle> claimedHandles;
+            synchronized (this) {
+                if (replacingBackend && !closeOnce.get()) {
+                    throw new IllegalStateException("cannot close registration reentrantly during backend replacement");
+                }
+                while (closingInProgress) {
+                    if (closeOwner == current) {
+                        throw new IllegalStateException("cannot close registration reentrantly during backend uninstall");
+                    }
+                    try {
+                        wait();
+                    } catch (InterruptedException failure) {
+                        interrupted = true;
+                    }
+                }
+                if (!closeOnce.compareAndSet(false, true)) return lastCloseReport;
+                claimed = true;
+                closingInProgress = true;
+                closeOwner = current;
+                state = RegistrationState.RETIRING;
+                // Replacement cannot change these handles after RETIRING is published.
+                claimedHandles = new LinkedHashMap<BoundPlan, BackendHandle>(handles);
+            }
+            return closeBoundHandles(claimedHandles);
+        } finally {
+            if (claimed) {
+                synchronized (this) {
+                    closeOwner = null;
+                    closingInProgress = false;
+                    notifyAll();
+                }
+            }
+            if (interrupted) current.interrupt();
         }
-        state = RegistrationState.RETIRING;
-        if (handles.isEmpty()) {
-            state = RegistrationState.CLOSED;
-            lastCloseReport = new CloseReport(state, true, CloseReport.EntryRestoration.UNKNOWN,
-                    inFlight.get(), CloseReport.PhysicalRelease.NOT_CLAIMED, "no backend handle was bound");
-            return lastCloseReport;
+    }
+
+    private CloseReport closeBoundHandles(Map<BoundPlan, BackendHandle> claimedHandles) {
+        if (claimedHandles.isEmpty()) {
+            synchronized (this) {
+                state = RegistrationState.CLOSED;
+                lastCloseReport = new CloseReport(state, true, CloseReport.EntryRestoration.UNKNOWN,
+                        inFlight.get(), CloseReport.PhysicalRelease.NOT_CLAIMED, "no backend handle was bound");
+                return lastCloseReport;
+            }
         }
 
         CloseReport.EntryRestoration restoration = CloseReport.EntryRestoration.RESTORED;
@@ -243,54 +301,102 @@ final class CoreRegistration implements HookRegistration {
         List<String> messages = new ArrayList<String>();
         List<Throwable> failures = new ArrayList<Throwable>();
         Error firstError = null;
-        for (Map.Entry<BoundPlan, BackendHandle> entry : handles.entrySet()) {
-            BackendCloseReport report;
-            try {
-                report = entry.getValue().uninstall();
-                if (report == null || report.entryRestoration() == null || report.physicalRelease() == null) {
+        boolean restoreInterrupt = false;
+        try {
+            for (Map.Entry<BoundPlan, BackendHandle> entry : claimedHandles.entrySet()) {
+                BackendCloseReport report;
+                try {
+                    report = entry.getValue().uninstall();
+                    if (report == null || report.entryRestoration() == null || report.physicalRelease() == null) {
+                        restoration = worstRestoration(restoration, CloseReport.EntryRestoration.UNKNOWN);
+                        physical = CloseReport.PhysicalRelease.UNKNOWN;
+                        resident = true;
+                        messages.add(safeTargetDescription(entry.getKey())
+                                + ": uninstall returned an incomplete report; entry restoration is unknown");
+                        continue;
+                    }
+                } catch (RuntimeException failure) {
+                    // An unchecked failure can occur before or after the backend removes the entry.
                     restoration = worstRestoration(restoration, CloseReport.EntryRestoration.UNKNOWN);
                     physical = CloseReport.PhysicalRelease.UNKNOWN;
                     resident = true;
-                    messages.add(entry.getKey().target().toGenericString()
-                            + ": uninstall returned an incomplete report; entry restoration is unknown");
+                    failures.add(failure);
+                    messages.add(safeTargetDescription(entry.getKey()) + ": uninstall failed: " + safeThrowableDescription(failure));
+                    continue;
+                } catch (Error failure) {
+                    if (TypeChecks.isFatal(failure)) {
+                        // Leave RETIRING and no completed report: the remaining handles were not tried.
+                        throw TypeChecks.fatal(failure);
+                    }
+                    restoration = worstRestoration(restoration, CloseReport.EntryRestoration.UNKNOWN);
+                    physical = CloseReport.PhysicalRelease.UNKNOWN;
+                    resident = true;
+                    failures.add(failure);
+                    if (firstError == null) firstError = failure;
+                    messages.add(safeTargetDescription(entry.getKey()) + ": uninstall error: " + safeThrowableDescription(failure));
+                    continue;
+                } catch (Throwable failure) {
+                    // JVM callers (including Kotlin) can throw checked failures despite the SPI's
+                    // Java signature. Treat their unknown uninstall outcome like a RuntimeException.
+                    if (failure instanceof InterruptedException) restoreInterrupt = true;
+                    restoration = worstRestoration(restoration, CloseReport.EntryRestoration.UNKNOWN);
+                    physical = CloseReport.PhysicalRelease.UNKNOWN;
+                    resident = true;
+                    failures.add(failure);
+                    messages.add(safeTargetDescription(entry.getKey()) + ": uninstall failed: " + safeThrowableDescription(failure));
                     continue;
                 }
-            } catch (RuntimeException failure) {
-                // An unchecked failure can occur before or after the backend removes the entry.
-                restoration = worstRestoration(restoration, CloseReport.EntryRestoration.UNKNOWN);
-                physical = CloseReport.PhysicalRelease.UNKNOWN;
-                resident = true;
-                failures.add(failure);
-                messages.add(entry.getKey().target().toGenericString() + ": uninstall failed: " + failure);
-                continue;
-            } catch (Error failure) {
-                if (TypeChecks.isFatal(failure)) {
-                    // Leave RETIRING and no completed report: the remaining handles were not tried.
-                    throw TypeChecks.fatal(failure);
+                restoration = worstRestoration(restoration, report.entryRestoration());
+                physical = worstPhysical(physical, report.physicalRelease());
+                resident |= report.resident();
+                messages.add(safeTargetDescription(entry.getKey()) + ": " + report.message());
+            }
+            synchronized (this) {
+                state = resident ? RegistrationState.RETIRED_RESIDENT : RegistrationState.CLOSED;
+                lastCloseReport = new CloseReport(state, true, restoration, inFlight.get(), physical,
+                        messages.toString());
+            }
+            if (firstError != null) {
+                for (Throwable failure : failures) {
+                    if (failure != firstError) firstError.addSuppressed(failure);
                 }
-                restoration = worstRestoration(restoration, CloseReport.EntryRestoration.UNKNOWN);
-                physical = CloseReport.PhysicalRelease.UNKNOWN;
-                resident = true;
-                failures.add(failure);
-                if (firstError == null) firstError = failure;
-                messages.add(entry.getKey().target().toGenericString() + ": uninstall error: " + failure);
-                continue;
+                throw firstError;
             }
-            restoration = worstRestoration(restoration, report.entryRestoration());
-            physical = worstPhysical(physical, report.physicalRelease());
-            resident |= report.resident();
-            messages.add(entry.getKey().target().toGenericString() + ": " + report.message());
+            return lastCloseReport;
+        } finally {
+            // Later backends or diagnostic code may clear it while processing remaining handles.
+            if (restoreInterrupt) Thread.currentThread().interrupt();
         }
-        state = resident ? RegistrationState.RETIRED_RESIDENT : RegistrationState.CLOSED;
-        lastCloseReport = new CloseReport(state, true, restoration, inFlight.get(), physical,
-                messages.toString());
-        if (firstError != null) {
-            for (Throwable failure : failures) {
-                if (failure != firstError) firstError.addSuppressed(failure);
+    }
+
+    /** Diagnostic formatting must not prevent remaining known handles from being uninstalled. */
+    private static String safeTargetDescription(BoundPlan plan) {
+        try {
+            return plan.target().toGenericString();
+        } catch (Throwable failure) {
+            if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+            try {
+                return plan.target().getDeclaringClass().getName() + "#" + plan.target().getName();
+            } catch (Throwable fallbackFailure) {
+                if (TypeChecks.isFatal(fallbackFailure)) throw TypeChecks.fatal(fallbackFailure);
+                return "<target unavailable>";
             }
-            throw firstError;
         }
-        return lastCloseReport;
+    }
+
+    /** A backend Throwable may itself throw while being rendered; keep the original failure. */
+    private static String safeThrowableDescription(Throwable failure) {
+        try {
+            return failure.toString();
+        } catch (Throwable formattingFailure) {
+            if (TypeChecks.isFatal(formattingFailure)) throw TypeChecks.fatal(formattingFailure);
+            try {
+                return failure.getClass().getName() + " [description unavailable]";
+            } catch (Throwable fallbackFailure) {
+                if (TypeChecks.isFatal(fallbackFailure)) throw TypeChecks.fatal(fallbackFailure);
+                return "<failure unavailable>";
+            }
+        }
     }
 
     private static CloseReport.EntryRestoration worstRestoration(CloseReport.EntryRestoration current,
@@ -340,13 +446,26 @@ final class CoreRegistration implements HookRegistration {
     }
 
     /** Single-after specialization selected at bind; all other plans keep their original dispatch. */
-    private final class SingleAfterPlanChannel implements DispatchChannel {
+    private final class SingleAfterPlanChannel implements DirectAfterDispatchChannel {
         private final BoundPlan plan;
         private final AfterCallback callback;
 
         private SingleAfterPlanChannel(BoundPlan plan, AfterCallback callback) {
             this.plan = plan;
             this.callback = callback;
+        }
+
+        @Override
+        public Object dispatchDirect(BackendInvocation invocation) throws Throwable {
+            if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+            inFlight.incrementAndGet();
+            try {
+                if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+                return DirectAfterDispatchChannel.escape(
+                        Dispatcher.dispatchSingleAfterValue(plan, callback, invocation, diagnostics));
+            } finally {
+                inFlight.decrementAndGet();
+            }
         }
 
         @Override

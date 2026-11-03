@@ -13,11 +13,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Explicit, bounded tracing for wrapped SDK callbacks. It is not installed by default and does
  * not create threads, perform I/O, connect services, or capture other modules' exceptions.
- * Call {@link #deliver(Transport, int)} or {@link #deliverBatch(BatchTransport, int)} on a
+ * Call {@link #deliver(Transport, int)}, {@link #deliverBatch(BatchTransport, int)} or
+ * {@link #tryDeliverBatch(BatchTransport, int)} on a
  * caller-owned background worker, never from a hook callback. The queue is bounded by record
  * count, not by the size of retained Throwable graphs.
  *
@@ -68,12 +70,30 @@ public final class CallbackExceptionTracker {
         int sendBatch(List<Event> events) throws Exception;
     }
 
+    /** Result of an explicitly non-waiting attempt to reserve the next batch. */
+    public enum BatchAttemptStatus { BUSY, EMPTY, ACCEPTED }
+
+    /** Acceptance means that the transport returned normally, not that data is durable. */
+    public static final class BatchAttempt {
+        private final BatchAttemptStatus status;
+        private final int acceptedCount;
+        private BatchAttempt(BatchAttemptStatus status, int acceptedCount) {
+            this.status = status;
+            this.acceptedCount = acceptedCount;
+        }
+        public BatchAttemptStatus status() { return status; }
+        public int acceptedCount() { return acceptedCount; }
+    }
+
+    private static final BatchAttempt BUSY = new BatchAttempt(BatchAttemptStatus.BUSY, 0);
+    private static final BatchAttempt EMPTY = new BatchAttempt(BatchAttemptStatus.EMPTY, 0);
+
     private final String source;
     private final ArrayBlockingQueue<Event> pending;
     private final AtomicLong dropped = new AtomicLong();
     private final AtomicLong trackingFailures = new AtomicLong();
     private final AtomicLong discarded = new AtomicLong();
-    private final Object deliveryLock = new Object();
+    private final ReentrantLock deliveryLock = new ReentrantLock();
     private boolean delivering;
 
     public CallbackExceptionTracker(String source, int capacity) {
@@ -159,13 +179,45 @@ public final class CallbackExceptionTracker {
     public long trackingFailureCount() { return trackingFailures.get(); }
     public long discardedCount() { return discarded.get(); }
 
+    /**
+     * Observe the current head without reserving or removing it, or return null when empty.
+     * The returned event may cease to be the head immediately; it retains the original throwable.
+     * Use {@link #discardIfNext(Event)} to avoid discarding a different event after inspection.
+     */
+    public Event peekNext() { return pending.peek(); }
+
+    /**
+     * Discard the head only if it is the exact previously observed event. Like
+     * {@link #discardNext()}, this waits for legacy delivery and rejects a live non-waiting batch
+     * reservation before checking the head. Otherwise, a mismatch leaves the queue unchanged and
+     * returns false.
+     *
+     * @throws NullPointerException if {@code expected} is null
+     */
+    public boolean discardIfNext(Event expected) {
+        Objects.requireNonNull(expected, "expected");
+        deliveryLock.lock();
+        try {
+            if (delivering) throw new IllegalStateException("discard during delivery is not supported");
+            if (pending.peek() != expected) return false;
+            if (pending.poll() != expected) throw new IllegalStateException("trace queue ownership lost");
+            discarded.incrementAndGet();
+            return true;
+        } finally {
+            deliveryLock.unlock();
+        }
+    }
+
     /** Explicitly discard and return one pending record for caller-controlled audit. */
     public Event discardNext() {
-        synchronized (deliveryLock) {
+        deliveryLock.lock();
+        try {
             if (delivering) throw new IllegalStateException("discard during delivery is not supported");
             Event event = pending.poll();
             if (event != null) discarded.incrementAndGet();
             return event;
+        } finally {
+            deliveryLock.unlock();
         }
     }
 
@@ -178,7 +230,8 @@ public final class CallbackExceptionTracker {
     public int deliver(Transport transport, int limit) throws Exception {
         Objects.requireNonNull(transport, "transport");
         if (limit < 1) throw new IllegalArgumentException("limit must be positive");
-        synchronized (deliveryLock) {
+        deliveryLock.lock();
+        try {
             if (delivering) throw new IllegalStateException("recursive delivery is not supported");
             delivering = true;
             try {
@@ -194,6 +247,8 @@ public final class CallbackExceptionTracker {
             } finally {
                 delivering = false;
             }
+        } finally {
+            deliveryLock.unlock();
         }
     }
 
@@ -209,7 +264,8 @@ public final class CallbackExceptionTracker {
     public int deliverBatch(BatchTransport transport, int limit) throws Exception {
         Objects.requireNonNull(transport, "transport");
         if (limit < 1) throw new IllegalArgumentException("limit must be positive");
-        synchronized (deliveryLock) {
+        deliveryLock.lock();
+        try {
             if (delivering) throw new IllegalStateException("recursive delivery is not supported");
             delivering = true;
             try {
@@ -234,6 +290,61 @@ public final class CallbackExceptionTracker {
             } finally {
                 delivering = false;
             }
+        } finally {
+            deliveryLock.unlock();
+        }
+    }
+
+    /**
+     * Attempts to reserve a single ordered batch without waiting for another delivery or discard.
+     * The transport is called synchronously on the caller's worker, outside the delivery lock: this
+     * method does not create threads or make Binder asynchronous. A competing attempt returns
+     * {@link BatchAttemptStatus#BUSY}; an empty snapshot returns {@link BatchAttemptStatus#EMPTY}.
+     *
+     * <p>While this opt-in attempt owns the head, legacy delivery and discard calls fail with
+     * IllegalStateException instead of waiting; a reentrant try also returns BUSY. When only legacy
+     * methods are used, their existing cross-thread waiting and recursive-call behavior is unchanged.
+     * Producers may append during the call, but no other delivery or discard can remove the head.
+     * A positive, in-range accepted-prefix count after a normal transport return removes only that
+     * prefix. A transport exception or invalid count leaves the queue untouched and propagates;
+     * external side effects may already have occurred, so an explicit retry may duplicate them.
+     * Acceptance is not durability, and process death or arbitrary fatal interruption during the
+     * commit does not provide transactional queue recovery.
+     */
+    public BatchAttempt tryDeliverBatch(BatchTransport transport, int limit) throws Exception {
+        Objects.requireNonNull(transport, "transport");
+        if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+        if (!deliveryLock.tryLock()) return BUSY;
+        boolean reserved = false;
+        try {
+            if (delivering) return BUSY;
+            List<Event> batch = new ArrayList<Event>(Math.min(limit, pending.size()));
+            for (Event event : pending) {
+                if (batch.size() == limit) break;
+                batch.add(event);
+            }
+            if (batch.isEmpty()) return EMPTY;
+            // Establish the finally guard before publishing ownership; no external code runs here.
+            reserved = true;
+            delivering = true;
+            deliveryLock.unlock();
+            int accepted = transport.sendBatch(Collections.unmodifiableList(batch));
+            // Reacquisition is not interruptible, like the previous monitor contract. A thread's
+            // interrupt status is not consumed by the delivery lock.
+            deliveryLock.lock();
+            if (accepted < 1 || accepted > batch.size()) {
+                throw new IllegalStateException("invalid accepted batch prefix");
+            }
+            for (int i = 0; i < accepted; i++) {
+                if (pending.poll() != batch.get(i)) throw new IllegalStateException("trace queue ownership lost");
+            }
+            return new BatchAttempt(BatchAttemptStatus.ACCEPTED, accepted);
+        } finally {
+            if (reserved) {
+                if (!deliveryLock.isHeldByCurrentThread()) deliveryLock.lock();
+                delivering = false;
+            }
+            deliveryLock.unlock();
         }
     }
 }

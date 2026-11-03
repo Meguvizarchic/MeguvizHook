@@ -97,9 +97,21 @@ public final class RegistrationReceipt {
         return targets;
     }
 
-    /** True only when every selected target was installed; partial success remains false. */
+    /** True only for {@link Status#INSTALLED}; an identical existing registration remains false. */
     public boolean isInstalled() {
         return status == Status.INSTALLED;
+    }
+
+    /**
+     * Whether this outcome reported a complete installation or an identical complete registration
+     * already present at the check. This is a point-in-time result: a registration may close after
+     * the check. {@link Status#ALREADY_INSTALLED} does not create a new generation, replace a
+     * framework hook, or return its registration; callers must retain the previously owned handle.
+     * It is not sufficient when a fresh replacement or ownership transfer is required. Partial
+     * installation remains unsatisfied and may still carry a registration that requires cleanup.
+     */
+    public boolean isSatisfied() {
+        return status == Status.INSTALLED || status == Status.ALREADY_INSTALLED;
     }
 
     public boolean isPartiallyInstalled() {

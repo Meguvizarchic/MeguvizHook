@@ -34,10 +34,13 @@ RegistrationReceipt receipt = environment.install(new HookSpec.Builder(
         .before(invocation -> ((MutableArgsInvocation) invocation).setArgument(0, 10))
         .after((invocation, result) -> { /* 可读取或显式替换结果 */ })
         .build());
-if (!receipt.isInstalled()) {
-    // 按 receipt.status() 分别处理：能力拒绝/歧义/缺失/冲突/过期/裁剪/失败。
+if (receipt.isInstalled()) {
+    HookRegistration owned = receipt.registration(); // 保存本次注册，之后检查 close 报告
+} else if (receipt.isSatisfied()) {
+    // 相同注册已存在；继续持有之前获得的 handle，不会在此回执中取得新 handle。
+} else {
+    // 按 status 处理；部分安装仍可能携带需要关闭的 registration。
 }
-// 退役：CloseReport report = receipt.registration().close();
 ```
 
 - 普通非 AROUND 形状至少一个 before 或 after；`AROUND` 与 before/after 互斥。显式
@@ -59,6 +62,24 @@ if (!receipt.isInstalled()) {
   `parameters(null)` 表示任意重载，UNIQUE 下多匹配返回 `AMBIGUOUS_TARGET`。
   构造器的 JVM 返回类型按 `void` 匹配：不指定返回类型或指定 `void` 均可匹配；
   `java.lang.Void` 和其他类型不会匹配构造器。
+- 当前开发源码在构造器回调中可显式调用 `invocation.constructorReceiver()` 获取后端提供的
+  接收对象；原有 `thisObject()` 对构造器仍返回 `null`。接收对象可能不可用，也可能尚未或只
+  部分初始化；即使在 after 中非空，也不能推断原构造器成功执行。提前返回或异常时同样如此。
+  借用调用对象仍只能在本次回调及所属线程使用，调用方负责管理自行保留的接收对象引用。
+  在新版 API 下，未覆盖该方法的旧实现使用默认值 `null`；若调用方运行时仍使用不包含此方法
+  的旧 API，会发生链接错误。存在相互冲突的接口默认方法时，具体实现仍需显式解决冲突。
+  应配套使用包含此方法的 API 和 core，不能假设它已在既有 1.0.0 发布包中。101/102 后端依赖
+  框架提供的接收对象，实际框架和 ART 行为仍需验证。
+
+  ```java
+  .before(invocation -> {
+      Object receiver = invocation.constructorReceiver();
+      if (receiver != null) {
+          // 仅按目标框架和业务约定处理，不能假设构造器已经执行。
+      }
+  })
+  ```
+
 - `HookSpec` 默认：`NO_ARGS`、`ErrorPolicy.PROPAGATE`、优先级 50、进程过滤 all、无必需能力。
 - 显式 `ErrorPolicy.FRAMEWORK_PROTECTIVE` 需要 backend 声明 `FRAMEWORK_PROTECTIVE` 能力；101/102
   将错误交由框架原生 PROTECTIVE 模式处理，SDK 不重放原方法。SDK 的多回调状态机及 fatal
@@ -70,7 +91,24 @@ if (!receipt.isInstalled()) {
 `RegistrationReceipt.Status`：`INSTALLED / PARTIALLY_INSTALLED / ALREADY_INSTALLED / CONFLICT /
 UNSUPPORTED_CAPABILITY / AMBIGUOUS_TARGET / TARGET_MISSING / STALE_IDENTITY / FILTERED /
 TEMPORARILY_UNAVAILABLE / FAILED`。`INSTALLED` 与 `PARTIALLY_INSTALLED` 携带 `HookRegistration`；
-`isInstalled()` 仅对全部目标成功返回 true，部分成功必须显式处理。`FILTERED` 是进程裁剪的正常结果。
+`isInstalled()` 仅对本次 `INSTALLED` 结果返回 true；已存在与部分成功均为 false。
+`FILTERED` 是进程裁剪的正常结果。
+
+`isSatisfied()` 对 `INSTALLED` 与 `ALREADY_INSTALLED` 返回 true，表示此次检查时完整配置已满足；
+回执不是实时存活状态。`ALREADY_INSTALLED` 不创建新 generation、不调用框架替换，也不返回
+registration：调用方须保留原 handle，且不能将其当成已强制换代或新句柄已获得所有权。
+`PARTIALLY_INSTALLED` 仍返回 false，但可能携带需要管理的 registration。
+该辅助方法属于当前开发源码，已发布的 1.0.0 尚无此方法；使用 1.0.0 时可显式比较上述两个
+状态，并遵循同样的 handle 所有权规则。
+
+当前开发源码还提供显式 `installWithResolutionDiagnostics(spec)`：`receipt()` 给出与普通安装
+同合同的回执，`resolutionFailure()` 仅返回本次 `MemberResolver.resolve` 抛出的原始受检
+`BackendInstallException`。解析后身份复核可能使回执为 `STALE_IDENTITY`，同时保留发生在身份
+变化前的解析异常；空异常不意味着成功，也不覆盖后端安装或其他阶段的失败。unchecked 异常和
+fatal 事件仍按普通安装规则传播。此入口不隐式记录异常，且不执行 replace 或 adopt。
+结果和异常可能保留完整 Throwable 图、敏感信息及 ClassLoader；调用方应控制保留期并在检查后
+释放引用，不能据此保证立即回收。桥接示例及使用边界见
+[`hook-ref-bridge` 说明](../../hook-ref-bridge/README.md#显式查看解析失败)。
 
 `MatchPolicy.ALL` 的 `targets()` 按稳定解析顺序给出每个 `TargetInstallReceipt`：`INSTALLED / FAILED /
 ROLLED_BACK`。普通单项失败保留已成功项并返回 `PARTIALLY_INSTALLED`，不承诺跨目标原子性；全部失败
@@ -80,12 +118,16 @@ ROLLED_BACK`。普通单项失败保留已成功项并返回 `PARTIALLY_INSTALLE
 恢复为 `RESTORED` 则允许重试，即使物理制品仍驻留。没有已安装项的失败不会因回滚被隔离。
 隔离仅覆盖当前环境和 ID，不提供卸载重试或跨环境保护；close 保持幂等。
 
-单目标 replacement 的 `BackendInstallException` 表示后端保证未提交且旧 handle 有效；unchecked 异常、
-Error 或 null handle 表示结果未知；异常会原样传播，null 会引发异常，同时停止新旧 SDK 回调并在同一环境隔离该 ID，
+单目标 replacement 的 `BackendInstallException` 表示后端保证未提交且旧 handle 有效；其他 Throwable
+（包括 Kotlin 等 JVM 实现抛出的未声明受检异常）或 null handle 表示结果未知；异常会原样传播，
+null 会引发异常，同时停止新旧 SDK 回调并在同一环境隔离该 ID，
 不会尝试卸载可能已失效的旧 handle。此状态不证明框架入口恢复或物理释放。
 backend 的 `BackendInstallException` 必须保证该次调用未安装入口，才可形成逐项失败回执。若 backend
-安装抛出运行时异常或 `Error`，core 尝试关闭已取得的句柄并传播异常；抛错调用未返回的句柄及其
-副作用无法确认，因此该 ID 在当前环境中隔离，即使已取得句柄的入口报告恢复也不会自动解除。
+安装或接管抛出其他 Throwable 时，core 对已取得的句柄按安装或接管合同清理或保留并传播原异常；
+抛错调用未返回的句柄及其副作用无法确认，因此该 ID 在当前环境中隔离，即使已取得句柄的入口
+报告恢复也不会自动解除。已成功安装后身份复核抛出异常，同样不伪装为普通失败或成功回执。
+声明的 `BackendInstallException` 子类若在生成失败回执时抛异常，当前目标仍视为未提交，已知的
+先前句柄按保守隔离规则处理，诊断异常原样传播。
 安装完成后若环境发布或回执构造中断，core 通过独立 guard 保留注册、关闭已取得的句柄并隔离该 ID；
 这不保证隔离自身遭异步致命事件中断或无法分配必要状态时一定成功。
 
@@ -94,7 +136,15 @@ backend 的 `BackendInstallException` 必须保证该次调用未安装入口，
 卸载抛出运行时异常时无法判断入口是否已恢复，报告 `UNKNOWN` 并记录失败。环境关闭时，注册抛出的
 非致命 `Error` 或未处理的运行时异常不会跳过后续注册：所有已知注册均尝试关闭，未确认入口仍保留
 引用，然后重抛首个 `Error`（若无 `Error` 则重抛首个未处理的运行时异常）。
+后端卸载若通过 Kotlin 等方式抛出 Java 签名未声明的受检异常，同样按恢复状态未知处理并继续
+关闭其余句柄；捕获到 `InterruptedException` 时会在该注册关闭结束时恢复中断位。环境关闭还会
+恢复进入时已有或各注册关闭后观察到的中断，无法恢复后端在单次调用内部自行产生并清除的信号。
+目标泛型签名或异常文本无法格式化时，报告使用简化描述，不将格式化故障当作卸载失败。
 致命 VM 事件立即传播，后续注册不宣称已关闭。环境和注册关闭均不自动重试未知卸载。
+
+`HookEnvironment.requestClose()` 只标记关闭请求并拒绝后续准入，不执行卸载或等待已领取
+事务；现有回调仍可能运行。调用方须另行协调并调用同步 `close()` 完成清理，详见
+[显式请求关闭环境](../close-request.md)。
 
 ## 4. 生命周期与借用规则
 
@@ -104,6 +154,9 @@ backend 的 `BackendInstallException` 必须保证该次调用未安装入口，
   这不改变原方法、异常与诊断顺序，也不改变多回调各自的借用寿命。
 - `AroundInvocation.proceed()` 每次 invocation 至多一次；第二次、跨线程、回调后调用均为合同异常。
 - `entrySnapshot()` 是浅槽快照：数组复制、对象共享。
+- 在 `around` 中需要保存某个时刻的参数槽时，可显式调用
+  `Object[] saved = InvocationArguments.copyOf(invocation);`。它按槽顺序读取当时的实时参数，
+  并非自动入口快照或跨槽原子读取；数组独立、对象共享，调用时仍须遵守回调线程与生命周期规则。
 - `HookRegistration.close()` 后到达框架入口的调用走 `passthrough`：原方法恰好一次，无 SDK 回调。
 
 ## 5. 身份模型

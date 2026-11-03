@@ -1,14 +1,11 @@
 package io.github.jichuo1.meguviz.hook.sample.java;
 
 import io.github.jichuo1.meguviz.hook.api.CloseReport;
-import io.github.jichuo1.meguviz.hook.api.HookId;
-import io.github.jichuo1.meguviz.hook.api.HookOwner;
 import io.github.jichuo1.meguviz.hook.api.HookRegistration;
 import io.github.jichuo1.meguviz.hook.api.HookSpec;
 import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
-import io.github.jichuo1.meguviz.hook.api.TargetSpec;
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment;
 import io.github.jichuo1.meguviz.hook.testing.FakeBackend;
 import io.github.jichuo1.meguviz.hook.testing.Fixtures;
@@ -59,8 +56,7 @@ public final class JavaContractsSample {
     }
 
     private static HookRegistration installMutable(HookEnvironment environment, Method add) {
-        HookSpec spec = new HookSpec.Builder(HookId.of("sample.java.mutable"), HookOwner.of("java-sample"),
-                TargetSpec.ofMember(add))
+        HookSpec spec = HookSpec.forMember("sample.java.mutable", "java-sample", add)
                 .access(ParameterAccess.MUTABLE_ARGS)
                 .before(invocation -> ((MutableArgsInvocation) invocation).setArgument(0, 10))
                 .build();
@@ -71,8 +67,7 @@ public final class JavaContractsSample {
     }
 
     private static HookRegistration installEarlyReturn(HookEnvironment environment, Method add) {
-        HookSpec spec = new HookSpec.Builder(HookId.of("sample.java.early"), HookOwner.of("java-sample"),
-                TargetSpec.ofMember(add))
+        HookSpec spec = HookSpec.forMember("sample.java.early", "java-sample", add)
                 .before(invocation -> invocation.setEarlyResult(99))
                 .build();
         RegistrationReceipt receipt = environment.install(spec);
@@ -82,8 +77,7 @@ public final class JavaContractsSample {
     }
 
     private static RegistrationReceipt replaceEarlyReturn(HookEnvironment environment, Method add) {
-        HookSpec spec = new HookSpec.Builder(HookId.of("sample.java.early"), HookOwner.of("java-sample"),
-                TargetSpec.ofMember(add))
+        HookSpec spec = HookSpec.forMember("sample.java.early", "java-sample", add)
                 .before(invocation -> invocation.setEarlyResult(100))
                 .build();
         RegistrationReceipt receipt = environment.replace(spec);

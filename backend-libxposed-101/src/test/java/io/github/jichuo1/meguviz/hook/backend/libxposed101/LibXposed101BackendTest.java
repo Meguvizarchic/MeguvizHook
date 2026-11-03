@@ -11,6 +11,8 @@ import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment;
 import io.github.jichuo1.meguviz.hook.core.DispatchChannel;
+import io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel;
+import io.github.jichuo1.meguviz.hook.core.DispatchResult;
 import io.github.libxposed.api.XposedInterface;
 
 import org.junit.Before;
@@ -97,6 +99,25 @@ public class LibXposed101BackendTest {
         receipt.registration().close();
         assertEquals(1, framework.unhookCalls.get());
         receipt.registration().close();
+        assertEquals(1, framework.unhookCalls.get());
+    }
+
+    @Test
+    public void forceReplaceIdenticalConstantTransfersOwnershipWithoutReinstall() throws Throwable {
+        HookSpec spec = new HookSpec.Builder(HookId.of("adapter101.force"), HookOwner.of("adapter-test"),
+                TargetSpec.ofMember(sampleTarget())).replaceConstant(99).build();
+        HookRegistration old = install(spec);
+        XposedInterface.Hooker originalHooker = framework.hooker;
+
+        RegistrationReceipt replaced = environment.forceReplace(spec);
+        assertTrue(replaced.toString(), replaced.isInstalled());
+        assertTrue(replaced.generation() > old.generation());
+        assertSame(originalHooker, framework.hooker);
+        assertEquals(1, framework.installCalls.get());
+        old.close();
+        assertEquals(0, framework.unhookCalls.get());
+        assertEquals(99, framework.invokeHook(sampleTarget(), null, 1, 2));
+        replaced.registration().close();
         assertEquals(1, framework.unhookCalls.get());
     }
 
@@ -300,6 +321,34 @@ public class LibXposed101BackendTest {
         assertEquals(1, framework.unhookCalls.get());
     }
 
+    @Test
+    public void directAfterPreservesReservedResultsAndClosedPassthrough() throws Throwable {
+        Method target = SampleTargets.class.getMethod("objectValue");
+        Object marker = DirectAfterDispatchChannel.NOT_ENTERED;
+        Object escaped = DirectAfterDispatchChannel.escape(marker);
+        Object[] values = {null, new Object(), marker, escaped,
+                DirectAfterDispatchChannel.escape(escaped), DispatchResult.passthrough()};
+        AtomicInteger callbacks = new AtomicInteger();
+        for (int i = 0; i < values.length; i++) {
+            Object expected = values[i];
+            HookRegistration registration = install(HookSpec.forMember("adapter101.after." + i, "adapter-test", target)
+                    .after((invocation, result) -> { callbacks.incrementAndGet(); result.setResult(expected); }).build());
+            Field routeField = framework.hooker.getClass().getDeclaredField("route");
+            routeField.setAccessible(true);
+            Object route = routeField.get(framework.hooker);
+            Field bindingField = route.getClass().getDeclaredField("directAfter");
+            bindingField.setAccessible(true);
+            assertTrue("direct route must be selected", bindingField.get(route) != null);
+            Object downstream = new Object();
+            framework.proceedResult = downstream;
+            assertSame(expected, framework.invokeHook(target, null));
+            registration.close();
+            assertSame(downstream, framework.invokeHook(target, null));
+        }
+        assertEquals(values.length, callbacks.get());
+        assertEquals(values.length * 2, framework.proceedCalls.get());
+    }
+
     private HookRegistration install(HookSpec spec) {
         RegistrationReceipt receipt = environment.install(spec);
         assertTrue(receipt.toString(), receipt.isInstalled());
@@ -313,6 +362,8 @@ public class LibXposed101BackendTest {
         public static int add(int left, int right) {
             return left + right;
         }
+
+        public static Object objectValue() { return null; }
     }
 
     /** Proxy stub rejects any method outside the small 101 surface used by the adapter. */

@@ -2,7 +2,7 @@
 
 MeguvizHook 是一个面向 Android 模块开发的 Hook SDK，提供独立的 Java API、JVM 执行核心、Kotlin DSL 和 libxposed API 101／102 适配器。实际方法拦截由运行框架完成；SDK 不替代框架管理器、注入器或 Android Runtime。
 
-当前版本为 `0.1.0-SNAPSHOT`，仍在开发中。真实框架和设备行为取决于所选框架及宿主环境，尚不能根据 JVM 测试推断所有设备兼容性或性能收益。
+Maven Central 已发布 `1.0.0`；当前工作树的默认开发版本为 `0.1.0-SNAPSHOT`，包含尚未发布的后续更改。真实框架和设备行为取决于所选框架及宿主环境，尚不能根据 JVM 测试推断所有设备兼容性或性能收益。
 
 ## 功能
 
@@ -11,6 +11,8 @@ MeguvizHook 是一个面向 Android 模块开发的 Hook SDK，提供独立的 J
 - 支持单目标原子替换和在途调用的代次隔离；API102 可显式接入框架模块热重载，API101 不提供同一模块热重载生命周期。
 - 可选的回调异常跟踪、JSONL 记录及 API102 远程文件和 Binder 适配；默认不启动服务、线程或远程采集。
 - 可选的同步批量诊断交付和有界压缩，支持 zlib、固定诊断字段字典、完整试压及 RAW 回退。双方须明确选择相同格式与限制。
+- 诊断交付可显式选择锁外批量预约或由调用方提供执行器；压缩和 Ref 查找也提供显式生命周期的可复用会话。当前开发版本的压缩会话可选择输出缓冲策略，详见 [压缩会话](docs/compression-session.md)。
+- 可选的模块入口路由、显式资源租约及 API101/102 高级操作；可选 MeguvizRef 桥提供可扩展的成员定位。
 
 批量交付确认的含义取决于接收端：接收回调正常返回不代表持久化。发送失败可能已有副作用，显式重试可能重复；跨进程使用者仍需处理授权、连接、队列容量、隐私和保存策略。参见 [异常诊断与远程传输](docs/remote-diagnostics-102.md)。
 
@@ -24,10 +26,29 @@ MeguvizHook 是一个面向 Android 模块开发的 Hook SDK，提供独立的 J
 | `backend-libxposed-101` | libxposed API 101 后端适配 |
 | `backend-libxposed-102` | libxposed API 102 后端适配 |
 | `hook-testing` | JVM fake backend 与合同验证工具 |
+| `hook-ref-bridge` | 可选 MeguvizRef 1.0.0 成员定位桥；Java 17，不进入核心默认依赖 |
 | `sample-java-contracts`、`sample-kotlin-contracts` | 在 JVM fake backend 上运行的消费示例 |
 | `sample-module-101`、`sample-module-102`、`sample-module-kotlin-102` | Android 模块入口示例 |
 
 选择与运行框架一致的一代后端；框架 API 由运行时提供。SDK 本身不自动发现服务、管理模块作用范围或配置框架权限。
+建议将 API、核心和后端统一为同一发行版本。较新的高级操作依赖对应版本的核心；强制将新后端与
+旧核心混用，可能在混淆构建或运行时遇到缺失类型。
+
+## 简洁声明
+
+Kotlin 可以复用模块 owner，并直接传入已解析的方法；返回的仍是完整安装回执：
+
+```kotlin
+val hooks = environment.forOwner("my-module")
+val receipt = hooks.install("feature.title", resolvedMethod) {
+    replaceConstant("")
+}
+// 检查 receipt.isInstalled 和其他状态，调用方仍负责关闭注册。
+```
+
+Java 可使用 `HookSpec.forMember("feature.title", "my-module", resolvedMethod)` 获得
+普通 Builder。类型令牌、构造器、条件替换和完整示例见 [Kotlin DSL](hook-dsl/README.md)
+及 [Java 消费样例](sample-java-contracts/src/main/java/io/github/jichuo1/meguviz/hook/sample/java/JavaContractsSample.java)。
 
 ## 构建与示例
 
@@ -46,6 +67,10 @@ cd MeguvizHook
 
 需要 Android SDK platform 37.2 和 build-tools 37.0.0。Windows 可使用 `gradlew.bat`。Android 的单元测试使用框架接口与平台桩，不等同于真实 Hook 或跨进程测试。
 
+Maven Central 的已发布制品与后续发布准备、独立消费检查和签名打包步骤见
+[中央仓库发布说明](docs/maven-central.md)。已发布的 `1.0.0` 和此前本地签名候选均不包含
+当前工作树的后续更改；本地构建不会自动更新中央仓库。
+
 从源码接入时，请参考 [Java 合同示例](sample-java-contracts/src/main/java/io/github/jichuo1/meguviz/hook/sample/java/JavaContractsSample.java)、[API101 模块](sample-module-101/) 和 [API102 模块](sample-module-102/)。示例中的目标、作用范围和框架生命周期由实际模块自行配置；fake backend 仅用于测试。
 
 ## 运行时合同
@@ -57,6 +82,14 @@ cd MeguvizHook
 - 批帧、压缩帧和 JSONL 是不同格式；未配对的旧接收端不能直接读取新格式。压缩帧的校验和不提供认证或保密。
 
 完整语义见 [回调合同](docs/contracts/callback_contract.md)、[运行时合同 ADR](docs/adr/ADR-0001-runtime-contract.md)、[Hook 身份作用域 ADR](docs/adr/ADR-0003-hook-identity-scope.md) 和 [API102 热重载](docs/hot-reload-102.md)。
+扩展使用边界见 [模块入口与生命周期](docs/module-entry-lifecycle.md)、
+[高级 Hook 操作](docs/advanced-hooks.md) 和 [MeguvizRef 桥接](hook-ref-bridge/README.md)。
+多个描述符需要并发定位时，可参考[显式并行预解析与顺序安装](docs/prepared-install.md)。
+需要在 backend 回调中提出关闭请求时，参见[显式请求关闭环境](docs/close-request.md)。
+诊断用法见 [非等待预约](docs/nonblocking-trace-delivery.md)、
+[调用方执行器](docs/trace-batch-dispatcher.md)、[后台批量轮询](docs/trace-batch-poller.md)
+和 [压缩会话](docs/compression-session.md)；
+[性能研究记录](docs/performance-research.md) 区分资料、实验假设与实际证据。
 
 ## 验证范围
 

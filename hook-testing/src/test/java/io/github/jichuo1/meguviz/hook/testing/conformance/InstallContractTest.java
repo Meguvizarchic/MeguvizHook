@@ -31,6 +31,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -64,6 +66,7 @@ public class InstallContractTest {
                 })
                 .build());
         assertEquals(RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY, receipt.status());
+        assertFalse(receipt.isSatisfied());
         assertEquals(0, backend.installCount());
     }
 
@@ -116,7 +119,37 @@ public class InstallContractTest {
                 })
                 .build());
         assertEquals(RegistrationReceipt.Status.CONFLICT, conflict.status());
+        assertFalse(conflict.isSatisfied());
         assertEquals("conflicting install must not replace the existing hook", 1, backend.installCount());
+    }
+
+    @Test
+    public void satisfiedIncludesIdenticalRegistrationWithoutTransferringItsHandle() {
+        HookSpec spec = TestSupport.spec("satisfied.same", ADD).replaceConstant(7).build();
+        try {
+            RegistrationReceipt first = environment.install(spec);
+            assertTrue(first.isInstalled());
+            assertTrue(first.isSatisfied());
+            HookRegistration owned = first.registration();
+            assertTrue(owned != null);
+
+            RegistrationReceipt repeated = environment.install(spec);
+            assertEquals(RegistrationReceipt.Status.ALREADY_INSTALLED, repeated.status());
+            assertFalse(repeated.isInstalled());
+            assertTrue(repeated.isSatisfied());
+            assertNull(repeated.registration());
+            assertEquals(first.generation(), repeated.generation());
+
+            RegistrationReceipt replacement = environment.replace(spec);
+            assertEquals(RegistrationReceipt.Status.ALREADY_INSTALLED, replacement.status());
+            assertTrue(replacement.isSatisfied());
+            assertNull(replacement.registration());
+            assertEquals(first.generation(), replacement.generation());
+            assertEquals(1, backend.installCount());
+
+            owned.close();
+            assertTrue("receipt reports the earlier outcome, not current liveness", repeated.isSatisfied());
+        } finally { environment.close(); }
     }
 
     @Test
@@ -248,6 +281,7 @@ public class InstallContractTest {
 
         assertEquals(RegistrationReceipt.Status.PARTIALLY_INSTALLED, receipt.status());
         assertFalse("partial success must not look like full success", receipt.isInstalled());
+        assertFalse("partial installation does not satisfy the full request", receipt.isSatisfied());
         assertTrue(receipt.isPartiallyInstalled());
         assertEquals(2, receipt.targets().size());
         assertEquals(TargetInstallReceipt.Status.FAILED, receipt.targets().get(0).status());
@@ -267,6 +301,49 @@ public class InstallContractTest {
         assertEquals("closing the partial generation permits a complete fresh install",
                 3, backend.installCount());
         retried.registration().close();
+    }
+
+    @Test
+    public void matchAllPreservesTargetOrderWhenMiddleInstallFails() throws Throwable {
+        Executable first = TestSupport.method("add", int.class, int.class);
+        Executable middle = TestSupport.method("overloaded", int.class);
+        Executable last = TestSupport.method("concat", String.class, String.class);
+        List<Executable> targets = Arrays.asList(first, middle, last);
+        List<Executable> attempts = new ArrayList<Executable>();
+        List<Executable> callbacks = new ArrayList<Executable>();
+        HookBackend failsMiddle = new HookBackend() {
+            @Override public String id() { return backend.id(); }
+            @Override public io.github.jichuo1.meguviz.hook.api.BackendCapabilities capabilities() { return backend.capabilities(); }
+            @Override public BackendContext context() { return backend.context(); }
+            @Override public BackendHandle install(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
+                attempts.add(plan.target());
+                if (plan.target().equals(middle)) throw new BackendInstallException("middle target unavailable");
+                return backend.install(plan, channel);
+            }
+        };
+        HookEnvironment scoped = HookEnvironment.create(failsMiddle, (descriptor, loader) -> targets,
+                io.github.jichuo1.meguviz.hook.core.DiagnosticsSink.NONE);
+        TargetSpec.DescriptorTarget descriptor = TargetSpec.descriptor(TargetKind.METHOD,
+                Fixtures.class.getName(), "unused").match(MatchPolicy.ALL).build();
+        HookSpec spec = HookSpec.builder("target.all.middle.failure", "conformance", descriptor)
+                .before(invocation -> callbacks.add(invocation.target())).build();
+        backend.onTarget(first, (receiver, args) -> 3);
+        backend.onTarget(last, (receiver, args) -> "ok");
+        try {
+            RegistrationReceipt receipt = scoped.install(spec);
+            assertEquals(RegistrationReceipt.Status.PARTIALLY_INSTALLED, receipt.status());
+            assertEquals(targets, attempts);
+            assertEquals(3, receipt.targets().size());
+            assertEquals(first, receipt.targets().get(0).target());
+            assertEquals(TargetInstallReceipt.Status.INSTALLED, receipt.targets().get(0).status());
+            assertEquals(middle, receipt.targets().get(1).target());
+            assertEquals(TargetInstallReceipt.Status.FAILED, receipt.targets().get(1).status());
+            assertEquals(last, receipt.targets().get(2).target());
+            assertEquals(TargetInstallReceipt.Status.INSTALLED, receipt.targets().get(2).status());
+            assertEquals(3, backend.call(first, null, 1, 2));
+            assertEquals("ok", backend.call(last, null, "a", "b"));
+            assertEquals(Arrays.asList(first, last), callbacks);
+        } finally { scoped.close(); }
     }
 
     @Test

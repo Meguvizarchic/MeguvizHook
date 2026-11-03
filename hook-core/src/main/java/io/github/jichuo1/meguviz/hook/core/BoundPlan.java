@@ -114,6 +114,14 @@ public final class BoundPlan {
         return parameterTypes()[index];
     }
 
+    Class<?> checkedParameterType(int index) {
+        // Preserve negative-index short circuit: resolving types may call a custom loader.
+        if (index < 0) throw new IndexOutOfBoundsException("argument index " + index + " of " + target);
+        Class<?>[] types = parameterTypes();
+        if (index >= types.length) throw new IndexOutOfBoundsException("argument index " + index + " of " + target);
+        return types[index];
+    }
+
     private Class<?>[] parameterTypes() {
         Class<?>[] current = parameterTypes;
         if (current == null) {

@@ -1,0 +1,78 @@
+Compiled from "MeguvizRefMemberResolver.java"
+public final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver implements io.github.jichuo1.meguviz.hook.core.spi.MemberResolver {
+  public io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver();
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver withHierarchy(io.github.jichuo1.meguviz.ref.api.query.Hierarchy);
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver withScope(io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$ScopeFactory, io.github.jichuo1.meguviz.ref.api.query.Hierarchy);
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver withQueries(io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$QueryFactory);
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver withQueries(io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$ScopeFactory, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$QueryFactory);
+  public java.util.List<java.lang.reflect.Executable> resolve(io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget, java.lang.ClassLoader) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+}
+Compiled from "MeguvizRefMemberResolver.java"
+interface io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$Checkpoint {
+  public abstract void check() throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public default void checkResult(io.github.jichuo1.meguviz.ref.api.result.ResolutionResult) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+}
+Compiled from "MeguvizRefMemberResolver.java"
+public interface io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$QueryFactory {
+  public abstract io.github.jichuo1.meguviz.ref.api.query.QuerySpec create(io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget, java.lang.Class<?>) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+}
+Compiled from "MeguvizRefMemberResolver.java"
+public interface io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$ScopeFactory {
+  public abstract io.github.jichuo1.meguviz.ref.scope.CodeScope open(java.lang.ClassLoader) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+}
+Compiled from "MeguvizRefResolutionException.java"
+public final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolutionException extends io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException {
+  public io.github.jichuo1.meguviz.ref.api.evidence.ResolutionReceipt receipt();
+}
+Compiled from "MeguvizRefResolverSession.java"
+public final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession implements io.github.jichuo1.meguviz.hook.core.spi.MemberResolver,java.lang.AutoCloseable {
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession open(io.github.jichuo1.meguviz.hook.core.spi.BackendContext) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession open(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession withHierarchy(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.ref.api.query.Hierarchy) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession withHierarchy(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.ref.api.query.Hierarchy, io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession withScope(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$ScopeFactory, io.github.jichuo1.meguviz.ref.api.query.Hierarchy) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession withScope(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$ScopeFactory, io.github.jichuo1.meguviz.ref.api.query.Hierarchy, io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession withQueries(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$QueryFactory) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession withQueriesAndWaiterPolicy(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$QueryFactory, io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession withQueries(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$ScopeFactory, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$QueryFactory) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession withQueries(io.github.jichuo1.meguviz.hook.core.spi.BackendContext, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$ScopeFactory, io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$QueryFactory, io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public boolean isWaiterInterruptionEvidenceAvailable();
+  public java.util.List<java.lang.reflect.Executable> resolve(io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget, java.lang.ClassLoader) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+  public io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$CloseReport requestClose();
+  public io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$CloseReport report();
+  public void close();
+}
+Compiled from "MeguvizRefResolverSession.java"
+public final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$CloseReport {
+  public io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State state();
+  public int inFlight();
+  public java.lang.String reason();
+  public java.lang.Throwable failure();
+}
+Compiled from "MeguvizRefResolverSession.java"
+final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$IsolatingLease extends io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$Lease {
+  public void checkResult(io.github.jichuo1.meguviz.ref.api.result.ResolutionResult) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+}
+Compiled from "MeguvizRefResolverSession.java"
+class io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$Lease implements io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver$Checkpoint {
+  public void check() throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+}
+Compiled from "MeguvizRefResolverSession.java"
+public final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State extends java.lang.Enum<io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State> {
+  public static final io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State OPEN;
+  public static final io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State DRAINING;
+  public static final io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State CLOSED;
+  public static final io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State FAILED;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State[] values();
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$State valueOf(java.lang.String);
+}
+Compiled from "MeguvizRefResolverSession.java"
+final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterEvidence {
+}
+Compiled from "MeguvizRefResolverSession.java"
+public final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy extends java.lang.Enum<io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy> {
+  public static final io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy RETIRE_SESSION;
+  public static final io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy ISOLATE_VERIFIED_WAITER;
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy[] values();
+  public static io.github.jichuo1.meguviz.hook.ref.MeguvizRefResolverSession$WaiterInterruptionPolicy valueOf(java.lang.String);
+}

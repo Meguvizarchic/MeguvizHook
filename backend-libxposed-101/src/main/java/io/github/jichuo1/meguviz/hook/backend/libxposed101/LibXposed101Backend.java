@@ -109,6 +109,56 @@ public final class LibXposed101Backend implements HookBackend {
         return new Shared101(handle, hooker, plan.spec().priority(), policy).initialHandle();
     }
 
+    // The compatibility boundary references only types available in the earlier core.
+    private static final class AfterBinding {
+        final java.util.function.Function<BackendInvocation, Object> function;
+        final Object notEntered;
+        AfterBinding(java.util.function.Function<BackendInvocation, Object> function, Object notEntered) {
+            this.function = function;
+            this.notEntered = notEntered;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static AfterBinding optionalAfter(DispatchChannel channel) {
+        ClassLoader loader = LibXposed101Backend.class.getClassLoader();
+        final Class<?> bridge;
+        try {
+            bridge = Class.forName("io.github.jichuo1.meguviz.hook.core.CoreAfterBridge", false, loader);
+        } catch (ClassNotFoundException missingBridge) {
+            try {
+                Class.forName("io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel", false, loader);
+            } catch (ClassNotFoundException oldCore) {
+                return null;
+            }
+            throw new IllegalStateException("core advertises direct after but bridge is missing", missingBridge);
+        }
+        try {
+            Object marker = new Object();
+            Object bound = bridge.getMethod("bind", DispatchChannel.class, Object.class)
+                    .invoke(null, channel, marker);
+            if (bound == null) return null;
+            if (!(bound instanceof java.util.function.Function)) {
+                throw new IllegalStateException("core returned an invalid direct after binding");
+            }
+            return new AfterBinding((java.util.function.Function<BackendInvocation, Object>) bound, marker);
+        } catch (java.lang.reflect.InvocationTargetException wrapper) {
+            Throwable cause = wrapper.getCause();
+            if (cause instanceof Error) throw (Error) cause;
+            if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+            throw new IllegalStateException("direct after bridge binding failed", cause);
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("direct after bridge is incomplete", failure);
+        }
+    }
+
+    private static Object dispatchAfter(AfterBinding binding, BackendInvocation invocation,
+                                        XposedInterface.Chain chain) throws Throwable {
+        Object value = binding.function.apply(invocation);
+        if (value == binding.notEntered) return chain.proceed();
+        return value instanceof DispatchResult ? ((DispatchResult) value).value() : value;
+    }
+
     private static XposedInterface.ExceptionMode exceptionMode(ErrorPolicy policy) throws BackendInstallException {
         if (policy == ErrorPolicy.PROPAGATE) return XposedInterface.ExceptionMode.PASSTHROUGH;
         if (policy == ErrorPolicy.FRAMEWORK_PROTECTIVE) return XposedInterface.ExceptionMode.PROTECTIVE;
@@ -139,6 +189,9 @@ public final class LibXposed101Backend implements HookBackend {
             }
             if (selected.conditional != null) {
                 return dispatchConditional(selected.conditional, selected.argumentIndex, selected.constantResult, chain);
+            }
+            if (selected.directAfter != null) {
+                return dispatchAfter(selected.directAfter, new Chain101Invocation(target, chain), chain);
             }
             DispatchResult result;
             if (selected.requiresInvocation) {
@@ -177,6 +230,7 @@ public final class LibXposed101Backend implements HookBackend {
         private final ConditionalDispatchChannel conditional;
         private final ConstantDispatchChannel constant;
         private final FusedConstantDispatchChannel fused;
+        private final AfterBinding directAfter;
         private final SuccessResultDispatchChannel success;
         private final Object successResult;
         private final int argumentIndex;
@@ -190,6 +244,7 @@ public final class LibXposed101Backend implements HookBackend {
                 // The chosen route is complete. A third-party channel may implement several
                 // optional interfaces; never call unselected getters or requiresInvocation here.
                 this.successResult = success.constantValue();
+                this.directAfter = null;
                 this.conditional = null;
                 this.requiresInvocation = true;
                 this.constant = null;
@@ -202,6 +257,7 @@ public final class LibXposed101Backend implements HookBackend {
             this.conditional = channel instanceof ConditionalDispatchChannel
                     ? (ConditionalDispatchChannel) channel : null;
             this.requiresInvocation = channel.requiresInvocation();
+            this.directAfter = conditional == null && requiresInvocation ? optionalAfter(channel) : null;
             this.constant = !requiresInvocation && channel instanceof ConstantDispatchChannel
                     ? (ConstantDispatchChannel) channel : null;
             this.argumentIndex = conditional == null ? -1 : conditional.argumentIndex();

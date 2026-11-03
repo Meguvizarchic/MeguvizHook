@@ -54,7 +54,19 @@ public final class TargetInstallReceipt {
 
     @Override
     public String toString() {
-        return "TargetInstallReceipt[" + target.toGenericString() + " " + status
+        return "TargetInstallReceipt[" + targetDescription() + " " + status
                 + (message == null ? "" : " " + message) + "]";
+    }
+
+    @SuppressWarnings("removal")
+    private String targetDescription() {
+        try {
+            return target.toGenericString();
+        } catch (Throwable failure) {
+            if (failure instanceof VirtualMachineError || failure instanceof ThreadDeath) {
+                throw (Error) failure;
+            }
+            return target.getDeclaringClass().getName() + "#" + target.getName();
+        }
     }
 }

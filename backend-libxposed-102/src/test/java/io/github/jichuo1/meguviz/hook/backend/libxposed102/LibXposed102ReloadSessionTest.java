@@ -13,10 +13,12 @@ import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModuleInterface;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.*;
@@ -118,6 +120,35 @@ public class LibXposed102ReloadSessionTest {
         } finally { env.close(); }
     }
 
+    @Test public void multipleEqualHandlesAreMappedByIdentityAndKeepFrameworkOrder() throws Exception {
+        Stub stub = new Stub(method("add"));
+        XposedInterface.HookHandle first = stub.equalHandle();
+        XposedInterface.HookHandle second = stub.equalHandle();
+        XposedInterface.HookHandle foreign = stub.equalHandle();
+        assertNotSame(first, second);
+        assertTrue(first.equals(second));
+        try (LibXposed102ReloadSession session = new LibXposed102ReloadSession(stub.backend(),
+                stub.param(Arrays.asList(first, second)))) {
+            List<XposedInterface.HookHandle> snapshot = session.oldHandles();
+            assertSame(first, snapshot.get(0));
+            assertSame(second, snapshot.get(1));
+            assertThrows(IllegalArgumentException.class, () -> session.adoption(foreign));
+            assertNotNull(session.adoption(second));
+            assertThrows(IllegalStateException.class, () -> session.adoption(second));
+            assertNotNull(session.adoption(first));
+            assertThrows(IllegalStateException.class, () -> session.adoption(first));
+        }
+    }
+
+    @Test public void reloadSessionRejectsNullAndRepeatedHandleIdentity() throws Exception {
+        Stub stub = new Stub(method("add"));
+        XposedInterface.HookHandle first = stub.equalHandle();
+        assertThrows(IllegalArgumentException.class, () ->
+                new LibXposed102ReloadSession(stub.backend(), stub.param(Arrays.asList(first, first))));
+        assertThrows(IllegalArgumentException.class, () ->
+                new LibXposed102ReloadSession(stub.backend(), stub.param(Arrays.asList(first, null))));
+    }
+
     @Test public void targetMismatchIsUncommittedAndTokenCanBeRetried() throws Exception {
         Stub stub = new Stub(method("add"));
         LibXposed102Backend backend = stub.backend();
@@ -139,6 +170,11 @@ public class LibXposed102ReloadSessionTest {
         HookEnvironment env = HookEnvironment.create(backend);
         LibXposed102ReloadSession session = new LibXposed102ReloadSession(backend, stub.param(stub.old));
         BackendAdoption token = session.adoption(stub.old);
+        Field index = LibXposed102ReloadSession.class.getDeclaredField("handleStates");
+        index.setAccessible(true);
+        assertNotNull(index.get(session));
+        session.close();
+        assertNull("a retained closed session must not retain the identity index", index.get(session));
         session.close();
         try {
             env.adopt(spec("reload.closed", stub.target, new AtomicInteger()), token);
@@ -205,10 +241,26 @@ public class LibXposed102ReloadSessionTest {
         }
 
         XposedModuleInterface.HotReloadedParam param(XposedInterface.HookHandle handle) {
+            return param(Collections.singletonList(handle));
+        }
+
+        XposedModuleInterface.HotReloadedParam param(List<XposedInterface.HookHandle> handles) {
             return (XposedModuleInterface.HotReloadedParam) Proxy.newProxyInstance(getClass().getClassLoader(),
                     new Class<?>[]{XposedModuleInterface.HotReloadedParam.class}, (proxy, method, args) -> {
-                        if ("getOldHookHandles".equals(method.getName())) return Collections.singletonList(handle);
+                        if ("getOldHookHandles".equals(method.getName())) return handles;
                         throw new UnsupportedOperationException(method.getName());
+                    });
+        }
+
+        XposedInterface.HookHandle equalHandle() {
+            return (XposedInterface.HookHandle) Proxy.newProxyInstance(getClass().getClassLoader(),
+                    new Class<?>[]{XposedInterface.HookHandle.class}, (proxy, method, args) -> {
+                        switch (method.getName()) {
+                            case "equals": return true;
+                            case "hashCode": return 1;
+                            case "getExecutable": return target;
+                            default: throw new UnsupportedOperationException(method.getName());
+                        }
                     });
         }
 

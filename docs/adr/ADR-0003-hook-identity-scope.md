@@ -20,9 +20,10 @@ executable 上用相同框架 ID 新建 Hook 时，框架按合同原子替换�
 1. `HookId` 是**单个 `HookEnvironment` 内的逻辑身份**。同一环境内重复 ID 仍按 ADR-0001 的完整
    语义、目标和注册状态处理；不同环境的相同 ID 是各自独立的注册，不进行跨环境的冲突协调、
    幂等比较或全局隔离。
-2. API102 初次安装**不调用 `setId`**，使用上游默认的无 ID Hook；`HookId` 留在 SDK 自己的计划与
-   回执中，不被赋为框架 Hook ID。多个环境可在同一模块、同一 executable 上分别持有独立 Hook，
-   不因相同逻辑 ID 触发框架的同 ID 隐式替换。
+2. API102 初次安装**默认不调用 `setId`**，使用上游默认的无 ID Hook；`HookId` 留在 SDK 自己的
+   计划与回执中，不被自动赋为框架 Hook ID。调用方也可使用 `LibXposed102Backend.withFrameworkId`
+   为单个 backend 实例显式指定框架 ID，须自行管理同模块、同目标的所有权：同 ID 安装会替换旧
+   Hook，旧环境不会自动获知。未选择此选项的多个环境不会因相同逻辑 ID 触发框架的同 ID 替换。
 3. API102 的显式单目标替换继续调用旧 handle 的 `replaceHook`，不使用卸载加安装模拟。API102
    源码明确 handle 形式也适用于无 ID Hook；成功后新 handle 承担卸载所有权，旧代、在途调用、
    失败与未知提交状态仍按 ADR-0001 处理。API101 不支持框架原生替换；SDK 可在保留同一框架入口时

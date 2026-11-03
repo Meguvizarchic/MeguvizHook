@@ -46,10 +46,11 @@ import java.util.Objects;
  *       receipt.</li>
  *   <li>The chain is snapshot based in 102, so replacing or adding hooks does not disturb an
  *       in-flight call; the core relies on its own immutable plan for the same guarantee.</li>
- *   <li>Initial hooks have no framework ID. A logical ID is scoped to one HookEnvironment, while
- *       framework IDs are scoped to the whole module and executable. Omitting the framework ID
- *       prevents another environment with the same logical ID from replacing this hook implicitly.
- *       Handle-based {@code replaceHook} also supports hooks without an ID.</li>
+ *   <li>Initial hooks have no framework ID by default. A logical ID is scoped to one HookEnvironment,
+ *       while framework IDs are scoped to the whole module and executable. A framework ID may be
+ *       explicitly selected with {@link #withFrameworkId}; installing the same ID on the same target
+ *       may atomically replace an existing module hook and invalidate its handle. Handle-based
+ *       {@code replaceHook} also supports hooks without an ID.</li>
  *   <li>Hot reload has an explicit old-handle adoption bridge; framework support and the module's
  *       lifecycle/resource cleanup remain runtime-dependent.</li>
  * </ul>
@@ -60,10 +61,33 @@ public final class LibXposed102Backend implements HookBackend {
     private final XposedInterface xposed;
     private final BackendContext context;
     private final BackendCapabilities capabilities;
+    private final String frameworkId;
 
     public LibXposed102Backend(XposedInterface xposed, BackendContext context) {
+        this(xposed, context, null);
+    }
+
+    /**
+     * Explicitly selects a framework ID for every initial hook installed by this backend instance.
+     * The value is independent of SDK logical IDs and is passed unchanged to API102. Reusing it
+     * on the same executable in the same module can replace a previously installed framework hook;
+     * the displaced SDK environment cannot automatically update its registration state. A caller
+     * must choose and own this ID deliberately. Different executables may use the same ID.
+     *
+     * @throws NullPointerException if {@code frameworkId} is null
+     * @throws IllegalArgumentException if {@code frameworkId} is blank
+     */
+    public static LibXposed102Backend withFrameworkId(XposedInterface xposed, BackendContext context,
+                                                       String frameworkId) {
+        Objects.requireNonNull(frameworkId, "frameworkId");
+        if (frameworkId.trim().isEmpty()) throw new IllegalArgumentException("frameworkId must not be blank");
+        return new LibXposed102Backend(xposed, context, frameworkId);
+    }
+
+    private LibXposed102Backend(XposedInterface xposed, BackendContext context, String frameworkId) {
         this.xposed = Objects.requireNonNull(xposed, "xposed");
         this.context = Objects.requireNonNull(context, "context");
+        this.frameworkId = frameworkId;
         if (xposed.getApiVersion() < XposedInterface.API_102) {
             throw new IllegalArgumentException("libxposed API 102 required, got " + xposed.getApiVersion());
         }
@@ -113,15 +137,66 @@ public final class LibXposed102Backend implements HookBackend {
     public BackendHandle install(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
         ErrorPolicy policy = plan.spec().errorPolicy();
         XposedInterface.ExceptionMode mode = exceptionMode(policy);
-        XposedInterface.HookHandle handle = xposed.hook(plan.target())
+        XposedInterface.HookBuilder builder = xposed.hook(plan.target())
                 .setPriority(plan.spec().priority())
                 // Never inherit module.prop: the selected policy must map to an explicit mode.
-                .setExceptionMode(mode)
-                .intercept(hooker(plan, channel));
+                .setExceptionMode(mode);
+        if (frameworkId != null) builder = builder.setId(frameworkId);
+        XposedInterface.HookHandle handle = builder.intercept(hooker(plan, channel));
         if (handle == null) {
             throw new IllegalStateException("framework intercept returned a null hook handle; installation outcome is unknown");
         }
         return new Handle102(handle, policy);
+    }
+
+    // The compatibility boundary references only types available in the earlier core.
+    private static final class AfterBinding {
+        final java.util.function.Function<BackendInvocation, Object> function;
+        final Object notEntered;
+        AfterBinding(java.util.function.Function<BackendInvocation, Object> function, Object notEntered) {
+            this.function = function;
+            this.notEntered = notEntered;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static AfterBinding optionalAfter(DispatchChannel channel) {
+        ClassLoader loader = LibXposed102Backend.class.getClassLoader();
+        final Class<?> bridge;
+        try {
+            bridge = Class.forName("io.github.jichuo1.meguviz.hook.core.CoreAfterBridge", false, loader);
+        } catch (ClassNotFoundException missingBridge) {
+            try {
+                Class.forName("io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel", false, loader);
+            } catch (ClassNotFoundException oldCore) {
+                return null;
+            }
+            throw new IllegalStateException("core advertises direct after but bridge is missing", missingBridge);
+        }
+        try {
+            Object marker = new Object();
+            Object bound = bridge.getMethod("bind", DispatchChannel.class, Object.class)
+                    .invoke(null, channel, marker);
+            if (bound == null) return null;
+            if (!(bound instanceof java.util.function.Function)) {
+                throw new IllegalStateException("core returned an invalid direct after binding");
+            }
+            return new AfterBinding((java.util.function.Function<BackendInvocation, Object>) bound, marker);
+        } catch (java.lang.reflect.InvocationTargetException wrapper) {
+            Throwable cause = wrapper.getCause();
+            if (cause instanceof Error) throw (Error) cause;
+            if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+            throw new IllegalStateException("direct after bridge binding failed", cause);
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("direct after bridge is incomplete", failure);
+        }
+    }
+
+    private static Object dispatchAfter(AfterBinding binding, BackendInvocation invocation,
+                                        XposedInterface.Chain chain) throws Throwable {
+        Object value = binding.function.apply(invocation);
+        if (value == binding.notEntered) return chain.proceed();
+        return value instanceof DispatchResult ? ((DispatchResult) value).value() : value;
     }
 
     private static XposedInterface.ExceptionMode exceptionMode(ErrorPolicy policy) throws BackendInstallException {
@@ -156,6 +231,10 @@ public final class LibXposed102Backend implements HookBackend {
             };
         }
         boolean requiresInvocation = channel.requiresInvocation();
+        AfterBinding direct = requiresInvocation ? optionalAfter(channel) : null;
+        if (direct != null) {
+            return chain -> dispatchAfter(direct, new Chain102Invocation(plan.target(), chain), chain);
+        }
         if (!requiresInvocation && channel instanceof ConstantDispatchChannel) {
             ConstantDispatchChannel constant = (ConstantDispatchChannel) channel;
             Object result = constant.constantValue();

@@ -1,5 +1,7 @@
 *.iml
 .gradle/
+.kotlin/
+.codex-workflow/runs/
 .idea/
 .DS_Store
 build/

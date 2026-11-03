@@ -153,6 +153,7 @@ public interface io.github.jichuo1.meguviz.hook.api.HookInvocation {
   public abstract long generation();
   public abstract java.lang.reflect.Executable target();
   public abstract java.lang.Object thisObject();
+  public default java.lang.Object constructorReceiver();
   public abstract io.github.jichuo1.meguviz.hook.api.ParameterAccess access();
   public abstract java.lang.Thread ownerThread();
   public abstract void setEarlyResult(java.lang.Object);
@@ -177,6 +178,8 @@ public interface io.github.jichuo1.meguviz.hook.api.HookRegistration {
 Compiled from "HookSpec.java"
 public final class io.github.jichuo1.meguviz.hook.api.HookSpec {
   public static final int DEFAULT_PRIORITY;
+  public static io.github.jichuo1.meguviz.hook.api.HookSpec$Builder builder(java.lang.String, java.lang.String, io.github.jichuo1.meguviz.hook.api.TargetSpec);
+  public static io.github.jichuo1.meguviz.hook.api.HookSpec$Builder forMember(java.lang.String, java.lang.String, java.lang.reflect.Executable);
   public io.github.jichuo1.meguviz.hook.api.HookId id();
   public io.github.jichuo1.meguviz.hook.api.HookOwner owner();
   public io.github.jichuo1.meguviz.hook.api.TargetSpec target();
@@ -214,6 +217,10 @@ public final class io.github.jichuo1.meguviz.hook.api.HookSpec$Builder {
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder processes(io.github.jichuo1.meguviz.hook.api.ProcessFilter);
   public io.github.jichuo1.meguviz.hook.api.HookSpec$Builder priority(int);
   public io.github.jichuo1.meguviz.hook.api.HookSpec build();
+}
+Compiled from "InvocationArguments.java"
+public final class io.github.jichuo1.meguviz.hook.api.InvocationArguments {
+  public static java.lang.Object[] copyOf(io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation);
 }
 Compiled from "InvocationResult.java"
 public interface io.github.jichuo1.meguviz.hook.api.InvocationResult {
@@ -280,6 +287,7 @@ public final class io.github.jichuo1.meguviz.hook.api.RegistrationReceipt {
   public io.github.jichuo1.meguviz.hook.api.HookRegistration registration();
   public java.util.List<io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt> targets();
   public boolean isInstalled();
+  public boolean isSatisfied();
   public boolean isPartiallyInstalled();
   public java.lang.String toString();
 }

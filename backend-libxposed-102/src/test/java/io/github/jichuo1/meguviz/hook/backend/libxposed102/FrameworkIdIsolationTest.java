@@ -21,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -97,6 +99,63 @@ public class FrameworkIdIsolationTest {
             first.close();
             second.close();
         }
+    }
+
+    @Test
+    public void explicitFrameworkIdSupportsHandleReplacementAndSameIdFrameworkReplacement() throws Throwable {
+        IdAwareFramework framework = new IdAwareFramework();
+        XposedInterface api = framework.api();
+        Method target = Target.class.getMethod("add", int.class, int.class);
+        LibXposed102Context context = new LibXposed102Context("stub.process", getClass().getClassLoader(), 1L);
+        HookEnvironment first = HookEnvironment.create(LibXposed102Backend.withFrameworkId(api, context, "owned.framework.id"));
+        HookEnvironment second = HookEnvironment.create(LibXposed102Backend.withFrameworkId(api, context, "owned.framework.id"));
+        AtomicInteger original = new AtomicInteger();
+        AtomicInteger replacement = new AtomicInteger();
+        AtomicInteger later = new AtomicInteger();
+        try {
+            HookRegistration old = install(first, spec(target, original));
+            assertEquals(1, framework.setIdCalls);
+            assertEquals("owned.framework.id", framework.active.get(0).id);
+            assertEquals(3, framework.invoke(target, 1, 2));
+
+            RegistrationReceipt next = first.replace(spec(target, replacement));
+            assertTrue(next.toString(), next.isInstalled());
+            assertEquals(1, framework.replaceCalls);
+            assertEquals(1, framework.setIdCalls);
+            assertEquals("owned.framework.id", framework.active.get(0).id);
+            old.close();
+            assertEquals(3, framework.invoke(target, 1, 2));
+            assertEquals(1, original.get());
+            assertEquals(1, replacement.get());
+
+            HookRegistration other = install(second, spec(target, later));
+            assertEquals(2, framework.setIdCalls);
+            assertEquals(1, framework.active.size());
+            assertEquals("owned.framework.id", framework.active.get(0).id);
+            assertEquals(3, framework.invoke(target, 1, 2));
+            assertEquals(1, replacement.get());
+            assertEquals(1, later.get());
+            // The displaced environment is not notified; only the framework knows the old handle was invalidated.
+            assertSame(io.github.jichuo1.meguviz.hook.api.RegistrationState.INSTALLED, next.registration().state());
+            next.registration().close();
+            assertEquals(1, framework.active.size());
+            other.close();
+            assertTrue(framework.active.isEmpty());
+        } finally {
+            first.close();
+            second.close();
+        }
+    }
+
+    @Test
+    public void explicitFrameworkIdRejectsMissingOrBlankValuesBeforeInstalling() {
+        IdAwareFramework framework = new IdAwareFramework();
+        XposedInterface api = framework.api();
+        LibXposed102Context context = new LibXposed102Context("stub.process", getClass().getClassLoader(), 1L);
+        assertThrows(NullPointerException.class, () -> LibXposed102Backend.withFrameworkId(api, context, null));
+        assertThrows(IllegalArgumentException.class, () -> LibXposed102Backend.withFrameworkId(api, context, " \t"));
+        assertEquals(0, framework.setIdCalls);
+        assertTrue(framework.active.isEmpty());
     }
 
     private static HookSpec spec(Method target, AtomicInteger counter) {

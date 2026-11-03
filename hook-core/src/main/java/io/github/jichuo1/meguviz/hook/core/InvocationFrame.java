@@ -10,6 +10,7 @@ import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -52,7 +53,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         this.owner = Thread.currentThread();
         ParameterAccess access = plan.access();
         if (access == ParameterAccess.READ_ARGS_VIEW) {
-            // API101/102 adapters can retain the framework's immutable view without toArray().
+            // Only the explicitly read-only shape borrows the adapter's argument view.
             this.argsView = Objects.requireNonNull(backend.readOnlyArguments(), "readOnlyArguments");
         } else if (access != ParameterAccess.NO_ARGS) {
             // Materialized once per frame at entry; NO_ARGS never reaches this branch.
@@ -99,7 +100,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     }
 
     Object[] argsForProceed() {
-        // null means "keep incoming arguments" for NO_ARGS and READ_ARGS_VIEW.
+        // null keeps incoming arguments for NO_ARGS and READ_ARGS_VIEW.
         return args;
     }
 
@@ -119,6 +120,11 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
 
     CallOutcome proceedOutcome() {
         return proceedOutcome;
+    }
+
+    /** Internal outcome state after the only around callback's borrow has expired. */
+    CallOutcome.State proceedStateForDispatch() {
+        return proceedState;
     }
 
     ResultSlot resultSlot() {
@@ -170,6 +176,12 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         Executable target = plan.target();
         return target instanceof Method && !Modifier.isStatic(target.getModifiers())
                 ? backend.thisObject() : null;
+    }
+
+    @Override
+    public Object constructorReceiver() {
+        check();
+        return plan.target() instanceof Constructor<?> ? backend.thisObject() : null;
     }
 
     @Override
@@ -291,14 +303,19 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         }
 
         private void checkBorrow() {
-            InvocationFrame.this.check();
             if (!active) {
+                // Preserve frame-expired / wrong-thread precedence for an inactive borrow.
+                InvocationFrame.this.check();
                 throw new HookContractException("invocation is no longer valid: the callback already returned");
             }
+            // Every public forwarding method validates the frame in its target method. Avoid a
+            // duplicate owner-thread and validity check while this particular borrow is active.
         }
 
         InvocationResult result() {
             checkBorrow();
+            // Unlike public forwards, constructing a result view has no validating target method.
+            InvocationFrame.this.check();
             return new BorrowedResult();
         }
 
@@ -306,6 +323,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         @Override public long generation() { checkBorrow(); return InvocationFrame.this.generation(); }
         @Override public Executable target() { checkBorrow(); return InvocationFrame.this.target(); }
         @Override public Object thisObject() { checkBorrow(); return InvocationFrame.this.thisObject(); }
+        @Override public Object constructorReceiver() { checkBorrow(); return InvocationFrame.this.constructorReceiver(); }
         @Override public ParameterAccess access() { checkBorrow(); return InvocationFrame.this.access(); }
         @Override public Thread ownerThread() { checkBorrow(); return InvocationFrame.this.ownerThread(); }
         @Override public int argumentCount() { checkBorrow(); return InvocationFrame.this.argumentCount(); }
@@ -346,6 +364,11 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
             state = CallOutcome.State.THREW;
             value = null;
             throwable = failure;
+        }
+
+        Object dispatchValue() throws Throwable {
+            if (state == CallOutcome.State.THREW) throw throwable;
+            return state == CallOutcome.State.RETURNED ? value : null;
         }
 
         DispatchResult dispatchResult() {

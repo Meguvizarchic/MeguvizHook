@@ -44,6 +44,36 @@ public class UnknownReplacementTest {
         verifyUnknown(Mode.FATAL);
     }
 
+    @Test
+    public void forcedIdenticalReplacementQuarantinesUnknownCommit() throws Throwable {
+        for (Mode mode : new Mode[]{Mode.RUNTIME, Mode.NULL}) {
+            UnknownBackend backend = new UnknownBackend(mode);
+            HookEnvironment environment = HookEnvironment.create(backend);
+            HookSpec spec = TestSupport.spec("replace.force.unknown", TARGET).replaceConstant(99).build();
+            try {
+                HookRegistration old = TestSupport.installOrFail(environment, spec);
+                Throwable failure = TestSupport.capture(() -> environment.forceReplace(spec));
+                if (mode == Mode.NULL) {
+                    assertTrue(failure instanceof IllegalStateException);
+                    assertTrue(failure.getMessage().contains("outcome is unknown"));
+                } else {
+                    assertSame(backend.failure, failure);
+                }
+                assertEquals(RegistrationState.RETIRED_RESIDENT, old.state());
+                assertEquals(DispatchResult.Kind.PASSTHROUGH, backend.oldChannel.dispatch(invocation()).kind());
+                assertEquals(DispatchResult.Kind.PASSTHROUGH, backend.newChannel.dispatch(invocation()).kind());
+                assertEquals(3, backend.delegate.call(TARGET, null, 1, 2));
+                assertEquals(CloseReport.EntryRestoration.UNKNOWN, old.close().entryRestoration());
+                assertEquals(RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE, environment.forceReplace(spec).status());
+                assertEquals(1, backend.replacements);
+                assertEquals(0, backend.unhooks);
+            } finally {
+                environment.close();
+            }
+            assertEquals(0, backend.unhooks);
+        }
+    }
+
     private static void verifyUnknown(Mode mode) throws Throwable {
         UnknownBackend backend = new UnknownBackend(mode);
         HookEnvironment environment = HookEnvironment.create(backend);

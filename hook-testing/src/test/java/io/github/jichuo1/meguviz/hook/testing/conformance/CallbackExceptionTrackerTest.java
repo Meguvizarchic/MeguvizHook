@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.*;
 
@@ -212,6 +213,111 @@ public final class CallbackExceptionTrackerTest {
             assertEquals(128, ((String) frame.get("class")).length());
             assertEquals("method\"\\", frame.get("method"));
             assertNull(frame.get("file"));
+        } finally { env.close(); }
+    }
+
+    @Test public void jsonEscapesControlCharactersAndSurrogatesAsExactBytes() throws Throwable {
+        FakeBackend backend = FakeBackend.create();
+        HookEnvironment env = HookEnvironment.create(backend);
+        StringBuilder input = new StringBuilder();
+        StringBuilder expected = new StringBuilder();
+        for (int i = 0; i < 32; i++) {
+            input.append((char) i);
+            expected.append(String.format(java.util.Locale.ROOT, "\\u%04x", i));
+        }
+        input.append('"').append('\\').appendCodePoint(0x1f603).append((char) 0xd800).append('X').append((char) 0xdc00);
+        expected.append("\\\"\\\\\\ud83d\\ude03\\ufffdX\\ufffd");
+        CallbackExceptionTracker tracker = new CallbackExceptionTracker("unicode", 1);
+        RuntimeException failure = new RuntimeException(input.toString());
+        try {
+            TestSupport.installOrFail(env, TestSupport.spec("trace.unicode", ADD)
+                    .before(tracker.before(invocation -> { throw failure; })).build());
+            assertSame(failure, TestSupport.capture(() -> backend.call(ADD, null, 1, 2)));
+            List<byte[]> payloads = new ArrayList<byte[]>();
+            assertEquals(1, tracker.deliver(new JsonLineTraceTransport(payloads::add, true, 0), 1));
+            String json = new String(payloads.get(0), StandardCharsets.UTF_8);
+            assertTrue(json.contains("\"message\":\"" + expected + "\""));
+            assertEquals(input.substring(0, 32) + "\"\\" + new String(Character.toChars(0x1f603))
+                    + '\ufffd' + "X" + '\ufffd', ((Map<?, ?>) TraceJsonParser.parse(json)).get("message"));
+        } finally { env.close(); }
+    }
+
+    @Test public void jsonUtf8PreservesExactBytesForCjkAndLargeSupplementaryFrames() throws Throwable {
+        FakeBackend backend = FakeBackend.create();
+        HookEnvironment env = HookEnvironment.create(backend);
+        CallbackExceptionTracker tracker = new CallbackExceptionTracker("中文é", 1);
+        IllegalStateException failure = new IllegalStateException("汉字é");
+        StringBuilder name = new StringBuilder(), escaped = new StringBuilder();
+        for (int i = 0; i < 64; i++) {
+            name.appendCodePoint(0x1f600);
+            escaped.append("\\ud83d\\ude00");
+        }
+        StackTraceElement[] frames = new StackTraceElement[32];
+        for (int i = 0; i < frames.length; i++) {
+            frames[i] = new StackTraceElement(name.toString(), name.toString(), name.toString(), Integer.MIN_VALUE);
+        }
+        failure.setStackTrace(frames);
+        try {
+            TestSupport.installOrFail(env, TestSupport.spec("trace.utf8.large", ADD)
+                    .before(tracker.before(invocation -> { throw failure; })).build());
+            assertSame(failure, TestSupport.capture(() -> backend.call(ADD, null, 1, 2)));
+            List<CallbackExceptionTracker.Event> events = new ArrayList<CallbackExceptionTracker.Event>();
+            assertEquals(1, tracker.deliver(events::add, 1));
+            CallbackExceptionTracker.Event event = events.get(0);
+            StringBuilder expected = new StringBuilder("{\"version\":1,\"source\":\"中文é\",\"hook\":\"trace.utf8.large\",\"generation\":")
+                    .append(event.generation()).append(",\"timeNanos\":").append(event.timeNanos())
+                    .append(",\"stage\":\"BEFORE\",\"type\":\"java.lang.IllegalStateException\",\"message\":\"汉字é\",\"frames\":[");
+            for (int i = 0; i < frames.length; i++) {
+                if (i != 0) expected.append(',');
+                expected.append("{\"class\":\"").append(escaped).append("\",\"method\":\"")
+                        .append(escaped).append("\",\"file\":\"").append(escaped)
+                        .append("\",\"line\":").append(Integer.MIN_VALUE).append('}');
+            }
+            expected.append("],\"framesCollected\":true,\"framesTruncated\":false}\n");
+            byte[] encoded = JsonLineTraceTransport.encode(event, true, 32);
+            assertTrue(encoded.length > 65536);
+            assertArrayEquals(expected.toString().getBytes(StandardCharsets.UTF_8), encoded);
+        } finally { env.close(); }
+    }
+
+    @Test public void jsonReentrantGetterKeepsEachEncodedArrayIndependent() throws Throwable {
+        FakeBackend backend = FakeBackend.create();
+        HookEnvironment env = HookEnvironment.create(backend);
+        CallbackExceptionTracker tracker = new CallbackExceptionTracker("reentrant", 2);
+        AtomicReference<RuntimeException> next = new AtomicReference<RuntimeException>();
+        AtomicReference<CallbackExceptionTracker.Event> innerEvent = new AtomicReference<CallbackExceptionTracker.Event>();
+        List<byte[]> innerBytes = new ArrayList<byte[]>();
+        RuntimeException inner = new IllegalStateException("inside");
+        RuntimeException outer = new RuntimeException() {
+            private static final long serialVersionUID = 1L;
+            @Override public String getMessage() {
+                innerBytes.add(JsonLineTraceTransport.encode(innerEvent.get(), true, 0));
+                return "outside";
+            }
+        };
+        try {
+            TestSupport.installOrFail(env, TestSupport.spec("trace.utf8.reentrant", ADD)
+                    .before(tracker.before(invocation -> { throw next.get(); })).build());
+            next.set(inner);
+            assertSame(inner, TestSupport.capture(() -> backend.call(ADD, null, 1, 2)));
+            next.set(outer);
+            assertSame(outer, TestSupport.capture(() -> backend.call(ADD, null, 1, 2)));
+            List<CallbackExceptionTracker.Event> events = new ArrayList<CallbackExceptionTracker.Event>();
+            assertEquals(2, tracker.deliver(events::add, 2));
+            innerEvent.set(events.get(0));
+            byte[] first = JsonLineTraceTransport.encode(events.get(1), true, 0);
+            byte[] second = JsonLineTraceTransport.encode(events.get(1), true, 0);
+            assertEquals(2, innerBytes.size());
+            assertArrayEquals(first, second);
+            assertNotSame(first, second);
+            assertArrayEquals(innerBytes.get(0), innerBytes.get(1));
+            assertNotSame(innerBytes.get(0), innerBytes.get(1));
+            first[0] = 0;
+            innerBytes.get(0)[0] = 0;
+            assertEquals('{', second[0]);
+            assertEquals('{', innerBytes.get(1)[0]);
+            assertEquals("outside", ((Map<?, ?>) TraceJsonParser.parse(new String(second, StandardCharsets.UTF_8))).get("message"));
+            assertEquals("inside", ((Map<?, ?>) TraceJsonParser.parse(new String(innerBytes.get(1), StandardCharsets.UTF_8))).get("message"));
         } finally { env.close(); }
     }
 

@@ -157,6 +157,108 @@ public class ReplacementContractTest {
     }
 
     @Test
+    public void forceReplaceIdenticalConstantCreatesNewOwnedGeneration() throws Throwable {
+        HookSpec spec = TestSupport.spec("replace.force.constant", ADD).replaceConstant(99).build();
+        HookRegistration old = TestSupport.installOrFail(environment, spec);
+        assertEquals(RegistrationReceipt.Status.ALREADY_INSTALLED, environment.replace(spec).status());
+        assertEquals(0, backend.replaceCount());
+
+        RegistrationReceipt forced = environment.forceReplace(spec);
+        assertTrue(forced.toString(), forced.isInstalled());
+        assertNotSame(old, forced.registration());
+        assertTrue(forced.generation() > old.generation());
+        assertEquals(1, backend.installCount());
+        assertEquals(1, backend.replaceCount());
+        assertEquals(CloseReport.EntryRestoration.NOT_RESTORED, old.close().entryRestoration());
+        assertTrue("closing the old generation must not unhook the new one", backend.isHooked(ADD));
+        assertEquals(99, backend.call(ADD, null, 1, 2));
+        assertEquals(0, backend.originalCallCount(ADD));
+        forced.registration().close();
+        assertFalse(backend.isHooked(ADD));
+    }
+
+    @Test
+    public void forceReplaceIdenticalCallbackKeepsAdmittedInvocation() throws Throwable {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch finish = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        BeforeCallback callback = invocation -> {
+            if (calls.incrementAndGet() == 1) {
+                entered.countDown();
+                await(finish);
+            }
+            invocation.setEarlyResult(99);
+        };
+        HookSpec spec = TestSupport.spec("replace.force.inflight", ADD).before(callback).build();
+        HookRegistration old = TestSupport.installOrFail(environment, spec);
+        AtomicReference<Object> oldResult = new AtomicReference<Object>();
+        AtomicReference<Throwable> oldFailure = new AtomicReference<Throwable>();
+        Thread call = new Thread(() -> {
+            try { oldResult.set(backend.call(ADD, null, 1, 2)); }
+            catch (Throwable failure) { oldFailure.set(failure); }
+        }, "force-replace-old-inflight");
+        call.setDaemon(true);
+        call.start();
+        try {
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            RegistrationReceipt forced = environment.forceReplace(spec);
+            assertTrue(forced.toString(), forced.isInstalled());
+            assertNotSame(old, forced.registration());
+            assertTrue(call.isAlive());
+            assertEquals(1, old.close().inFlightAtClose());
+            assertEquals(99, backend.call(ADD, null, 1, 2));
+            finish.countDown();
+            call.join(5000);
+            assertFalse(call.isAlive());
+            assertNull(oldFailure.get());
+            assertEquals(99, oldResult.get());
+            assertEquals(2, calls.get());
+            assertEquals(0, backend.originalCallCount(ADD));
+        } finally {
+            finish.countDown();
+            call.join(5000);
+        }
+    }
+
+    @Test
+    public void forceReplaceDoesNotBypassChecksOrCheckedFailure() throws Throwable {
+        HookSpec spec = TestSupport.spec("replace.force.checks", ADD).replaceConstant(99).build();
+        HookRegistration old = TestSupport.installOrFail(environment, spec);
+        assertEquals(RegistrationReceipt.Status.CONFLICT, environment.forceReplace(
+                new HookSpec.Builder(HookId.of("replace.force.checks"), HookOwner.of("other"), TargetSpec.ofMember(ADD))
+                        .replaceConstant(99).build()).status());
+        assertEquals(RegistrationReceipt.Status.CONFLICT, environment.forceReplace(
+                TestSupport.spec("replace.force.checks", ADD).priority(70).replaceConstant(99).build()).status());
+        assertEquals(RegistrationReceipt.Status.CONFLICT, environment.forceReplace(
+                TestSupport.spec("replace.force.checks", NO_ARGS).replaceConstant(99).build()).status());
+        TargetSpec all = TargetSpec.descriptor(TargetKind.METHOD, Fixtures.class.getName(), "overloaded")
+                .match(MatchPolicy.ALL).build();
+        assertEquals(RegistrationReceipt.Status.CONFLICT, environment.forceReplace(
+                new HookSpec.Builder(HookId.of("replace.force.checks"), HookOwner.of("conformance"), all)
+                        .replaceConstant(99).build()).status());
+        assertEquals(0, backend.replaceCount());
+
+        backend.withFailingNextReplace();
+        RegistrationReceipt failed = environment.forceReplace(spec);
+        assertEquals(RegistrationReceipt.Status.FAILED, failed.status());
+        assertNull(failed.registration());
+        assertEquals(RegistrationState.INSTALLED, old.state());
+        assertEquals(99, backend.call(ADD, null, 1, 2));
+        assertEquals(1, backend.replaceCount());
+        assertTrue(environment.forceReplace(spec).isInstalled());
+        assertEquals(2, backend.replaceCount());
+    }
+
+    @Test
+    public void forceReplaceIdenticalSpecRequiresAtomicCapability() {
+        HookSpec spec = TestSupport.spec("replace.force.unsupported", ADD).replaceConstant(99).build();
+        TestSupport.installOrFail(environment, spec);
+        backend.withCapability(Capability.ATOMIC_REPLACE, CapabilityResult.unsupported("fake", "off"));
+        assertEquals(RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY, environment.forceReplace(spec).status());
+        assertEquals(0, backend.replaceCount());
+    }
+
+    @Test
     public void descriptorMatchPolicyAndInitializationTriggerReplacement() {
         BeforeCallback callback = invocation -> invocation.setEarlyResult(99);
         TargetSpec.DescriptorTarget unique = TargetSpec.descriptor(TargetKind.METHOD, Fixtures.class.getName(), "add")

@@ -53,7 +53,17 @@ final class Dispatcher {
                                                BackendInvocation backend, DiagnosticsSink diagnostics) {
         InvocationFrame frame = new InvocationFrame(plan, backend);
         try {
-            return dispatchSingleAfter(plan, callback, frame, diagnostics);
+            return dispatchSingleAfter(plan, callback, frame, diagnostics).dispatchResult();
+        } finally {
+            frame.invalidate();
+        }
+    }
+
+    static Object dispatchSingleAfterValue(BoundPlan plan, AfterCallback callback,
+                                           BackendInvocation backend, DiagnosticsSink diagnostics) throws Throwable {
+        InvocationFrame frame = new InvocationFrame(plan, backend);
+        try {
+            return dispatchSingleAfter(plan, callback, frame, diagnostics).dispatchValue();
         } finally {
             frame.invalidate();
         }
@@ -64,7 +74,7 @@ final class Dispatcher {
      * but can use the frame lifetime directly, eliminating two per-callback wrappers. Expire both
      * before handling failure or calling diagnostics, just as the ordinary borrowed view does.
      */
-    private static DispatchResult dispatchSingleAfter(BoundPlan plan, AfterCallback callback,
+    private static InvocationFrame.ResultSlot dispatchSingleAfter(BoundPlan plan, AfterCallback callback,
                                                        InvocationFrame frame, DiagnosticsSink diagnostics) {
         InvocationFrame.ResultSlot slot = frame.resultSlot();
         Throwable originalFailure = null;
@@ -98,7 +108,7 @@ final class Dispatcher {
                 slot.restoreOriginal(originalFailure);
             }
         }
-        return slot.dispatchResult();
+        return slot;
     }
 
     /**
@@ -130,7 +140,11 @@ final class Dispatcher {
     }
 
     private static DispatchResult dispatchBeforeAfter(BoundPlan plan, InvocationFrame frame, DiagnosticsSink diagnostics) {
-        for (BeforeCallback callback : plan.beforeCallbacks()) {
+        // HookSpec freezes callbacks into an unmodifiable ArrayList at construction, so indexed
+        // iteration preserves the same order and early-stop semantics without an Iterator per call.
+        List<BeforeCallback> befores = plan.beforeCallbacks();
+        for (int i = 0, count = befores.size(); i < count; i++) {
+            BeforeCallback callback = befores.get(i);
             try {
                 InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
                 try {
@@ -226,11 +240,13 @@ final class Dispatcher {
 
     private static DispatchResult dispatchAround(BoundPlan plan, InvocationFrame frame) {
         try {
-            InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
             try {
-                plan.spec().aroundCallback().around(borrowed);
+                // An around plan has exactly one callback, so its invocation frame itself is the
+                // sole borrow. The frame stays valid during proceed(), including reentry, and is
+                // expired at callback exit before any result processing or error handling.
+                plan.spec().aroundCallback().around(frame);
             } finally {
-                borrowed.invalidate();
+                frame.invalidate();
             }
             frame.rethrowObservedFatal();
         } catch (Throwable failure) {
@@ -241,10 +257,10 @@ final class Dispatcher {
             // Even after a successful proceed the original is never replayed.
             return DispatchResult.threw(failure);
         }
-        if (frame.hasEarlyOutcome()) {
+        if (frame.hasEarlyOutcomeForDispatch()) {
             return frame.earlyDispatchResult();
         }
-        CallOutcome.State state = frame.proceedState();
+        CallOutcome.State state = frame.proceedStateForDispatch();
         if (state == CallOutcome.State.RETURNED || state == CallOutcome.State.THREW) {
             return toDispatchResult(frame.proceedOutcome());
         }

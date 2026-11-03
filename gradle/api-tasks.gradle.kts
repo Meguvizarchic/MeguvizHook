@@ -51,7 +51,7 @@ abstract class ApiSurfaceDump : DefaultTask() {
     }
 }
 
-val apiModules = listOf("hook-api", "hook-core", "hook-dsl")
+val apiModules = listOf("hook-api", "hook-core", "hook-dsl", "hook-ref-bridge")
 val aggregateDumpTasks = mutableListOf<String>()
 val aggregateCheckTasks = mutableListOf<String>()
 

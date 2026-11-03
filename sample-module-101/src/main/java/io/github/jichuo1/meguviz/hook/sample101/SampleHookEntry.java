@@ -25,15 +25,26 @@ public final class SampleHookEntry extends XposedModule {
     private static final String EXPECTED_PACKAGE = "com.example.host";
 
     private final AtomicLong clockCalls = new AtomicLong();
+    private volatile String processName;
     private HookEnvironment environment;
+
+    @Override
+    public void onModuleLoaded(ModuleLoadedParam param) {
+        processName = param.getProcessName();
+    }
 
     @Override
     public void onPackageReady(PackageReadyParam param) {
         if (!EXPECTED_PACKAGE.equals(param.getPackageName())) {
             return;
         }
+        String currentProcess = processName;
+        if (currentProcess == null) {
+            Log.w(TAG, "module-loaded process name unavailable");
+            return;
+        }
         LibXposed101Backend backend = new LibXposed101Backend(this, new LibXposed101Context(
-                param.getApplicationInfo().processName, param.getClassLoader(), 1L));
+                currentProcess, param.getClassLoader(), 1L));
         environment = HookEnvironment.create(backend);
         installClockCounter();
     }

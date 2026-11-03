@@ -1,7 +1,5 @@
 package io.github.jichuo1.meguviz.hook.core;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -16,7 +14,8 @@ import java.util.Objects;
 public final class BatchTraceTransport {
     private static final int MAGIC = 0x4d484231; // MHB1
     private static final int HEADER_BYTES = 8;
-    private static final int MAX_FRAME_BYTES = 65536;
+    static final int MAX_FRAME_BYTES = 65536;
+    static final int MIN_FRAME_BYTES = HEADER_BYTES + 5;
     private static final int MAX_RECORDS = 1024;
 
     private BatchTraceTransport() { }
@@ -39,26 +38,32 @@ public final class BatchTraceTransport {
         if (maxFrames < 0 || maxFrames > 32) throw new IllegalArgumentException("maxFrames must be 0..32");
         return events -> {
             Objects.requireNonNull(events, "events");
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream(Math.min(maxFrameBytes, 1024));
-            DataOutputStream out = new DataOutputStream(bytes);
-            out.writeInt(MAGIC);
-            out.writeInt(0); // count is filled only after framing completes
+            List<byte[]> records = new ArrayList<byte[]>();
+            int size = HEADER_BYTES;
             int count = 0;
             for (CallbackExceptionTracker.Event event : events) {
-                if (count == maxRecords || maxFrameBytes - bytes.size() < 5) break;
+                if (count == maxRecords || maxFrameBytes - size < 5) break;
                 byte[] record = JsonLineTraceTransport.encode(event, includeMessage, maxFrames);
                 if (record.length == 0 || record.length > maxFrameBytes - HEADER_BYTES - 4) {
                     if (count == 0) throw new IllegalArgumentException("trace record does not fit batch frame");
                     break;
                 }
-                if (record.length > maxFrameBytes - bytes.size() - 4) break;
-                out.writeInt(record.length);
-                out.write(record);
+                if (record.length > maxFrameBytes - size - 4) break;
+                records.add(record);
+                size += 4 + record.length;
                 count++;
             }
             if (count == 0) throw new IllegalArgumentException("empty batch");
-            byte[] frame = bytes.toByteArray();
+            byte[] frame = new byte[size];
+            putInt(frame, 0, MAGIC);
             putInt(frame, 4, count);
+            int position = HEADER_BYTES;
+            for (byte[] record : records) {
+                putInt(frame, position, record.length);
+                position += 4;
+                System.arraycopy(record, 0, frame, position, record.length);
+                position += record.length;
+            }
             writer.writeRecord(frame);
             return count;
         };
@@ -72,6 +77,46 @@ public final class BatchTraceTransport {
      */
     public static JsonLineTraceTransport.RecordWriter receiver(BatchWriter writer,
                                                                int maxFrameBytes, int maxRecords) {
+        return receiverInternal(writer, maxFrameBytes, maxRecords, true);
+    }
+
+    /**
+     * Pair compression decoding and batch parsing on a caller-owned worker. This accepts the same
+     * frames and invokes the writer under the same conditions as
+     * {@code codec.decodingWriter(receiver(writer, maxFrameBytes, maxRecords))}. The decoder's
+     * newly created plaintext stays internal, so it does not need a second whole-frame snapshot;
+     * each record passed to the writer remains an independent byte array. The input wire frame is
+     * still snapshotted and validated by the codec. Normal return is not a durability guarantee.
+     */
+    public static JsonLineTraceTransport.RecordWriter compressedReceiver(BoundedTraceCompression codec,
+            BatchWriter writer, int maxFrameBytes, int maxRecords) {
+        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords, false);
+        return Objects.requireNonNull(codec, "codec").decodingWriter(receiver);
+    }
+
+    /**
+     * Session variant of {@link #compressedReceiver}. The session retains its existing owner-thread,
+     * availability and close rules; neither this method nor the receiver creates a worker.
+     */
+    public static JsonLineTraceTransport.RecordWriter compressedSessionReceiver(BoundedTraceCompression.Session session,
+            BatchWriter writer, int maxFrameBytes, int maxRecords) {
+        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords, false);
+        return Objects.requireNonNull(session, "session").decodingWriter(receiver);
+    }
+
+    /**
+     * Serialized-session variant of {@link #compressedReceiver}. Codec operations may move
+     * between threads but overlapping use is rejected; the batch writer runs outside the codec
+     * lock and is responsible for its own synchronization and acceptance semantics.
+     */
+    public static JsonLineTraceTransport.RecordWriter compressedSerializedReceiver(
+            BoundedTraceCompression.SerializedSession session, BatchWriter writer, int maxFrameBytes, int maxRecords) {
+        JsonLineTraceTransport.RecordWriter receiver = receiverInternal(writer, maxFrameBytes, maxRecords, false);
+        return Objects.requireNonNull(session, "session").decodingWriter(receiver);
+    }
+
+    private static JsonLineTraceTransport.RecordWriter receiverInternal(BatchWriter writer,
+            int maxFrameBytes, int maxRecords, boolean snapshot) {
         Objects.requireNonNull(writer, "writer");
         checkBounds(maxFrameBytes, maxRecords);
         return incoming -> {
@@ -79,8 +124,8 @@ public final class BatchTraceTransport {
             if (incoming.length < HEADER_BYTES || incoming.length > maxFrameBytes) {
                 throw new IllegalArgumentException("invalid batch frame");
             }
-            // A local caller may retain and mutate its array while parsing; use one bounded snapshot.
-            byte[] frame = incoming.clone();
+            // Only paired codec output is known to be a fresh array with no external references.
+            byte[] frame = snapshot ? incoming.clone() : incoming;
             if (readInt(frame, 0) != MAGIC) throw new IllegalArgumentException("invalid batch frame");
             int count = readInt(frame, 4);
             if (count < 1 || count > maxRecords || count > (frame.length - HEADER_BYTES) / 5) {
@@ -113,7 +158,7 @@ public final class BatchTraceTransport {
     }
 
     private static void checkBounds(int maxFrameBytes, int maxRecords) {
-        if (maxFrameBytes < HEADER_BYTES + 5 || maxFrameBytes > MAX_FRAME_BYTES
+        if (maxFrameBytes < MIN_FRAME_BYTES || maxFrameBytes > MAX_FRAME_BYTES
                 || maxRecords < 1 || maxRecords > MAX_RECORDS) {
             throw new IllegalArgumentException("invalid batch bounds");
         }

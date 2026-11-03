@@ -3,6 +3,13 @@
   "version": "0.1.0-SNAPSHOT",
   "release_qualified": false,
   "status": "development",
+  "maven_central": {
+    "candidate_version": "not_selected",
+    "candidate_status": "current_development_source_not_published",
+    "prior_signed_candidate": "does_not_represent_current_source",
+    "namespace_authorization": "prior_1_0_0_publication_exists_current_credentials_not_verified",
+    "upload": "1_0_0_published_current_changes_not_uploaded"
+  },
   "features": [
     "Java hook API and JVM core",
     "libxposed API101 and API102 backends",
@@ -10,13 +17,22 @@
     "explicit API102 reload lifecycle handoff",
     "opt-in callback diagnostics",
     "bounded synchronous diagnostic batching",
-    "paired bounded diagnostic compression"
+    "paired bounded diagnostic compression",
+    "optional MeguvizRef resolver bridge and extensible query providers",
+    "module entry router and explicitly leased lifecycle",
+    "opt-in libxposed advanced operations",
+    "explicit epoch-bound Ref resolver session",
+    "opt-in bounded concurrent preparation with serial checked commit",
+    "caller-owned trace batching, polling and compression sessions"
   ],
   "verification": {
     "jvm_and_stub_tests": "covered",
     "public_api_check": "covered",
     "android_release_build": "covered for selected artifacts",
     "android_binder_ipc": "not verified",
+    "ref_bridge_android": "minSdk 27 APK build and DEX definition checks only; runtime not verified",
+    "advanced_framework_operations": "JVM and backend proxy tests only; device runtime not verified",
+    "trace_session_and_ref_session": "JVM correctness and synthetic desktop probes; no Binder or ART runtime qualification",
     "durable_delivery": "not provided",
     "device_performance": "not qualified"
   },

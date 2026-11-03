@@ -24,6 +24,12 @@ final class TypeChecks {
     private TypeChecks() {
     }
 
+    /** JVM implementations may throw checked exceptions absent from the declared Java SPI. */
+    @SuppressWarnings("unchecked")
+    static <T extends Throwable> RuntimeException rethrow(Throwable failure) throws T {
+        throw (T) failure;
+    }
+
     static Class<?> returnType(Executable target) {
         return target instanceof Method ? ((Method) target).getReturnType() : void.class;
     }
@@ -48,10 +54,7 @@ final class TypeChecks {
 
     static void checkArgumentValue(BoundPlan plan, int index, Object value) {
         Executable target = plan.target();
-        if (index < 0 || index >= plan.parameterCount()) {
-            throw new IndexOutOfBoundsException("argument index " + index + " of " + target);
-        }
-        Class<?> type = plan.parameterType(index);
+        Class<?> type = plan.checkedParameterType(index);
         if (!isAssignable(type, value)) {
             checkAssignable(type, value, "argument " + index + " of " + target);
         }
