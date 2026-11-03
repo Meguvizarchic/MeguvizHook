@@ -20,6 +20,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
 /**
@@ -29,8 +30,10 @@ import java.util.concurrent.locks.LockSupport;
  * transport has accepted all of them. An untimed per-invocation setup parks for a random fraction
  * of the poll interval so arrivals are not phase-locked to poll ticks.
  *
- * <p>config = pollMillis/waitMillis/triggerCount. Host JVM only: no Binder, ART, device
- * scheduler or power management is represented, and the spin-wait adds no wake-up latency.
+ * <p>config = pollMillis/waitMillis/triggerCount. wake=signal wires the tracker's opt-in
+ * CaptureSignal to TraceBatchPoller.requestPoll (one coalesced executor submission on the
+ * capturing thread); wake=none is the default periodic polling. Host JVM only: no Binder, ART,
+ * device scheduler or power management is represented, and the spin-wait adds no wake-up latency.
  */
 @State(Scope.Thread)
 @BenchmarkMode(Mode.SampleTime)
@@ -42,6 +45,9 @@ public class PollerLatencyBenchmark {
 
     @Param({"1", "16"})
     public int burst;
+
+    @Param({"none", "signal"})
+    public String wake;
 
     private ScheduledThreadPoolExecutor executor;
     private CallbackExceptionTracker tracker;
@@ -63,12 +69,19 @@ public class PollerLatencyBenchmark {
             thread.setDaemon(true);
             return thread;
         });
-        tracker = new CallbackExceptionTracker("bench-latency", 4096);
+        AtomicReference<TraceBatchPoller> target = new AtomicReference<TraceBatchPoller>();
+        tracker = "signal".equals(wake)
+                ? new CallbackExceptionTracker("bench-latency", 4096, () -> {
+                    TraceBatchPoller current = target.get();
+                    if (current != null) current.requestPoll();
+                })
+                : new CallbackExceptionTracker("bench-latency", 4096);
         producer = new TraceFixtures.Producer(tracker, "bench.latency.hook",
                 new TraceFixtures.SyntheticFailure("latency", 4));
         CallbackExceptionTracker.BatchTransport transport = this::accept;
         poller = TraceBatchPoller.startDraining(executor, tracker, transport, trigger, 64, 4,
                 pollMillis, waitMillis, TimeUnit.MILLISECONDS);
+        target.set(poller);
     }
 
     private int accept(List<CallbackExceptionTracker.Event> events) {
