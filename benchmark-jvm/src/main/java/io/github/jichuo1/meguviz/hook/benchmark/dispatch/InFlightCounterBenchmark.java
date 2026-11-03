@@ -15,9 +15,9 @@ import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Standalone comparison of the registration admission lease (state read, increment, state re-read,
- * decrement) with the current AtomicInteger and a LongAdder. Numbers only: the core keeps its
- * AtomicInteger semantics this round. One counter is shared by every thread, as in
- * CoreRegistration. Host JDK microbenchmark only, not ART evidence.
+ * decrement) with a plain AtomicInteger (the round-1 core) and a LongAdder. One counter is shared
+ * by every thread, as in CoreRegistration. The core's own counter is measured end to end by
+ * {@link RegistrationContentionBenchmark}. Host JDK microbenchmark only, not ART evidence.
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
@@ -58,6 +58,16 @@ public class InFlightCounterBenchmark {
         return adderLease();
     }
 
+    @Benchmark @Threads(2)
+    public boolean atomicInteger2Threads() {
+        return atomicLease();
+    }
+
+    @Benchmark @Threads(2)
+    public boolean longAdder2Threads() {
+        return adderLease();
+    }
+
     @Benchmark @Threads(4)
     public boolean atomicInteger4Threads() {
         return atomicLease();
@@ -65,6 +75,16 @@ public class InFlightCounterBenchmark {
 
     @Benchmark @Threads(4)
     public boolean longAdder4Threads() {
+        return adderLease();
+    }
+
+    @Benchmark @Threads(8)
+    public boolean atomicInteger8Threads() {
+        return atomicLease();
+    }
+
+    @Benchmark @Threads(8)
+    public boolean longAdder8Threads() {
         return adderLease();
     }
 }

@@ -59,7 +59,7 @@ public enum ChainAdapter {
     abstract ModelHooker hooker(BoundPlan plan, DispatchChannel channel);
 
     /** Mirrors the generic and direct hooker paths of LibXposed101Backend / LibXposed102Backend. */
-    abstract static class ModelHooker {
+    abstract static class ModelHooker implements VectorLikeChain.Level {
         final Executable target;
         final int parameterCount;
         private final DispatchChannel channel;
@@ -79,7 +79,8 @@ public enum ChainAdapter {
             return direct != null;
         }
 
-        final Object intercept(VectorLikeChain chain) throws Throwable {
+        @Override
+        public final Object intercept(VectorLikeChain chain) throws Throwable {
             if (direct != null) {
                 Object value = direct.apply(invocation(chain));
                 if (value == notEntered) return chain.proceed();
