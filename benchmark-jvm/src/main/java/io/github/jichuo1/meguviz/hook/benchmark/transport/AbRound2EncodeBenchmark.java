@@ -22,8 +22,9 @@ import java.util.concurrent.TimeUnit;
  * Round-2 same-run A/B of single-record JSONL encoding: round-1 copy (Round1Transport) against
  * the current encoder. shape = message kind + frame count: none0 has no message, ascii* uses a
  * 900-char ASCII message (truncated to 512), unicode* the 400-char mixed CJK/escape message of
- * JsonLineEncodeBenchmark; the digit is maxFrames out of a 40-frame trace. encode returns the
- * exact-length record; send passes it to a consuming RecordWriter. Host JVM only; not ART.
+ * JsonLineEncodeBenchmark, cjk* 600 CJK chars (truncated to 512); the digit is maxFrames out of a
+ * 40-frame trace. encode returns the exact-length record; send passes it to a consuming
+ * RecordWriter. Host JVM only; not ART.
  */
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
@@ -33,7 +34,7 @@ public class AbRound2EncodeBenchmark {
     @Param({"round1", "current"})
     public String impl;
 
-    @Param({"none0", "ascii0", "ascii8", "unicode0", "unicode8"})
+    @Param({"none0", "ascii0", "ascii8", "unicode0", "unicode8", "cjk0"})
     public String shape;
 
     private boolean round1;
@@ -50,7 +51,8 @@ public class AbRound2EncodeBenchmark {
         maxFrames = shape.charAt(shape.length() - 1) - '0';
         includeMessage = !"none".equals(kind);
         String message = "ascii".equals(kind) ? TraceFixtures.asciiMessage(900)
-                : "unicode".equals(kind) ? TraceFixtures.unicodeMessage(400) : null;
+                : "unicode".equals(kind) ? TraceFixtures.unicodeMessage(400)
+                : "cjk".equals(kind) ? TraceFixtures.cjkMessage(600) : null;
         event = TraceFixtures.event("bench.ab2.hook", new TraceFixtures.SyntheticFailure(message, 40));
         round1Writer = sink::consume;
         transport = new JsonLineTraceTransport(sink::consume, includeMessage, maxFrames);
