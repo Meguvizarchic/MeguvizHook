@@ -52,14 +52,34 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         if (access == ParameterAccess.READ_ARGS_VIEW) {
             // Only the explicitly read-only shape borrows the adapter's argument view.
             this.argsView = Objects.requireNonNull(backend.readOnlyArguments(), "readOnlyArguments");
-        } else if (access != ParameterAccess.NO_ARGS) {
-            // Materialized once per frame at entry; NO_ARGS never reaches this branch.
+        } else if (access == ParameterAccess.ENTRY_SNAPSHOT) {
+            // The snapshot is defined at entry, so this shape stays eager. Shallow slot copy: the
+            // array is copied, the argument objects are shared.
             this.args = backend.arguments();
-            if (access == ParameterAccess.ENTRY_SNAPSHOT) {
-                // Shallow slot copy: the array is copied, the argument objects are shared.
-                this.entrySnapshot = args.clone();
-            }
+            this.entrySnapshot = args.clone();
         }
+        // READ_ARGS, MUTABLE_ARGS and AROUND obtain the backend array on first slot access (see
+        // slots()); NO_ARGS never does.
+    }
+
+    /** The backend argument array, obtained at most once per frame on the first slot access. */
+    private Object[] slots() {
+        Object[] current = args;
+        return current != null ? current : materializeSlots();
+    }
+
+    private Object[] materializeSlots() {
+        Object[] materialized;
+        try {
+            materialized = backend.arguments();
+        } catch (Error failure) {
+            // Runs inside a callback: a fatal VM event must stay fatal even if that callback
+            // catches it. Ordinary failures surface to the callback that touched the slots.
+            rejectFatal(failure);
+            throw failure;
+        }
+        args = Objects.requireNonNull(materialized, "arguments");
+        return materialized;
     }
 
     void invalidate() {
@@ -96,8 +116,12 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         }
     }
 
+    /**
+     * The array callbacks read and wrote, so downstream and every stage observe the same slots. If
+     * no callback touched the slots before downstream runs, null keeps the incoming arguments (always
+     * for NO_ARGS and READ_ARGS_VIEW); a later slot access then obtains them from the backend.
+     */
     Object[] argsForProceed() {
-        // null keeps incoming arguments for NO_ARGS and READ_ARGS_VIEW.
         return args;
     }
 
@@ -200,7 +224,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public Object getArgument(int index) {
         requireReadable();
-        return plan.access() == ParameterAccess.READ_ARGS_VIEW ? argsView.get(index) : args[index];
+        return plan.access() == ParameterAccess.READ_ARGS_VIEW ? argsView.get(index) : slots()[index];
     }
 
     @Override
@@ -231,7 +255,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     public void setArgument(int index, Object value) {
         requireMutable();
         TypeChecks.checkArgumentValue(plan, index, value);
-        args[index] = value;
+        slots()[index] = value;
     }
 
     @Override

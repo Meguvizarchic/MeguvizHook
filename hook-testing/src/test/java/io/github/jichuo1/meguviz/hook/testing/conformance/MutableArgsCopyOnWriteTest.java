@@ -133,10 +133,11 @@ public final class MutableArgsCopyOnWriteTest {
         } finally { env.close(); }
     }
 
-    @Test public void singleAfterObservesTheArrayPassedToDownstream() {
+    @Test public void singleAfterObservesTheSlotsUsedByDownstream() {
         CapturingBackend backend = new CapturingBackend();
         HookEnvironment env = HookEnvironment.create(backend);
         Object[] arguments = {3, 4};
+        AtomicInteger materializations = new AtomicInteger();
         try {
             TestSupport.installOrFail(env, TestSupport.spec("mutable.single.after", ADD)
                     .access(ParameterAccess.MUTABLE_ARGS)
@@ -145,15 +146,18 @@ public final class MutableArgsCopyOnWriteTest {
             DispatchResult result = backend.channel.dispatch(new BackendInvocation() {
                 @Override public Executable target() { return ADD; }
                 @Override public Object thisObject() { return null; }
-                @Override public Object[] arguments() { return arguments; }
+                @Override public Object[] arguments() { materializations.incrementAndGet(); return arguments; }
                 @Override public Object proceed(Object[] supplied) {
-                    assertSame(arguments, supplied);
-                    supplied[0] = 9;
+                    // No callback touched the slots before downstream: the incoming ones are kept.
+                    assertNull(supplied);
+                    assertEquals(0, materializations.get());
+                    arguments[0] = 9;
                     return 7;
                 }
             });
             assertEquals(DispatchResult.Kind.RETURNED, result.kind());
             assertEquals(7, result.value());
+            assertEquals("the after callback obtains the slots once, after downstream", 1, materializations.get());
         } finally { env.close(); }
     }
 }
