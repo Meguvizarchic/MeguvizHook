@@ -55,13 +55,13 @@ Binder 或设备证据。
 
 | # | 改动 | 合同依据 |
 |---|---|---|
-| a | `TraceBatchPoller.WaitExpiry.DEADLINE`（新增 `startDraining(..., Clock, WaitExpiry)` 重载）：评估结束时若窗口仍开着且未到期，用 `executor.schedule` 安排一次普通评估，延迟为“观察时刻 + 等待 − 本次时钟读数” | 默认 `NEXT_POLL` 与原工厂完全相同；只有评估会安排，所以只在执行器线程上发生。门槛、排空上限、BUSY／EMPTY、失败暂停不变，等待仍从“观察到”起算 |
-| a' | 有界与不丢失：每个 poller 同时最多一个待执行的到期评估；每个窗口最多安排一次；窗口提前关闭不取消它，它到时作为普通评估运行并为当前窗口安排；遇到正在进行的评估则记下目标，那次评估结束后提交一次后续评估 | 不取消就不会在 STPE 队列中堆积已取消任务（见上方 STPE 文档）；“每窗口一次”避免时钟慢于执行器时的忙循环；后续评估走 `requestPoll` 的提交路径但**不**启用其积压排空行为 |
-| a'' | 拒绝记入 `schedulingFailure()` 且不暂停；暂停和关闭以 `cancel(false)` 取消待执行的到期评估；旧代次的任务运行时什么也不做 | 与 `requestPoll` 的拒绝规则一致；代次检查沿用周期任务的做法 |
+| a | `TraceBatchPoller.WaitExpiry.DEADLINE`（新增 `startDraining(..., Clock, WaitExpiry)` 重载）：评估结束时若窗口仍开着且未到期，用 `executor.schedule` 安排一次普通评估，延迟为“观察时刻 + 等待 − 本次时钟读数”（评估中发送过批次时重新读一次时钟） | 默认 `NEXT_POLL` 与原工厂完全相同；只有评估会安排，所以只在执行器线程上发生。门槛、排空上限、BUSY／EMPTY、失败暂停不变，等待仍从“观察到”起算 |
+| a' | 有界与不丢失：每个 poller 同时最多一个待执行的到期评估；每个窗口最多安排一次；窗口提前关闭不取消它，它到时作为普通评估运行并为当前窗口安排；遇到正在进行的评估则记下目标，那次评估结束时若窗口仍开着就提交一次后续评估 | 不取消就不会在 STPE 队列中堆积已取消任务（见上方 STPE 文档）；“每窗口一次”避免时钟慢于执行器时的忙循环；后续评估走 `requestPoll` 的提交路径但**不**启用其积压排空行为 |
+| a'' | 拒绝记入 `schedulingFailure()` 且不暂停；暂停、恢复（新代次开始时）和关闭以 `cancel(false)` 取消待执行的到期评估并释放名额；旧代次的任务运行时什么也不做 | 与 `requestPoll` 的拒绝规则一致；代次检查沿用周期任务的做法。评审发现：`resume()` 先置 ACTIVE、稍后才在 `schedule()` 中推进代次，期间的评估会以旧代次占住名额，使 DEADLINE 静默退化为 NEXT_POLL；已改为推进代次时一并释放，并加了 4000 轮竞争的回归测试（去掉修复后第 114／370 轮即失败） |
 | b | 单条 JSONL 的非 ASCII 尾部：若剩余容量连每单元 6 字节的最坏情况都放得下，一遍写完；否则按“每单元 3 字节 + 12 字节余量”分块写入可确定放得下的部分，转义单元用掉余量后结束本块；不足 32 个单元时才扩容。尾部写完后把记录估算的终点按实际差额校正，之后的扩容直接到校正后的大小，而不是翻倍 | 字节不变（`JsonSingleRecordTailTest` 在 6 万个随机串、各种容量下与批帧编码器逐字节比较，`TraceWireDifferentialTest` 与第 0 轮编码器比较）；getter 次数与顺序不变；批帧（有界）编码器的路径一字未改 |
 | c | `JsonLineTraceTransport.SlicedRecordWriter`（继承 `RecordWriter`，新增 `writeRecord(byte[], int, int)`，整数组方法默认转发）。`JsonLineTraceTransport.send`、`BatchTraceTransport.sender`、codec／会话／串行会话的 `batchSender` 遇到它时交出私有编码缓冲区的切片，省去最后的裁剪复制；codec 直接压缩或 RAW 编码这段区间 | 一次调用必须等价于对复制出的区间调用 `writeRecord`；缓冲区每次调用私有、调用后不再写入；只实现 `RecordWriter` 的写入器照旧收到精确长度的数组；帧和 `Decision` 只取决于区间内字节 |
 | c' | `BinderTrace102.sender` 返回实现该接口的私有类，用 `Parcel.writeByteArray(buffer, offset, length)`；切片先按数组边界和记录上限检查再取 Parcel。`ModuleRemoteTraceWriter102` 也实现它，打开流之前检查切片 | 返回类型仍是 `RecordWriter`（二进制兼容）；AOSP 中整数组重载即以偏移 0 调用切片重载，Parcel 布局不变；空数组、超限、null 的异常类型与消息不变 |
-| d | `TraceBatchDispatcher`：交给执行器的任务与完成闩合并为一个私有对象 `Completion extends AbstractQueuedSynchronizer implements Runnable`；`get` 调用与 `CountDownLatch(1)` 完全相同的 AQS 方法 | 中断、超时、`null` 单位的异常顺序、`Long.MAX_VALUE` 超时都由同一段 AQS 代码处理。状态只能由 Attempt 的终态转换清零；从队列里拿到任务的代码调用公开的 `releaseShared` 只会得到“尚未完成”，不能提前放行等待者 |
+| d | `TraceBatchDispatcher`：交给执行器的任务与完成闩合并为一个私有对象 `Completion extends AbstractQueuedSynchronizer implements Runnable`；`get` 调用与 `CountDownLatch(1)` 完全相同的 AQS 方法 | 中断、超时、`null` 单位的异常顺序、`Long.MAX_VALUE` 超时都由同一段 AQS 代码处理。状态只能由 Attempt 的终态转换清零；从队列里拿到任务的代码调用公开的 `releaseShared` 只会得到“尚未完成”，不能提前放行等待者。AQS 可序列化而原方法引用不可：`writeObject` 抛 `NotSerializableException`，序列化任务的执行器仍在 `execute` 中失败（评审发现，已有对照测试） |
 
 ## 4. JSONL 与切片写入
 
@@ -160,7 +160,7 @@ JMH 同轮 A/B（`AbDispatcherBenchmark`，每个参数独立 JVM）：
 6 种 transport 结果；先置中断的 `get`、超时为负／0／1 ns／1 ms／`Long.MIN_VALUE`、`null` 单位、取消、
 状态查询、引用释放），逐步比较返回值、异常类型与原因、调用后的中断状态；另比较 9 种并发等待（无限期、
 限时、`Long.MAX_VALUE` 纳秒与天、三个等待者、等待中被中断、取消、超时）。把同步器改成永不阻塞的变异
-会让四个测试全部失败。
+会让当时的四个测试全部失败。
 
 ## 7. 风险
 
@@ -173,8 +173,8 @@ JMH 同轮 A/B（`AbDispatcherBenchmark`，每个参数独立 JVM）：
   Parcel，需设备验证。
 - **JSONL**：分块路径多了少量分支；对每个字段都含大量非 ASCII 的记录，扩容次数仍为对数级（第二次起至少
   1.5 倍）。只验证了 HotSpot C2，ART 的编译结果不同。
-- **Dispatcher**：交给执行器的对象现在是一个 AQS 子类；检查队列的代码能看到它的公开查询方法，但不能改变
-  完成状态。
+- **Dispatcher**：交给执行器的对象现在是一个 AQS 子类；检查队列的代码能看到它的公开查询方法和带状态的
+  `toString()`，但不能改变完成状态，也不能把它序列化。
 - 所有结论都只来自宿主 JVM。
 
 ## 8. 评估后未做

@@ -199,7 +199,7 @@ ART 或设备）。信号抛出的非致命异常计入 `trackingFailureCount()`
 默认（`WaitExpiry.NEXT_POLL`）下，低于数量门槛的记录要等到观察等待到期后的**下一次**评估才发送，
 因此比等待时间最多晚一个轮询间隔。显式选择 `WaitExpiry.DEADLINE` 后，评估结束时若观察窗口仍开着
 且等待尚未到期，poller 会用 `executor.schedule` 安排**一次**普通评估，延迟为剩余等待时间（按该次评估
-读取的时钟计算）：
+读取的时钟计算；评估中发送过批次时，安排前重新读取一次时钟）：
 
 ```java
 TraceBatchPoller poller = TraceBatchPoller.startDraining(
@@ -216,11 +216,11 @@ TraceBatchPoller poller = TraceBatchPoller.startDraining(
 - 每个 poller 同时最多只有一个待执行的到期评估，每个观察窗口最多安排一次。窗口提前关闭（例如达到
   数量门槛）时不取消它，它到时作为一次普通评估运行，如有新窗口则为新窗口安排；因此
   `ScheduledThreadPoolExecutor` 的队列里不会堆积已取消的任务。
-- 到期评估遇到另一次评估正在进行、而那次评估读取的时钟尚未到期时，那次评估结束后会再提交一次普通
+- 到期评估遇到另一次评估正在进行时，它本身什么也不做；若那次评估结束时窗口仍开着，会再提交一次普通
   评估（与 `requestPoll()` 的后续评估相同，不会因此启用 `requestPoll()` 的积压排空行为）。
 - 自定义时钟与执行器的时间不一致、到期评估运行时时钟仍未到期，则不再重复安排，由周期任务兜底，
   不会形成忙循环。执行器拒绝安排时异常记入 `schedulingFailure()`，poller 不暂停，该窗口由周期任务
-  兜底。暂停和关闭会以 `cancel(false)` 取消待执行的到期评估。观察等待为 0 时从不安排。
+  兜底。暂停、恢复和关闭会以 `cancel(false)` 取消待执行的到期评估。观察等待为 0 时从不安排。
 - 这不是硬期限：执行器排队、同步传输、系统调度和暂停仍会增加延迟。`scheduleObservation()` 只观察
   周期句柄，不包括到期评估。
 
