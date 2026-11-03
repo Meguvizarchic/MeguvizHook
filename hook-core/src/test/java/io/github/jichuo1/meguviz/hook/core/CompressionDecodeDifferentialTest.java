@@ -189,6 +189,52 @@ public final class CompressionDecodeDifferentialTest {
         }
     }
 
+    /** Every RAW frame below the threshold now takes the single-copy path, whatever its size. */
+    @Test public void belowThresholdRawEncodingKeepsTheWireFormatForEverySize() throws Exception {
+        Random random = new Random(0x5a1L);
+        BoundedTraceCompression codec = new BoundedTraceCompression(8192, 8192 + HEADER_BYTES, 8193, 0,
+                BoundedTraceCompression.Algorithm.TRACE_SCHEMA_V1);
+        try (BoundedTraceCompression.Session session = codec.newSession();
+             BoundedTraceCompression.SerializedSession serialized = codec.newSerializedSession()) {
+            for (int i = 0; i < 2000; i++) {
+                byte[] input = new byte[random.nextInt(random.nextBoolean() ? 300 : 8193)];
+                random.nextBytes(input);
+                CRC32 crc = new CRC32();
+                crc.update(input);
+                byte[] expected = ByteBuffer.allocate(HEADER_BYTES + input.length)
+                        .putInt(0x4d485443).put((byte) 1).put((byte) 0).putShort((short) 0)
+                        .putInt(input.length).putInt(input.length).putInt((int) crc.getValue())
+                        .put(input).array();
+                for (BoundedTraceCompression.Encoding encoding : new BoundedTraceCompression.Encoding[] {
+                        codec.encode(input), session.encode(input), serialized.encode(input)}) {
+                    assertEquals(BoundedTraceCompression.Decision.BELOW_THRESHOLD, encoding.reason());
+                    assertArrayEquals(expected, encoding.bytes());
+                }
+            }
+        }
+    }
+
+    @Test public void smallRawEncodingStaysSelfConsistentUnderConcurrentMutation() throws Exception {
+        BoundedTraceCompression codec = new BoundedTraceCompression(4096, 4116, 4097, 0,
+                BoundedTraceCompression.Algorithm.ZLIB);
+        byte[] input = new byte[200];
+        java.util.concurrent.atomic.AtomicBoolean running = new java.util.concurrent.atomic.AtomicBoolean(true);
+        Thread mutator = new Thread(() -> {
+            byte value = 0;
+            while (running.get()) Arrays.fill(input, value++);
+        }, "small-raw-mutator");
+        mutator.start();
+        try {
+            for (int i = 0; i < 5000; i++) {
+                byte[] frame = codec.encode(input).bytes();
+                assertArrayEquals(Arrays.copyOfRange(frame, HEADER_BYTES, frame.length), codec.decode(frame));
+            }
+        } finally {
+            running.set(false);
+            mutator.join();
+        }
+    }
+
     private static byte[] mutate(Random random, byte[] frame) {
         byte[] copy = frame.clone();
         switch (random.nextInt(8)) {

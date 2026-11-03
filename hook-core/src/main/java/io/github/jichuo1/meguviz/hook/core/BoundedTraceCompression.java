@@ -424,9 +424,9 @@ public final class BoundedTraceCompression {
         if (input.length > maxPlainBytes) throw new IOException("plain trace exceeds limit");
         boolean rawFits = input.length <= maxFrameBytes - HEADER_BYTES;
         boolean attempt = input.length > 0 && (input.length >= thresholdBytes || !rawFits);
-        // Keep the existing small-record path; this threshold is an allocation tradeoff, not
-        // an end-to-end latency guarantee across runtimes and workloads.
-        if (snapshot && !attempt && rawFits && input.length >= 4096) {
+        // A RAW frame that needs no compression attempt copies the input once, straight into
+        // the frame; that copy is also the snapshot the checksum covers (for every size).
+        if (snapshot && !attempt && rawFits) {
             // The final payload is also the snapshot used by the checksum. Concurrent input
             // mutation during the copy is not atomic, just as with the ordinary clone path.
             ByteBuffer frame = ByteBuffer.allocate(HEADER_BYTES + input.length).order(ByteOrder.BIG_ENDIAN);
