@@ -137,10 +137,9 @@ JsonLineTraceTransport.RecordWriter wire = BinderTrace102.sender(endpointFromMod
 CallbackExceptionTracker.BatchTransport batch = codec.batchSender(wire, false, 0, batchLimitBytes, 32);
 tracker.deliverBatch(batch, 32);
 
-// 模块侧单个后台消费者：只在处理成功后移除队首。
-JsonLineTraceTransport.RecordWriter decode = BatchTraceTransport.compressedReceiver(codec, records -> {
-    for (byte[] record : records) writer.writeRecord(record);
-}, batchLimitBytes, 32);
+// 模块侧单个后台消费者：只在处理成功后移除队首。writer 作为 BatchWriter 时每批只打开一次流。
+JsonLineTraceTransport.RecordWriter decode = BatchTraceTransport.compressedReceiver(
+        codec, writer, batchLimitBytes, 32);
 byte[] head = frames.peek();
 if (head != null) {
     decode.writeRecord(head);
@@ -152,6 +151,11 @@ if (head != null) {
 解码必须在经过授权后的后台线程进行。该示例要求队列只有一个消费者、生产者不移除队首；处理失败的帧
 仍留在队首，由调用方审计、重试或显式处理。若写入部分记录后失败，重试整个帧可能重复；进程退出会丢失
 队列。若需要持久化确认或去重，必须由应用实现相应协议和存储，不能由本示例推导。
+
+`ModuleRemoteTraceWriter102` 同时实现 `BatchTraceTransport.BatchWriter`：`writeBatch` 先按同一上限
+检查整批记录，任一无效则不打开流；随后只调用一次 opener，按序写入各条记录（不另行拼接复制），
+最后 flush 一次并关闭。逐条 `writeRecord` 仍是每条打开一次流。批内写入中途失败时，已追加的前缀
+（可能以半条记录结尾）不会回滚，重试整批可能重复。
 
 `compressedReceiver` 等价于显式组合 codec 解码与批帧接收；它仅在内部复用 codec 新建的明文数组，
 避免再复制整个批帧。codec 只读取一次帧头：RAW 负载直接复制为返回的明文，校验和正是对这份副本
