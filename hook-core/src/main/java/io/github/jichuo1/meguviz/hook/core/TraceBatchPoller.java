@@ -176,18 +176,19 @@ public final class TraceBatchPoller implements AutoCloseable {
      * exactly the other factories. With {@link WaitExpiry#DEADLINE}, an evaluation that leaves an
      * observation window open with its wait not yet expired arms one ordinary evaluation through
      * {@code executor.schedule} for the remaining wait, measured from that evaluation's clock
-     * reading. Only evaluations arm, so this happens on the executor, never on a hook thread.
+     * reading (taken again after any sends). Only evaluations arm, so this happens on the
+     * executor, never on a hook thread.
      *
      * <p>Rules: at most one such one-shot is pending per poller, and each window arms its deadline
      * at most once. A window that closes early does not cancel the one-shot; it then runs once as
      * an ordinary evaluation and arms the current window's deadline if one is open, so cancelled
      * tasks never pile up in a ScheduledThreadPoolExecutor queue. If the one-shot finds another
-     * evaluation in flight that did not yet see the expiry, that evaluation submits one follow-up
+     * evaluation in flight and that evaluation leaves the window open, it submits one follow-up
      * evaluation when it ends, as for {@link #requestPoll()}. If the one-shot runs before the
      * supplied clock reports the expiry (a clock other than {@code System.nanoTime()}), it is not
      * re-armed and the periodic tick remains responsible. A rejected schedule is kept in
      * {@link #schedulingFailure()} without suspending; that window then waits for the periodic
-     * tick. Suspension and close cancel the pending one-shot with {@code cancel(false)}. A zero
+     * tick. Suspension, resume and close cancel the pending one-shot with {@code cancel(false)}. A zero
      * wait never arms. The count trigger, drain bound, BUSY/EMPTY and failure rules are unchanged,
      * and no hard deadline is promised: executor queueing and transport time still add latency.
      */
@@ -229,10 +230,16 @@ public final class TraceBatchPoller implements AutoCloseable {
 
     private void schedule() {
         final long ticket;
+        ScheduledFuture<?> stale;
         synchronized (this) {
             if (state != State.ACTIVE) return;
             ticket = ++generation;
+            // An evaluation that ran between resume() and this increment may have armed a
+            // one-shot under the previous ticket; it can never evaluate, so free its slot.
+            stale = clearDeadline();
+            deadlineArmed = false;
         }
+        if (stale != null) cancelFuture(stale);
         ScheduledFuture<?> installed;
         try {
             installed = Objects.requireNonNull(executor.scheduleWithFixedDelay(
@@ -392,6 +399,8 @@ public final class TraceBatchPoller implements AutoCloseable {
             if (deadlines && observedPending) {
                 windowOpen = true;
                 windowDeadline = observedAt + waitNanos;
+                // A one-shot's delay counts from when it is scheduled: re-read after sending.
+                if (send) now = clock.nanoTime();
             }
         } catch (Throwable failure) {
             ScheduledFuture<?> cancel = null;
@@ -419,12 +428,13 @@ public final class TraceBatchPoller implements AutoCloseable {
                 rerunRequested = false;
                 boolean missed = deadlineMissed && missedDeadline == windowDeadline;
                 deadlineMissed = false;
-                if (windowOpen && windowDeadline - now > 0 && state == State.ACTIVE && generation == ticket) {
+                if (windowOpen && state == State.ACTIVE && generation == ticket) {
                     if (missed) {
-                        // This window's one-shot ran while this evaluation was in flight with an
-                        // earlier clock reading: evaluate once more instead of waiting a period.
+                        // This window's one-shot ran while this evaluation was in flight and so
+                        // did nothing: evaluate once more instead of waiting a period.
                         rerun = true;
-                    } else if (!rerun && !deadlinePending && !(deadlineArmed && armedDeadline == windowDeadline)) {
+                    } else if (windowDeadline - now > 0 && !rerun && !deadlinePending
+                            && !(deadlineArmed && armedDeadline == windowDeadline)) {
                         deadlinePending = true;
                         deadlineArmed = true;
                         armedDeadline = windowDeadline;
@@ -454,7 +464,8 @@ public final class TraceBatchPoller implements AutoCloseable {
         boolean cancel = false;
         synchronized (this) {
             if (state != State.ACTIVE || generation != ticket) {
-                cancel = installed != null; // closed or suspended before the handle was installed
+                cancel = installed != null; // closed, suspended or resumed before installation
+                if (deadlineSeq == seq) deadlinePending = false;
             } else if (deadlineSeq == seq && deadlinePending) {
                 deadlineFuture = installed;
             }

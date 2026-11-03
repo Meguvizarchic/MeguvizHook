@@ -393,6 +393,165 @@ public final class TraceBatchPollerDeadlineTest {
         }
     }
 
+    @Test public void oneShotDelayCountsFromAfterTheSends() throws Exception {
+        ManualExecutor executor = new ManualExecutor();
+        CallbackExceptionTracker tracker = new CallbackExceptionTracker("after-send", 8);
+        Hook hook = new Hook(tracker);
+        AtomicLong clock = new AtomicLong(0);
+        List<Integer> batches = new ArrayList<Integer>();
+        TraceBatchPoller poller = TraceBatchPoller.startDraining(executor, tracker, events -> {
+            clock.addAndGet(5 * MS); // a slow synchronous transport
+            batches.add(events.size());
+            return events.size();
+        }, 3, 1, 1, 1, 20, TimeUnit.MILLISECONDS, clock::get, TraceBatchPoller.WaitExpiry.DEADLINE);
+        try {
+            hook.fail(3);
+            executor.periodic.runTask(); // count trigger at 0 ms: one capped batch, window stays open
+            assertEquals(Collections.singletonList(1), batches);
+            assertEquals(1, executor.oneShotCount());
+            assertEquals("remaining wait after the 5 ms send", 15 * MS, executor.oneShot(0).delayNanos);
+        } finally {
+            poller.close();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test public void oneShotSwallowedBySendingEvaluationStillFollowsUp() throws Throwable {
+        ManualExecutor executor = new ManualExecutor();
+        CallbackExceptionTracker tracker = new CallbackExceptionTracker("swallowed", 8);
+        Hook hook = new Hook(tracker);
+        AtomicLong clock = new AtomicLong(0);
+        CountDownLatch inSend = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        List<Integer> batches = Collections.synchronizedList(new ArrayList<Integer>());
+        TraceBatchPoller poller = TraceBatchPoller.startDraining(executor, tracker, events -> {
+            if (batches.isEmpty()) {
+                inSend.countDown();
+                assertTrue(release.await(5, TimeUnit.SECONDS));
+                clock.set(25 * MS); // the deadline passes during this send
+            }
+            batches.add(events.size());
+            return events.size();
+        }, 3, 1, 1, 1, 20, TimeUnit.MILLISECONDS, clock::get, TraceBatchPoller.WaitExpiry.DEADLINE);
+        AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+        try {
+            hook.fail(1);
+            executor.periodic.runTask(); // window at 0 ms, one-shot for 20 ms
+            assertEquals(1, executor.oneShotCount());
+            hook.fail(2);
+            clock.set(19 * MS);
+            Thread periodic = new Thread(() -> {
+                try { executor.periodic.runTask(); } catch (Throwable problem) { failure.set(problem); }
+            }, "sending-tick");
+            periodic.start(); // count trigger: sends one capped batch
+            assertTrue(inSend.await(5, TimeUnit.SECONDS));
+            executor.oneShot(0).runTask(); // swallowed: the tick is in flight
+            release.countDown();
+            periodic.join(5000);
+            assertNull(failure.get());
+            assertEquals(Collections.singletonList(1), batches);
+            assertEquals(2, tracker.pendingCount());
+            assertEquals("follow-up for the swallowed one-shot", 1, executor.submittedCount());
+            executor.takeSubmitted().run(); // the window has expired: sends
+            assertEquals(Arrays.asList(1, 1), batches);
+        } finally {
+            release.countDown();
+            poller.close();
+            executor.shutdownNow();
+        }
+    }
+
+    /**
+     * resume() makes the poller ACTIVE before the next generation starts. An evaluation that runs
+     * in between can arm a one-shot under the old ticket; the new generation must not inherit its
+     * slot, which would silently turn DEADLINE into NEXT_POLL. Races resume against a requesting
+     * evaluator and, after every cycle, checks (white-box) that a marked slot has a live handle.
+     */
+    @Test public void resumeRacingAnEvaluationNeverLeavesTheOneShotSlotStuck() throws Throwable {
+        ManualExecutor executor = new ManualExecutor();
+        CallbackExceptionTracker tracker = new CallbackExceptionTracker("resume-race", 8);
+        new Hook(tracker).fail(1);
+        java.util.concurrent.atomic.AtomicBoolean clockFails = new java.util.concurrent.atomic.AtomicBoolean();
+        TraceBatchPoller poller = TraceBatchPoller.startDraining(executor, tracker, events -> events.size(),
+                16, 8, 1, 1, 20, TimeUnit.HOURS, () -> {
+                    if (clockFails.get()) throw new IllegalStateException("suspend via the clock");
+                    return 1000 * MS;
+                }, TraceBatchPoller.WaitExpiry.DEADLINE);
+        java.lang.reflect.Field pendingField = TraceBatchPoller.class.getDeclaredField("deadlinePending");
+        java.lang.reflect.Field futureField = TraceBatchPoller.class.getDeclaredField("deadlineFuture");
+        pendingField.setAccessible(true);
+        futureField.setAccessible(true);
+        java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.atomic.AtomicBoolean pause = new java.util.concurrent.atomic.AtomicBoolean();
+        java.util.concurrent.atomic.AtomicBoolean paused = new java.util.concurrent.atomic.AtomicBoolean();
+        AtomicLong evaluations = new AtomicLong();
+        AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+        Thread evaluator = new Thread(() -> {
+            try {
+                while (!stop.get()) {
+                    if (pause.get()) {
+                        paused.set(true);
+                        while (pause.get() && !stop.get()) Thread.yield();
+                        paused.set(false);
+                        continue;
+                    }
+                    if (poller.requestPoll()) {
+                        Runnable task;
+                        synchronized (executor.submitted) {
+                            task = executor.submitted.isEmpty() ? null : executor.submitted.remove(0);
+                        }
+                        if (task != null) {
+                            task.run();
+                            evaluations.incrementAndGet();
+                        }
+                    }
+                }
+            } catch (Throwable problem) {
+                failure.compareAndSet(null, problem);
+            }
+        }, "racing-evaluator");
+        evaluator.start();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        int cycles = 0;
+        try {
+            for (; cycles < 4000 && System.nanoTime() < deadline; cycles++) {
+                clockFails.set(true);
+                while (poller.state() == TraceBatchPoller.State.ACTIVE) {
+                    poller.requestPoll();
+                    Runnable task;
+                    synchronized (executor.submitted) {
+                        task = executor.submitted.isEmpty() ? null : executor.submitted.remove(0);
+                    }
+                    if (task != null) task.run(); // the failing clock suspends the poller
+                    if (failure.get() != null) throw failure.get();
+                }
+                clockFails.set(false);
+                while (!poller.resume()) Thread.yield(); // races the evaluator's requested evaluation
+                long seen = evaluations.get();
+                long settle = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(20);
+                while (evaluations.get() < seen + 2 && System.nanoTime() < settle) Thread.yield();
+                pause.set(true);
+                while (!paused.get() && evaluator.isAlive()) Thread.yield();
+                boolean pending;
+                Object handle;
+                synchronized (poller) {
+                    pending = (Boolean) pendingField.get(poller);
+                    handle = futureField.get(poller);
+                }
+                assertFalse("cycle " + cycles + ": one-shot slot marked pending without a handle",
+                        pending && handle == null);
+                pause.set(false);
+            }
+        } finally {
+            stop.set(true);
+            evaluator.join(5000);
+        }
+        assertNull(failure.get());
+        assertTrue("cycles " + cycles, cycles > 200);
+        poller.close();
+        executor.shutdownNow();
+    }
+
     @Test public void singleRecordIsDeliveredAtTheObservedWaitOnARealScheduler() throws Exception {
         ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
         AtomicReference<TraceBatchPoller> target = new AtomicReference<TraceBatchPoller>();
