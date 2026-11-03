@@ -371,6 +371,9 @@ final class io.github.jichuo1.meguviz.hook.core.HookEnvironment$PreparedPayload 
 Compiled from "HookEnvironment.java"
 final class io.github.jichuo1.meguviz.hook.core.HookEnvironment$ResolutionFailureCapture {
 }
+Compiled from "InFlightCounter.java"
+final class io.github.jichuo1.meguviz.hook.core.InFlightCounter extends java.util.concurrent.atomic.AtomicInteger {
+}
 Compiled from "InvocationFrame.java"
 final class io.github.jichuo1.meguviz.hook.core.InvocationFrame implements io.github.jichuo1.meguviz.hook.api.AroundInvocation,io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation,io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation {
   public io.github.jichuo1.meguviz.hook.api.HookId id();

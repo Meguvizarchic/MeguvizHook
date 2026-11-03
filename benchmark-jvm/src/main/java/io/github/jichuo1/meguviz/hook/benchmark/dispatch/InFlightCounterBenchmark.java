@@ -15,8 +15,10 @@ import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Standalone comparison of the registration admission lease (state read, increment, state re-read,
- * decrement) with a plain AtomicInteger (the round-1 core) and a LongAdder. One counter is shared
- * by every thread, as in CoreRegistration. The core's own counter is measured end to end by
+ * decrement): a plain AtomicInteger (the round-1 core), a LongAdder, and the two adaptive designs of
+ * {@link StripedLeaseCandidates} (inflate on a failed CAS, or on an increment that observes another
+ * open lease; the core adopted the latter). One counter is shared by every thread, as in
+ * CoreRegistration. The core's own counter is measured end to end by
  * {@link RegistrationContentionBenchmark}. Host JDK microbenchmark only, not ART evidence.
  */
 @State(Scope.Benchmark)
@@ -27,6 +29,8 @@ public class InFlightCounterBenchmark {
     private volatile int state;
     private final AtomicInteger atomic = new AtomicInteger();
     private final LongAdder adder = new LongAdder();
+    private final StripedLeaseCandidates.CasFirst casFirst = new StripedLeaseCandidates.CasFirst();
+    private final StripedLeaseCandidates.OverlapFirst overlapFirst = new StripedLeaseCandidates.OverlapFirst();
 
     private boolean atomicLease() {
         if (state != 0) return false;
@@ -45,6 +49,26 @@ public class InFlightCounterBenchmark {
             return state == 0;
         } finally {
             adder.decrement();
+        }
+    }
+
+    private boolean casFirstLease() {
+        if (state != 0) return false;
+        int lease = casFirst.enter();
+        try {
+            return state == 0;
+        } finally {
+            casFirst.exit(lease);
+        }
+    }
+
+    private boolean overlapFirstLease() {
+        if (state != 0) return false;
+        int lease = overlapFirst.enter();
+        try {
+            return state == 0;
+        } finally {
+            overlapFirst.exit(lease);
         }
     }
 
@@ -86,5 +110,45 @@ public class InFlightCounterBenchmark {
     @Benchmark @Threads(8)
     public boolean longAdder8Threads() {
         return adderLease();
+    }
+
+    @Benchmark @Threads(1)
+    public boolean casFirst1Thread() {
+        return casFirstLease();
+    }
+
+    @Benchmark @Threads(1)
+    public boolean overlapFirst1Thread() {
+        return overlapFirstLease();
+    }
+
+    @Benchmark @Threads(2)
+    public boolean casFirst2Threads() {
+        return casFirstLease();
+    }
+
+    @Benchmark @Threads(2)
+    public boolean overlapFirst2Threads() {
+        return overlapFirstLease();
+    }
+
+    @Benchmark @Threads(4)
+    public boolean casFirst4Threads() {
+        return casFirstLease();
+    }
+
+    @Benchmark @Threads(4)
+    public boolean overlapFirst4Threads() {
+        return overlapFirstLease();
+    }
+
+    @Benchmark @Threads(8)
+    public boolean casFirst8Threads() {
+        return casFirstLease();
+    }
+
+    @Benchmark @Threads(8)
+    public boolean overlapFirst8Threads() {
+        return overlapFirstLease();
     }
 }
