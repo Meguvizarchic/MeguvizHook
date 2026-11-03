@@ -21,10 +21,12 @@ final class LegacyTraceCodec {
     private static final int MAGIC = 0x4d484231;
     private static final int HEADER_BYTES = 8;
 
+    @SuppressWarnings("removal")
     private static boolean isFatal(Throwable failure) {
         return failure instanceof VirtualMachineError || failure instanceof ThreadDeath;
     }
 
+    @SuppressWarnings("removal")
     private static RuntimeException fatal(Throwable failure) {
         if (failure instanceof VirtualMachineError) throw (VirtualMachineError) failure;
         throw (ThreadDeath) failure;
