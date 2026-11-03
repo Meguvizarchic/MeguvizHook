@@ -157,3 +157,39 @@ long records = progress.acceptedRecords();
 执行器排队、同步传输、系统
 调度和暂停均可增加延迟；该接口不承诺硬期限，也不证明端到端速度有所改善。接收确认与队列
 规则详见 [非等待批量预约](nonblocking-trace-delivery.md)。
+
+## 显式提前触发（可选）
+
+`poller.requestPoll()` 请求调用方执行器**立即**额外执行一次普通评估，而不必等下一个固定延迟
+周期。评估规则与周期任务完全相同：数量门槛、观察等待、排空上限、`BUSY`／`EMPTY` 与失败暂停
+都不变，它不会强制发送。请求会合并：已提交的评估尚未开始时，后续调用只返回 `true`；评估进行
+中到达的请求会在该次评估结束后再触发一次评估，避免它读取队列之后才入队的记录等待整个周期。
+返回 `false` 表示 poller 不处于 `ACTIVE`，或执行器拒绝了提交；拒绝异常保留在
+`schedulingFailure()`，poller 不因此暂停。`requestPoll()` 不等待 poller 的状态锁，也不执行
+传输；若执行器在调用线程内联执行任务，该次评估会被跳过，仍由周期任务负责。
+
+需要由捕获直接唤醒时，可显式为 tracker 提供 `CaptureSignal`：
+
+```java
+AtomicReference<TraceBatchPoller> target = new AtomicReference<>();
+CallbackExceptionTracker tracker = new CallbackExceptionTracker("target-process", 128, () -> {
+    TraceBatchPoller poller = target.get();
+    if (poller != null) poller.requestPoll();
+});
+// worker 的 execute 必须不阻塞、不内联执行，例如 ScheduledThreadPoolExecutor。
+target.set(TraceBatchPoller.start(worker, tracker, transport, 1, 32, 1, 0, TimeUnit.SECONDS));
+```
+
+信号只在记录成功入队后、在 **Hook 线程**上调用，被丢弃的记录不触发。不使用该构造器时没有
+信号，Hook 线程在失败时仍只做入队。启用后的代价只在失败路径：两次 volatile 读；未被合并时再加
+一次 CAS 和一次 `execute`（分配任务对象、获取执行器队列锁，必要时唤醒工作线程）。在宿主
+JDK 17 x86-64 上连续失败时，每次捕获平均多约 0.3 µs（`CaptureSignalCostBenchmark`，不代表
+ART 或设备）。信号抛出的非致命异常计入 `trackingFailureCount()`，不替换回调异常；致命 VM
+事件照常传播。
+
+搭配数量门槛 1 或观察等待 0 时，单条记录在执行器线程被唤醒后即发送；发送进行中到达的记录会在
+下一次评估中合并为一批，批量随负载自然增大。调用过 `requestPoll()` 后，若一次评估达到每次批次
+上限、最后一批被确认而队列仍非空，评估结束后会再请求一次评估，以有界、让出执行器的步骤继续
+排空，而不是把积压留到下一个周期；从未调用 `requestPoll()` 的 poller 行为不变。周期任务仍是唤醒丢失、执行器异常等情况的兜底，
+间隔可适当拉长以减少空闲唤醒。观察等待是否到期仍只在评估时检查，请求不会让等待提前结束；
+宿主测量结果见 [传输优化第一轮](research/transport-round-1.md)。

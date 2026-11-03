@@ -146,6 +146,13 @@ environment 对 backend 加载器和代次的检查不能独立证明该 `Method
 此方式也不重新执行描述符筛选、候选去重或排序：如果原查找是“第一个匹配项”，必须由
 调用方确认原有选择顺序符合预期，不能假设与桥的签名排序一致。
 
+当前开发源码在导出成员前，先用 Ref 已持有的 JVM 描述符做一次保守预筛：只排除基本类型不同、
+对象与基本类型错配、数组维数不同等与类元数据无关的确定不匹配；对象类型名仍在导出后按
+`getName()`／`getCanonicalName()` 精确比较，预筛不会排除精确比较可能接受的候选。被排除的重载
+不再导出，因此在 `TRY_SUPPRESS_JAVA_CHECKS` 下，某个无关重载拒绝设置可访问性时不再导致整次
+解析失败。多个候选的稳定排序改为每个候选只计算一次排序键，顺序不变。自定义查询
+（`withQueries`）不做预筛。
+
 需要继承成员时，可显式调用 `MeguvizRefMemberResolver.withHierarchy(Hierarchy.SUPERCLASSES)`
 或 `Hierarchy.JAVA_PUBLIC`。**被 Hook 的是成员实际声明所在的类**，可能影响其他子类；
 构造器始终只在目标类中查找。桥接对候选数量、方法种类和 loader 有限制，且每次解析
@@ -394,3 +401,15 @@ boolean evidenceApiDetected = session.isWaiterInterruptionEvidenceAvailable();
 - 自定义 `ScopeFactory`／provider 可能拥有状态或副作用。不要为了分流自动复制、并发
   重放它们，也不能把某次“未找到”当成以后查找的结果；选择方式时须继续核对覆盖范围、
   错误、loader 和代码代次。
+
+## 与 MeguvizRef 1.1 开发版
+
+桥的正式依赖仍是已发布的 Ref `1.0.0`。在本地把依赖替换为 MeguvizRef `1.1.0-SNAPSHOT`
+开发制品后，桥的测试除两项外全部通过；这两项（`RefWaiterPolicyOldCompatibilityTest`）专门断言
+1.0.0 **没有**等待者中断来源 API，在新版本上失败是预期结果。这只是 JVM 测试证据，不是已发布版本
+或 Android 运行时证据。
+
+Ref 1.1 开发版降低了全新作用域的构造和结构查询成本，桥的默认解析器无需改代码即可受益。它还新增
+单锁的 `CodeScope.isCurrent(...)` 和不创建 binding 的 `resolveRaw(...)`：前者可把会话每次解析中
+多次分开的身份检查合并为一次加锁，后者可避免长会话累计导出 4096 个成员后触发 `binding_capacity`。
+桥会在 Ref 1.1 正式发布并升级依赖后再采用这两个入口。

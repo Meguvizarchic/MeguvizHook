@@ -23,6 +23,12 @@ public final class io.github.jichuo1.meguviz.hook.core.BoundPlan {
   public java.util.List<io.github.jichuo1.meguviz.hook.api.AfterCallback> afterCallbacks();
   public java.lang.String toString();
 }
+Compiled from "BoundPlan.java"
+final class io.github.jichuo1.meguviz.hook.core.BoundPlan$ResultType {
+}
+Compiled from "BoundPlan.java"
+final class io.github.jichuo1.meguviz.hook.core.BoundPlan$Signature {
+}
 Compiled from "BoundedDiagnosticsSink.java"
 public final class io.github.jichuo1.meguviz.hook.core.BoundedDiagnosticsSink implements io.github.jichuo1.meguviz.hook.core.DiagnosticsSink {
   public io.github.jichuo1.meguviz.hook.core.BoundedDiagnosticsSink(int);
@@ -103,6 +109,7 @@ public final class io.github.jichuo1.meguviz.hook.core.BoundedTraceCompression$S
 Compiled from "CallbackExceptionTracker.java"
 public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker {
   public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker(java.lang.String, int);
+  public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker(java.lang.String, int, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$CaptureSignal);
   public io.github.jichuo1.meguviz.hook.api.BeforeCallback before(io.github.jichuo1.meguviz.hook.api.BeforeCallback);
   public io.github.jichuo1.meguviz.hook.api.AfterCallback after(io.github.jichuo1.meguviz.hook.api.AfterCallback, boolean);
   public io.github.jichuo1.meguviz.hook.api.AroundCallback around(io.github.jichuo1.meguviz.hook.api.AroundCallback);
@@ -138,6 +145,10 @@ public interface io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Ba
   public abstract int sendBatch(java.util.List<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event>) throws java.lang.Exception;
 }
 Compiled from "CallbackExceptionTracker.java"
+public interface io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$CaptureSignal {
+  public abstract void recordQueued();
+}
+Compiled from "CallbackExceptionTracker.java"
 public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event {
   public java.lang.String source();
   public io.github.jichuo1.meguviz.hook.api.HookId hookId();
@@ -145,6 +156,13 @@ public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$
   public long timeNanos();
   public io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage stage();
   public java.lang.Throwable failure();
+}
+Compiled from "CallbackExceptionTracker.java"
+final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$PrefixCheck extends java.util.AbstractCollection<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event> {
+  public boolean add(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event);
+  public java.util.Iterator<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event> iterator();
+  public int size();
+  public boolean add(java.lang.Object);
 }
 Compiled from "CallbackExceptionTracker.java"
 public final class io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Stage> {
@@ -209,7 +227,8 @@ final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$ConstantPlanCha
   public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
 }
 Compiled from "CoreRegistration.java"
-final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$PlanChannel implements io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$PlanChannel implements io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel {
+  public java.lang.Object dispatchDirect(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation) throws java.lang.Throwable;
   public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
 }
 Compiled from "CoreRegistration.java"
@@ -374,10 +393,16 @@ final class io.github.jichuo1.meguviz.hook.core.InvocationFrame implements io.gi
   public io.github.jichuo1.meguviz.hook.api.CallOutcome$State proceedState();
 }
 Compiled from "InvocationFrame.java"
-class io.github.jichuo1.meguviz.hook.core.InvocationFrame$1 {
+final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$AfterBorrow extends io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
+  public boolean hasReturned();
+  public boolean hasThrown();
+  public java.lang.Object getResult();
+  public java.lang.Throwable getThrowable();
+  public void setResult(java.lang.Object);
+  public void setThrowable(java.lang.Throwable);
 }
 Compiled from "InvocationFrame.java"
-final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation implements io.github.jichuo1.meguviz.hook.api.AroundInvocation,io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation,io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation {
+class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation implements io.github.jichuo1.meguviz.hook.api.AroundInvocation,io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation,io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation {
   public io.github.jichuo1.meguviz.hook.api.HookId id();
   public long generation();
   public java.lang.reflect.Executable target();
@@ -398,15 +423,6 @@ final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocati
   public io.github.jichuo1.meguviz.hook.api.CallOutcome$State proceedState();
 }
 Compiled from "InvocationFrame.java"
-final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation$BorrowedResult implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
-  public boolean hasReturned();
-  public boolean hasThrown();
-  public java.lang.Object getResult();
-  public java.lang.Throwable getThrowable();
-  public void setResult(java.lang.Object);
-  public void setThrowable(java.lang.Throwable);
-}
-Compiled from "InvocationFrame.java"
 final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$ResultSlot implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
   public boolean hasReturned();
   public boolean hasThrown();
@@ -421,9 +437,6 @@ public final class io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport im
   public void send(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event) throws java.lang.Exception;
   public byte[] encode(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event);
   public static byte[] encode(io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$Event, boolean, int);
-}
-Compiled from "JsonLineTraceTransport.java"
-class io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$1 {
 }
 Compiled from "JsonLineTraceTransport.java"
 public interface io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter {
@@ -552,8 +565,8 @@ public final class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver 
   public java.util.List<java.lang.reflect.Executable> resolve(io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget, java.lang.ClassLoader) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 }
 Compiled from "ReflectiveMemberResolver.java"
-class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver$1 implements java.util.Comparator<java.lang.reflect.Executable> {
-  public int compare(java.lang.reflect.Executable, java.lang.reflect.Executable);
+class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver$1 implements java.util.Comparator<java.lang.Integer> {
+  public int compare(java.lang.Integer, java.lang.Integer);
   public int compare(java.lang.Object, java.lang.Object);
 }
 Compiled from "SuccessResultDispatchChannel.java"
@@ -597,6 +610,7 @@ public final class io.github.jichuo1.meguviz.hook.core.TraceBatchPoller implemen
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller startDraining(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, int, long, long, java.util.concurrent.TimeUnit);
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller startDraining(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, int, long, long, java.util.concurrent.TimeUnit, io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$Clock);
   public boolean resume();
+  public boolean requestPoll();
   public synchronized io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$State state();
   public synchronized boolean inFlight();
   public synchronized io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchAttempt lastAttempt();

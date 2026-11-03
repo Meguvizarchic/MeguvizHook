@@ -1,3 +1,6 @@
+Compiled from "JvmTypeNames.java"
+final class io.github.jichuo1.meguviz.hook.ref.JvmTypeNames {
+}
 Compiled from "MeguvizRefMemberResolver.java"
 public final class io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver implements io.github.jichuo1.meguviz.hook.core.spi.MemberResolver {
   public io.github.jichuo1.meguviz.hook.ref.MeguvizRefMemberResolver();

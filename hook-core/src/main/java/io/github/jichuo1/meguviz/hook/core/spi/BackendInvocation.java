@@ -6,11 +6,16 @@ import java.util.List;
 
 /**
  * One live invocation as seen by a backend. Argument materialization may be expensive, so the core
- * only calls {@link #arguments()} for shapes that actually need it.
+ * only calls {@link #arguments()} for shapes that actually need it, at most once per invocation:
+ * at entry for {@code READ_ARGS} and {@code ENTRY_SNAPSHOT}; for {@code MUTABLE_ARGS} and
+ * {@code AROUND} only when a callback first reads or writes a slot. The
+ * call may therefore happen inside a callback or after downstream returned, and must reflect the
+ * incoming slots at that time.
  *
  * <p>{@link #proceed(Object[])} runs the downstream continuation with the supplied arguments and
  * propagates its throwable. A {@code null} argument array means "keep the incoming arguments", so a
- * {@code NO_ARGS} registration never forces argument materialization. Fatal VM errors thrown by the
+ * registration whose callbacks did not touch the slots before downstream never forces argument
+ * materialization. Fatal VM errors thrown by the
  * downstream are never converted into an ordinary outcome by the core.
  */
 public interface BackendInvocation {

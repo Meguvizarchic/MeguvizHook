@@ -43,6 +43,13 @@ if (receipt.isInstalled()) {
 }
 ```
 
+- 当前开发源码提供类型化回调 `beforeArgs`、`beforeMutableArgs`、`afterArgs`：回调直接收到
+  `ReadArgsInvocation`／`MutableArgsInvocation`，上例可写为
+  `.beforeMutableArgs(invocation -> invocation.setArgument(0, 10))`，无需强转和 `access(...)`。
+  未显式选择形状时，只读类型化回调选 `READ_ARGS_VIEW`，出现 `beforeMutableArgs` 时选
+  `MUTABLE_ARGS`；显式 `access(...)`（顺序不限）保持不变，若无法满足类型化回调则 `build()` 失败。
+  类型化回调只是一个收窄调用类型的适配器，回调顺序、借用生命周期和异常规则不变；复用同一回调
+  对象时幂等安装仍视为同一回调。
 - 普通非 AROUND 形状至少一个 before 或 after；`AROUND` 与 before/after 互斥。显式
   `replaceConstant(value)` 与所有回调互斥，并且只允许 NO_ARGS；常量在安装前按目标返回类型校验。
 - `replaceResultOnSuccess(value)` 仅在原参数调用下游一次并正常返回后替换为所给引用；原异常保持身份，
@@ -52,8 +59,8 @@ if (receipt.isInstalled()) {
   常量通道缓存所属注册的共享计数器，保持原有两次状态读取和原子加减次序。
   关闭后未准入时透传。未准入标记只按引用比较，常量与标记为同一对象、旧通道或需要调用帧时回退原路径。
   异常保护策略不因此改变；SDK core 和后端需共享该接口与标记的类加载身份。
-- `READ_ARGS_VIEW` 为显式的只读借用视图，生命周期与普通回调一致；101/102 可直接使用框架不可变
-  参数列表，下游保持原始参数。它不改变现有 `READ_ARGS` 或 `ENTRY_SNAPSHOT`，也不保证框架零分配。
+- `READ_ARGS_VIEW` 为显式的只读借用视图，生命周期与普通回调一致；101/102 按下标读取框架参数槽，
+  不复制参数列表，下游保持原始参数。它不改变现有 `READ_ARGS` 或 `ENTRY_SNAPSHOT`，也不保证框架零分配。
 - `replaceIfStringArgumentEquals(index, expected, result, observer)` 显式声明字符串槽匹配和常量返回，
   与普通回调/其他替换互斥；匹配按 actual 在前比较，缺槽为 null。命中通知不能访问或修改调用帧，
   未命中执行原方法一次；通知和原方法异常按原身份交给框架。安装前校验全部目标的参数与返回类型。
@@ -152,6 +159,7 @@ backend 的 `BackendInstallException` 必须保证该次调用未安装入口，
   `HookContractException`。重入获得独立 frame。
 - 单 after 且无 before 时在绑定期选用专用 channel 并复用该调用的 frame；独立结果槽与 invocation 均在回调退出时失效。
   这不改变原方法、异常与诊断顺序，也不改变多回调各自的借用寿命。
+- 有多个回调时，after 回调收到的 `invocation` 与 `result` 可能是同一借用对象；不要依赖二者的对象身份。
 - `AroundInvocation.proceed()` 每次 invocation 至多一次；第二次、跨线程、回调后调用均为合同异常。
 - `entrySnapshot()` 是浅槽快照：数组复制、对象共享。
 - 在 `around` 中需要保存某个时刻的参数槽时，可显式调用

@@ -24,6 +24,8 @@ include(":hook-core")
 include(":hook-dsl")
 include(":hook-testing")
 include(":hook-ref-bridge")
+// JVM microbenchmarks only; not published and not device evidence.
+include(":benchmark-jvm")
 include(":sample-java-contracts")
 include(":sample-kotlin-contracts")
 include(":backend-libxposed-101")

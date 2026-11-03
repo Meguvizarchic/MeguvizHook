@@ -14,7 +14,7 @@ public final class ArgumentTypeCheckTest {
         HookSpec spec = HookSpec.forMember("test.types", "test", method)
                 .before(invocation -> { }).build();
         BoundPlan plan = new BoundPlan(spec, method, 1, getClass().getClassLoader(), 1);
-        Field types = BoundPlan.class.getDeclaredField("parameterTypes");
+        Field types = BoundPlan.class.getDeclaredField("signature");
         types.setAccessible(true);
         try {
             TypeChecks.checkArgumentValue(plan, -1, 1);

@@ -3,8 +3,6 @@ package io.github.jichuo1.meguviz.hook.sample.java;
 import io.github.jichuo1.meguviz.hook.api.CloseReport;
 import io.github.jichuo1.meguviz.hook.api.HookRegistration;
 import io.github.jichuo1.meguviz.hook.api.HookSpec;
-import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation;
-import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment;
 import io.github.jichuo1.meguviz.hook.testing.FakeBackend;
@@ -57,8 +55,7 @@ public final class JavaContractsSample {
 
     private static HookRegistration installMutable(HookEnvironment environment, Method add) {
         HookSpec spec = HookSpec.forMember("sample.java.mutable", "java-sample", add)
-                .access(ParameterAccess.MUTABLE_ARGS)
-                .before(invocation -> ((MutableArgsInvocation) invocation).setArgument(0, 10))
+                .beforeMutableArgs(invocation -> invocation.setArgument(0, 10))
                 .build();
         RegistrationReceipt receipt = environment.install(spec);
         System.out.println("install mutable: " + receipt);

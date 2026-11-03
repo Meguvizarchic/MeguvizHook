@@ -38,6 +38,13 @@ final class TypeChecks {
         return target instanceof Constructor;
     }
 
+    /** Wrapper class for a primitive (Void for void), otherwise the type itself. */
+    static Class<?> boxed(Class<?> type) {
+        if (!type.isPrimitive()) return type;
+        Class<?> wrapper = WRAPPERS.get(type);
+        return wrapper != null ? wrapper : Void.class;
+    }
+
     /** Validates a value written into a result slot. Void targets only accept {@code null}. */
     static void checkResultValue(Executable target, Object value) {
         Class<?> type = returnType(target);
@@ -52,11 +59,24 @@ final class TypeChecks {
         }
     }
 
+    /** Hot-path form of {@link #checkResultValue(Executable, Object)} using the plan's cached return type. */
+    static void checkResultValue(BoundPlan plan, Object value) {
+        BoundPlan.ResultType result = plan.resultType();
+        if (result.isVoid) {
+            if (value != null) {
+                throw new IllegalArgumentException("void/constructor target cannot return a value: " + plan.target());
+            }
+            return;
+        }
+        if (value == null ? result.primitive : !result.boxed.isInstance(value)) {
+            checkAssignable(result.type, value, "result of " + plan.target());
+        }
+    }
+
     static void checkArgumentValue(BoundPlan plan, int index, Object value) {
-        Executable target = plan.target();
         Class<?> type = plan.checkedParameterType(index);
-        if (!isAssignable(type, value)) {
-            checkAssignable(type, value, "argument " + index + " of " + target);
+        if (value == null ? type.isPrimitive() : !plan.parameterBox(index).isInstance(value)) {
+            checkAssignable(type, value, "argument " + index + " of " + plan.target());
         }
     }
 

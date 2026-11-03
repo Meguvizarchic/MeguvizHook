@@ -11,3 +11,5 @@ Maven Central 已发布 `io.github.jichuo1.meguviz.hook` 的 `1.0.0`，包含 AP
 诊断批量、压缩、Ref 会话和并行预解析均需显式选择。调用方负责后台执行、端点授权、会话与句柄生命周期；接收确认不代表持久化，失败后重试可能重复。详见[远程诊断](remote-diagnostics-102.md)、[批量轮询](trace-batch-poller.md)、[压缩会话](compression-session.md)和[预解析合同](prepared-install.md)。
 
 JVM 合同、后端替身、公开 API 检查及部分 Android 构建已有覆盖；它们不能证明全部真实框架、ART、Binder、设备兼容或端到端性能。性能设计依据和验证边界见[性能研究](performance-research.md)。
+
+当前源码还包含第 1 轮性能与易用性改动：类型化参数回调、101/102 按下标读参、通用分发直接返回值、诊断编码与队列快照减少复制，以及可选的捕获唤醒轮询。宿主 JVM 微基准与取舍见[性能研究](performance-research.md#第-1-轮优化当前开发源码)，接入步骤见[接入指南](integration-guide.md)。这些改动同样没有设备或真实框架证据。

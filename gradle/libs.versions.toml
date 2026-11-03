@@ -8,6 +8,7 @@ libxposed = "102.0.0"
 libxposed101 = "101.0.0"
 junit = "4.13.2"
 meguviz-ref = "1.0.0"
+jmh = "1.37"
 
 [plugins]
 android-library = { id = "com.android.library", version.ref = "agp" }
@@ -19,3 +20,5 @@ libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "li
 libxposed101-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposed101" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 meguviz-ref-core = { group = "io.github.jichuo1.meguviz", name = "meguviz-ref-core", version.ref = "meguviz-ref" }
+jmh-core = { group = "org.openjdk.jmh", name = "jmh-core", version.ref = "jmh" }
+jmh-generator = { group = "org.openjdk.jmh", name = "jmh-generator-annprocess", version.ref = "jmh" }

@@ -105,8 +105,9 @@ SDK 不自动声明／导出服务，Binder 身份、畸形 Parcel 和真实跨�
 如果调用方需要在批量发送时避免持有 tracker 的交付锁，可显式选择
 [`tryDeliverBatch`](nonblocking-trace-delivery.md)；需要交给自己的执行器时可组合
 [`TraceBatchDispatcher`](trace-batch-dispatcher.md)，或使用调用方后台调度器进行
-[批量轮询](trace-batch-poller.md)。这些工具均保留真实回执边界，不自动创建线程、
-重试或提供持久化。压缩状态复用为单线程、显式关闭的
+[批量轮询](trace-batch-poller.md)。需要缩短捕获到投递的延迟时，可显式为 tracker 提供
+`CaptureSignal` 并调用 `poller.requestPoll()`，见[显式提前触发](trace-batch-poller.md#显式提前触发可选)；
+默认构造的 tracker 没有信号。这些工具均保留真实回执边界，不自动创建线程、重试或提供持久化。压缩状态复用为单线程、显式关闭的
 [可选会话](compression-session.md)。
 
 ## 显式批量与压缩
@@ -136,10 +137,9 @@ JsonLineTraceTransport.RecordWriter wire = BinderTrace102.sender(endpointFromMod
 CallbackExceptionTracker.BatchTransport batch = codec.batchSender(wire, false, 0, batchLimitBytes, 32);
 tracker.deliverBatch(batch, 32);
 
-// 模块侧单个后台消费者：只在处理成功后移除队首。
-JsonLineTraceTransport.RecordWriter decode = BatchTraceTransport.compressedReceiver(codec, records -> {
-    for (byte[] record : records) writer.writeRecord(record);
-}, batchLimitBytes, 32);
+// 模块侧单个后台消费者：只在处理成功后移除队首。writer 作为 BatchWriter 时每批只打开一次流。
+JsonLineTraceTransport.RecordWriter decode = BatchTraceTransport.compressedReceiver(
+        codec, writer, batchLimitBytes, 32);
 byte[] head = frames.peek();
 if (head != null) {
     decode.writeRecord(head);
@@ -152,10 +152,16 @@ if (head != null) {
 仍留在队首，由调用方审计、重试或显式处理。若写入部分记录后失败，重试整个帧可能重复；进程退出会丢失
 队列。若需要持久化确认或去重，必须由应用实现相应协议和存储，不能由本示例推导。
 
+`ModuleRemoteTraceWriter102` 同时实现 `BatchTraceTransport.BatchWriter`：`writeBatch` 先按同一上限
+检查整批记录，任一无效则不打开流；随后只调用一次 opener，按序写入各条记录（不另行拼接复制），
+最后 flush 一次并关闭。逐条 `writeRecord` 仍是每条打开一次流。批内写入中途失败时，已追加的前缀
+（可能以半条记录结尾）不会回滚，重试整批可能重复。
+
 `compressedReceiver` 等价于显式组合 codec 解码与批帧接收；它仅在内部复用 codec 新建的明文数组，
-避免再复制整个批帧。输入压缩帧仍由 codec 快照，但并发复制不是原子操作，调用方应避免同时修改输入；
-传给 writer 的每条记录仍是独立数组；原有的
-`BatchTraceTransport.receiver` 继续快照调用方传入的明文。需要复用编解码状态时可使用
+避免再复制整个批帧。codec 只读取一次帧头：RAW 负载直接复制为返回的明文，校验和正是对这份副本
+计算；压缩负载仍先做有界快照再解压。`BatchTraceTransport.receiver` 同样只读取一次长度字段，并把
+每条记录复制为独立数组，不再先复制整帧。因此返回后修改输入不影响已交付记录，并发修改也不会让
+校验结果与交付内容分离；但并发复制不是原子操作，调用方仍应避免同时修改输入。需要复用编解码状态时可使用
 `compressedSessionReceiver(session, writer, ...)`，session 仍须在创建它的后台线程使用并关闭。
 codec 的解压上限和批帧上限分别检查；若前者配置得更大，数据可能先完成解压分配，再因
 超过批帧上限被拒绝。处理不可信输入时应同时约束两者。

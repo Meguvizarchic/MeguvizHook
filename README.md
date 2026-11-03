@@ -13,6 +13,9 @@ Maven Central 已发布 `1.0.0`；当前工作树的默认开发版本为 `0.1.0
 - 可选的同步批量诊断交付和有界压缩，支持 zlib、固定诊断字段字典、完整试压及 RAW 回退。双方须明确选择相同格式与限制。
 - 诊断交付可显式选择锁外批量预约或由调用方提供执行器；压缩和 Ref 查找也提供显式生命周期的可复用会话。当前开发版本的压缩会话可选择输出缓冲策略，详见 [压缩会话](docs/compression-session.md)。
 - 可选的模块入口路由、显式资源租约及 API101/102 高级操作；可选 MeguvizRef 桥提供可扩展的成员定位。
+- 当前开发源码减少了每次调用的分配和包装：101/102 按下标读取参数、通用分发直接返回值、参数改写和
+  around 在首次访问时才取参数；诊断编码与队列快照减少复制，并可选择由捕获直接唤醒轮询。宿主 JVM
+  微基准与取舍见[性能研究记录](docs/performance-research.md#第-1-轮优化当前开发源码)，尚无设备证据。
 
 批量交付确认的含义取决于接收端：接收回调正常返回不代表持久化。发送失败可能已有副作用，显式重试可能重复；跨进程使用者仍需处理授权、连接、队列容量、隐私和保存策略。参见 [异常诊断与远程传输](docs/remote-diagnostics-102.md)。
 
@@ -49,6 +52,18 @@ val receipt = hooks.install("feature.title", resolvedMethod) {
 Java 可使用 `HookSpec.forMember("feature.title", "my-module", resolvedMethod)` 获得
 普通 Builder。类型令牌、构造器、条件替换和完整示例见 [Kotlin DSL](hook-dsl/README.md)
 及 [Java 消费样例](sample-java-contracts/src/main/java/io/github/jichuo1/meguviz/hook/sample/java/JavaContractsSample.java)。
+
+需要读写参数时，当前开发源码的类型化回调直接给出对应调用类型，并自动选择参数形状：
+
+```kotlin
+hooks.install("feature.title", resolvedMethod) {
+    beforeArgs { log(it.getArgument(0)) }                 // READ_ARGS_VIEW
+    beforeMutableArgs { it.setArgument(0, "rewritten") }  // MUTABLE_ARGS
+}
+```
+
+Java 对应 `beforeArgs`、`beforeMutableArgs`、`afterArgs`。从依赖到诊断和关闭的完整步骤见
+[接入指南](docs/integration-guide.md)。
 
 ## 构建与示例
 
@@ -89,7 +104,8 @@ Maven Central 的已发布制品与后续发布准备、独立消费检查和签
 诊断用法见 [非等待预约](docs/nonblocking-trace-delivery.md)、
 [调用方执行器](docs/trace-batch-dispatcher.md)、[后台批量轮询](docs/trace-batch-poller.md)
 和 [压缩会话](docs/compression-session.md)；
-[性能研究记录](docs/performance-research.md) 区分资料、实验假设与实际证据。
+[性能研究记录](docs/performance-research.md) 区分资料、实验假设与实际证据；JVM 微基准位于
+`benchmark-jvm`（`./gradlew :benchmark-jvm:jmh`，不发布，不代表 ART）。
 
 ## 验证范围
 

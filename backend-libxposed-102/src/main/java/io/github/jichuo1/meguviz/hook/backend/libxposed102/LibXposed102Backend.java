@@ -23,8 +23,10 @@ import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 import io.github.libxposed.api.XposedInterface;
 
 import java.lang.reflect.Executable;
+import java.util.AbstractList;
 import java.util.List;
 import java.util.Objects;
+import java.util.RandomAccess;
 
 /**
  * Adapter for libxposed API 102 (artifact {@code io.github.libxposed:api:102.0.0}).
@@ -159,24 +161,67 @@ public final class LibXposed102Backend implements HookBackend {
         }
     }
 
+    /**
+     * Outcome of the reflective {@code CoreAfterBridge.bind} lookup. The core is fixed for the
+     * lifetime of this backend class, so the lookup runs once instead of once per hooker binding.
+     * Only the two definite outcomes are cached; an unexpected lookup failure propagates uncached.
+     */
+    static final class BridgeLookup {
+        static final String BRIDGE = "io.github.jichuo1.meguviz.hook.core.CoreAfterBridge";
+        static final String DIRECT = "io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel";
+
+        /** Null for an older core without the direct transport. */
+        final java.lang.reflect.Method bind;
+        /** Non-null when the core is inconsistent; every binding attempt then fails loudly. */
+        final String failure;
+        final Throwable cause;
+
+        private BridgeLookup(java.lang.reflect.Method bind, String failure, Throwable cause) {
+            this.bind = bind;
+            this.failure = failure;
+            this.cause = cause;
+        }
+
+        static BridgeLookup resolve(ClassLoader loader) {
+            final Class<?> bridge;
+            try {
+                bridge = Class.forName(BRIDGE, false, loader);
+            } catch (ClassNotFoundException missingBridge) {
+                try {
+                    Class.forName(DIRECT, false, loader);
+                } catch (ClassNotFoundException oldCore) {
+                    return new BridgeLookup(null, null, null);
+                }
+                return new BridgeLookup(null, "core advertises direct after but bridge is missing", missingBridge);
+            }
+            try {
+                return new BridgeLookup(bridge.getMethod("bind", DispatchChannel.class, Object.class), null, null);
+            } catch (NoSuchMethodException incomplete) {
+                return new BridgeLookup(null, "direct after bridge is incomplete", incomplete);
+            }
+        }
+    }
+
+    private static volatile BridgeLookup bridgeLookup;
+
+    static BridgeLookup bridgeLookup() {
+        BridgeLookup current = bridgeLookup;
+        if (current == null) {
+            // Benign race: concurrent first binders resolve the same immutable answer.
+            current = BridgeLookup.resolve(LibXposed102Backend.class.getClassLoader());
+            bridgeLookup = current;
+        }
+        return current;
+    }
+
     @SuppressWarnings("unchecked")
     private static AfterBinding optionalAfter(DispatchChannel channel) {
-        ClassLoader loader = LibXposed102Backend.class.getClassLoader();
-        final Class<?> bridge;
-        try {
-            bridge = Class.forName("io.github.jichuo1.meguviz.hook.core.CoreAfterBridge", false, loader);
-        } catch (ClassNotFoundException missingBridge) {
-            try {
-                Class.forName("io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel", false, loader);
-            } catch (ClassNotFoundException oldCore) {
-                return null;
-            }
-            throw new IllegalStateException("core advertises direct after but bridge is missing", missingBridge);
-        }
+        BridgeLookup lookup = bridgeLookup();
+        if (lookup.failure != null) throw new IllegalStateException(lookup.failure, lookup.cause);
+        if (lookup.bind == null) return null;
         try {
             Object marker = new Object();
-            Object bound = bridge.getMethod("bind", DispatchChannel.class, Object.class)
-                    .invoke(null, channel, marker);
+            Object bound = lookup.bind.invoke(null, channel, marker);
             if (bound == null) return null;
             if (!(bound instanceof java.util.function.Function)) {
                 throw new IllegalStateException("core returned an invalid direct after binding");
@@ -233,7 +278,10 @@ public final class LibXposed102Backend implements HookBackend {
         boolean requiresInvocation = channel.requiresInvocation();
         AfterBinding direct = requiresInvocation ? optionalAfter(channel) : null;
         if (direct != null) {
-            return chain -> dispatchAfter(direct, new Chain102Invocation(plan.target(), chain), chain);
+            // Captured once per binding: the target and its declared parameter count never change.
+            Executable target = plan.target();
+            int parameterCount = target.getParameterCount();
+            return chain -> dispatchAfter(direct, new Chain102Invocation(target, chain, parameterCount), chain);
         }
         if (!requiresInvocation && channel instanceof ConstantDispatchChannel) {
             ConstantDispatchChannel constant = (ConstantDispatchChannel) channel;
@@ -279,10 +327,12 @@ public final class LibXposed102Backend implements HookBackend {
                 }
             };
         }
+        Executable target = plan.target();
+        int parameterCount = target.getParameterCount();
         return new XposedInterface.Hooker() {
             @Override
             public Object intercept(XposedInterface.Chain chain) throws Throwable {
-                DispatchResult result = channel.dispatch(new Chain102Invocation(plan.target(), chain));
+                DispatchResult result = channel.dispatch(new Chain102Invocation(target, chain, parameterCount));
                 switch (result.kind()) {
                     case RETURNED:
                         return result.value();
@@ -351,13 +401,15 @@ public final class LibXposed102Backend implements HookBackend {
         }
     }
 
-    private static final class Chain102Invocation implements BackendInvocation {
+    static final class Chain102Invocation implements BackendInvocation {
         private final Executable target;
         private final XposedInterface.Chain chain;
+        private final int parameterCount;
 
-        private Chain102Invocation(Executable target, XposedInterface.Chain chain) {
+        Chain102Invocation(Executable target, XposedInterface.Chain chain, int parameterCount) {
             this.target = target;
             this.chain = chain;
+            this.parameterCount = parameterCount;
         }
 
         @Override
@@ -370,20 +422,60 @@ public final class LibXposed102Backend implements HookBackend {
             return chain.getThisObject();
         }
 
+        /**
+         * One new array filled slot by slot. {@code getArgs()} may copy the slots into a new list on
+         * every call (Vector does), so it is used only when the chain exposes fewer slots than the
+         * target declares. Called only for shapes that touch arguments; NO_ARGS never reaches it.
+         */
         @Override
         public Object[] arguments() {
-            // Called only for shapes that need arguments; NO_ARGS never reaches this method.
-            return chain.getArgs().toArray();
+            int count = parameterCount;
+            Object[] values = new Object[count];
+            try {
+                for (int i = 0; i < count; i++) values[i] = chain.getArg(i);
+            } catch (IndexOutOfBoundsException fewerSlots) {
+                return chain.getArgs().toArray();
+            }
+            return values;
         }
 
         @Override
         public List<?> readOnlyArguments() {
-            return chain.getArgs();
+            return new ArgumentView(chain, parameterCount);
         }
 
         @Override
         public Object proceed(Object[] args) throws Throwable {
             return args == null ? chain.proceed() : chain.proceed(args);
+        }
+    }
+
+    /**
+     * Read-only, index-backed view of the chain's argument slots: one small object per invocation
+     * instead of a list copy. The chain's slots are fixed for the call (API {@code getArgs()} is
+     * immutable), so the view keeps BackendInvocation's slot-stability rule without copying. It is
+     * unmodifiable through AbstractList's defaults and sized by the declared parameter count.
+     */
+    static final class ArgumentView extends AbstractList<Object> implements RandomAccess {
+        private final XposedInterface.Chain chain;
+        private final int size;
+
+        ArgumentView(XposedInterface.Chain chain, int size) {
+            this.chain = chain;
+            this.size = size;
+        }
+
+        @Override
+        public Object get(int index) {
+            if (index < 0 || index >= size) {
+                throw new IndexOutOfBoundsException("argument index " + index + ", size " + size);
+            }
+            return chain.getArg(index);
+        }
+
+        @Override
+        public int size() {
+            return size;
         }
     }
 }

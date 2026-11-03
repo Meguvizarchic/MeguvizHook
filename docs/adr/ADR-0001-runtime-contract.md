@@ -25,7 +25,7 @@
 | READ_ARGS | 仅当前线程、当前回调内读取；逃逸/跨线程抛合同异常 | `InvocationFrame.check()` |
 | READ_ARGS_VIEW | 显式借用入口只读参数视图，回调结束即不可访问；保留原参数下传，不承诺深拷贝或框架零分配 | `BackendInvocation.readOnlyArguments()` |
 | ENTRY_SNAPSHOT | 进入注册时的**浅槽快照**：复制数组、共享对象；不深拷贝、不回滚对象内部 | `args.clone()` |
-| MUTABLE_ARGS | 写入经 primitive/引用/null 校验，对下游 continuation 生效；入口获取后端参数数组并传给下游 | `InvocationFrame`、`TypeChecks` |
+| MUTABLE_ARGS | 写入经 primitive/引用/null 校验，对下游 continuation 生效；首次访问参数槽时获取后端参数数组，下游前已获取则传给下游 | `InvocationFrame`、`TypeChecks` |
 | AROUND | 与 before/after 互斥（本版）；continuation at-most-once | `Dispatcher.dispatchAround` |
 
 同一 invocation 不可跨线程重用；每个回调收到独立借用视图，其 invocation 和结果槽在该回调返回后
@@ -36,11 +36,15 @@ frame，不共享 ThreadLocal 可变数组。独立视图引入的分配成本�
 执行下游前即失效。该优化不复用跨调用对象，也不放宽重入、跨线程或回调结束后的访问限制。
 
 `READ_ARGS_VIEW` 是新增的显式选择，不改变 `READ_ARGS` 和 `ENTRY_SNAPSHOT` 的现有行为。
-101/102 使用框架不可变参数列表，旧后端默认复制数组回退；对象本身仍共享。视图不是可持久化快照，
+101/102 使用按下标读取框架参数槽（`Chain.getArg`）的只读视图，不复制列表；旧后端默认复制数组回退；对象本身仍共享。视图不是可持久化快照，
 也不承诺底层框架没有分配。框架继续使用原参数执行下游，而不是替换为 SDK 的数组。
 
-`MUTABLE_ARGS` 在入口获取后端的参数数组；如果执行下游，即使回调没有写入也会传入同一数组。
-后端未承诺此数组独占，回调在各阶段读取同一组参数槽；参数对象自身不会被深拷贝。
+`MUTABLE_ARGS` 与 `AROUND` 在回调首次读写参数槽时向后端获取一次参数数组
+（`argumentCount()`/`argumentType()` 不触发获取），同一 frame 之后各阶段读写该数组。下游执行前
+已获取时，下游收到同一数组，即使回调没有写入；下游执行前没有回调访问参数槽时，以 `null` 保留
+后端原参数下传，之后的读取再向后端获取。后端未承诺此数组独占，回调在各阶段读取与下游一致的
+参数槽；参数对象自身不会被深拷贝。获取失败的普通异常由触发访问的回调观察，致命事件仍直接重抛。
+`READ_ARGS` 与 `ENTRY_SNAPSHOT` 仍在入口获取（后者再复制快照），下游收到该实时数组。
 
 `HookSpec.Builder.replaceConstant(value)` 显式声明独占的常量替换，不能与回调或非 NO_ARGS 形状
 组合。解析后在安装任何目标前校验返回类型，使用调用方提供的同一对象引用；执行仍受注册状态、
@@ -206,7 +210,12 @@ callback 失败分别分类；本切片无 native 路径。
 热路径只读 `BoundPlan` 冻结字段、执行业务回调与必要类型/寿命检查。不做：声明重解析、manager
 发现、磁盘/网络配置读取、同步 shell、类路径扫描、无界日志、service 连接、线程池、JNI、IPC。
 无 before 且恰好一个 after 时，注册绑定时选用专用 channel，frame 直接作为该回调的唯一 invocation 借用，结果槽仍为独立对象；
-回调结束即共同失效，原方法异常、after 异常及诊断优先级与通用路径相同。多个回调仍各用独立借用。
+回调结束即共同失效，原方法异常、after 异常及诊断优先级与通用路径相同。多个回调仍各用独立借用；
+多回调计划中每个 after 回调的 invocation 与结果视图是同一借用对象并共同失效，before、around 与
+frame 视图不实现 `InvocationResult`，因此强转不能扩大形状。
+通用 plan channel（before、多回调、around）同样提供可选的直接值传输（`DirectAfterDispatchChannel`
+经 `CoreAfterBridge` 绑定）：返回值或原样抛出 THREW 异常，未准入时返回标记并由后端恰好执行一次原方法，
+与 `dispatch()` 共用同一状态机、准入与在途租约；未绑定的后端继续使用 `DispatchResult`。
 诊断默认关闭，容量有界（`BoundedDiagnosticsSink`）。未选择 native 时本切片新增 so=0（无 native 模块）。
 
 ## 7. 独立 oracle 与反例清单

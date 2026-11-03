@@ -103,24 +103,44 @@ matches zero arguments. Kotlin `Int::class` matches primitive `int`; to match bo
 
 Owner reuse and descriptor conversion happen during spec construction, not once per intercepted
 call. The DSL does not adapt or wrap the `BeforeCallback`, `AfterCallback` or `AroundCallback`
-supplied by the caller; the framework and core may still allocate in their own paths. No relative
+supplied by the caller (the typed variants below add one narrowing adapter, created once at spec
+construction); the framework and core may still allocate in their own paths. No relative
 performance improvement or device compatibility follows from this syntax alone.
 
-For callbacks that explicitly request read access, `argumentOrNull` avoids repetitive bounds
-checks for optional slots:
+### Typed argument callbacks (development source)
+
+`beforeArgs`, `beforeMutableArgs` and `afterArgs` hand the callback a `ReadArgsInvocation` or
+`MutableArgsInvocation` directly, so no cast and no separate `access(...)` call is needed:
+
+```kotlin
+hooks.install("feature.title", resolvedMethod) {
+    beforeArgs { log(it.getArgument(0)) }                 // selects READ_ARGS_VIEW
+    beforeMutableArgs { it.setArgument(0, "rewritten") }  // widens the shape to MUTABLE_ARGS
+    afterArgs { invocation, result -> audit(invocation.getArgument(0), result.result) }
+}
+```
+
+Without an explicit `access(...)`, read-only typed callbacks select `READ_ARGS_VIEW` and any
+`beforeMutableArgs` selects `MUTABLE_ARGS`. An explicit `access(...)` (in any order) is kept, and
+`build` fails when it cannot serve the typed callbacks: read callbacks need `READ_ARGS`,
+`READ_ARGS_VIEW`, `ENTRY_SNAPSHOT` or `MUTABLE_ARGS`; mutable callbacks need `MUTABLE_ARGS`.
+These methods wrap the supplied callback in a small adapter that only narrows the invocation type;
+callback order, borrowing and exception rules are unchanged. Reusing the same typed callback object
+still counts as the same callback for idempotent installation. The Java builder offers the same
+three methods. They are in the current development source, not in the released 1.0.0 API.
+
+For callbacks that read optional slots, `argumentOrNull` avoids repetitive bounds checks:
 
 ```kotlin
 val receipt = hooks.install("feature.key", resolvedMethod) {
-    access(ParameterAccess.READ_ARGS_VIEW)
-    before { invocation ->
-        val key = (invocation as ReadArgsInvocation).argumentOrNull(0) as? String
+    beforeArgs { invocation ->
+        val key = invocation.argumentOrNull(0) as? String
         // Use key inside this callback; retain neither the borrowed invocation nor its view.
     }
 }
 ```
 
-Import `argumentOrNull` from `io.github.jichuo1.meguviz.hook.dsl` and `ReadArgsInvocation` and
-`ParameterAccess` from the API package. The helper checks the declared parameter count and returns
+Import `argumentOrNull` from `io.github.jichuo1.meguviz.hook.dsl`. The helper checks the declared parameter count and returns
 null for a negative or out-of-range index; a null value in an existing slot is also returned as
 null. It still checks the borrowed invocation on invalid indexes, and exceptions while reading an
 in-range slot propagate. It does not create an argument snapshot or adapt the callback. As with all

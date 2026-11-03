@@ -4,7 +4,6 @@ import android.os.SystemClock
 import android.text.TextUtils
 import android.util.Log
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess
-import io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt
 import io.github.jichuo1.meguviz.hook.backend.libxposed102.LibXposed102Backend
 import io.github.jichuo1.meguviz.hook.backend.libxposed102.LibXposed102Context
@@ -58,8 +57,7 @@ class KotlinSampleHookEntry : XposedModule() {
                 member(target),
             ) {
                 access(ParameterAccess.READ_ARGS)
-                before { invocation ->
-                    val arguments = invocation as ReadArgsInvocation
+                beforeArgs { arguments ->
                     check(arguments.argumentCount() == 1) {
                         "unexpected TextUtils.isEmpty signature"
                     }

@@ -50,7 +50,7 @@ public final class HookSpec {
         this.id = builder.id;
         this.owner = builder.owner;
         this.target = builder.target;
-        this.access = builder.access;
+        this.access = builder.effectiveAccess();
         this.beforeCallbacks = Collections.unmodifiableList(new ArrayList<BeforeCallback>(builder.beforeCallbacks));
         this.afterCallbacks = Collections.unmodifiableList(new ArrayList<AfterCallback>(builder.afterCallbacks));
         this.aroundCallback = builder.aroundCallback;
@@ -221,7 +221,9 @@ public final class HookSpec {
             return false;
         }
         for (int i = 0; i < first.size(); i++) {
-            if (first.get(i) != second.get(i)) {
+            Object left = first.get(i);
+            Object right = second.get(i);
+            if (left != right && !TypedCallbacks.sameDelegate(left, right)) {
                 return false;
             }
         }
@@ -233,6 +235,10 @@ public final class HookSpec {
         private final HookOwner owner;
         private final TargetSpec target;
         private ParameterAccess access = ParameterAccess.NO_ARGS;
+        // Typed callbacks only choose a shape while no shape-defining call was made.
+        private boolean accessExplicit;
+        private boolean typedRead;
+        private boolean typedMutable;
         private final List<BeforeCallback> beforeCallbacks = new ArrayList<BeforeCallback>();
         private final List<AfterCallback> afterCallbacks = new ArrayList<AfterCallback>();
         private AroundCallback aroundCallback;
@@ -254,6 +260,7 @@ public final class HookSpec {
 
         public Builder access(ParameterAccess value) {
             this.access = Objects.requireNonNull(value, "access");
+            this.accessExplicit = true;
             return this;
         }
 
@@ -262,15 +269,66 @@ public final class HookSpec {
             return this;
         }
 
+        /**
+         * Typed before callback that reads arguments without a cast. Without an explicit
+         * {@link #access} choice the spec uses {@link ParameterAccess#READ_ARGS_VIEW} (or
+         * MUTABLE_ARGS when a mutable typed callback is also registered). With an explicit choice,
+         * that shape must be READ_ARGS, READ_ARGS_VIEW, ENTRY_SNAPSHOT or MUTABLE_ARGS, otherwise
+         * {@link #build()} fails. Callback order and lifetime rules are those of {@link #before}.
+         */
+        public Builder beforeArgs(ArgsBeforeCallback callback) {
+            beforeCallbacks.add(new TypedCallbacks.ReadBefore(callback));
+            typedRead = true;
+            return this;
+        }
+
+        /**
+         * Typed before callback that may call {@code setArgument} without a cast. Without an
+         * explicit {@link #access} choice the spec uses {@link ParameterAccess#MUTABLE_ARGS};
+         * with an explicit choice it must be MUTABLE_ARGS, otherwise {@link #build()} fails.
+         */
+        public Builder beforeMutableArgs(MutableArgsBeforeCallback callback) {
+            beforeCallbacks.add(new TypedCallbacks.MutableBefore(callback));
+            typedMutable = true;
+            return this;
+        }
+
         public Builder after(AfterCallback callback) {
             afterCallbacks.add(Objects.requireNonNull(callback, "callback"));
+            return this;
+        }
+
+        /**
+         * Typed after callback that reads arguments without a cast; shape selection follows
+         * {@link #beforeArgs}. Callback order and lifetime rules are those of {@link #after}.
+         */
+        public Builder afterArgs(ArgsAfterCallback callback) {
+            afterCallbacks.add(new TypedCallbacks.ReadAfter(callback));
+            typedRead = true;
             return this;
         }
 
         public Builder around(AroundCallback callback) {
             this.aroundCallback = Objects.requireNonNull(callback, "callback");
             this.access = ParameterAccess.AROUND;
+            this.accessExplicit = true;
             return this;
+        }
+
+        private ParameterAccess effectiveAccess() {
+            if (!accessExplicit) {
+                if (typedMutable) return ParameterAccess.MUTABLE_ARGS;
+                if (typedRead) return ParameterAccess.READ_ARGS_VIEW;
+                return access;
+            }
+            if (typedMutable && access != ParameterAccess.MUTABLE_ARGS) {
+                throw new IllegalArgumentException("beforeMutableArgs requires ParameterAccess.MUTABLE_ARGS, not " + access);
+            }
+            if (typedRead && access != ParameterAccess.READ_ARGS && access != ParameterAccess.READ_ARGS_VIEW
+                    && access != ParameterAccess.ENTRY_SNAPSHOT && access != ParameterAccess.MUTABLE_ARGS) {
+                throw new IllegalArgumentException("typed argument callbacks require a readable ParameterAccess, not " + access);
+            }
+            return access;
         }
 
         /**
@@ -312,6 +370,7 @@ public final class HookSpec {
                                                      MatchObserver observer) {
             this.stringArgumentCondition = new StringArgumentCondition(index, expected, result, observer);
             this.access = ParameterAccess.READ_ARGS_VIEW;
+            this.accessExplicit = true;
             return this;
         }
 
