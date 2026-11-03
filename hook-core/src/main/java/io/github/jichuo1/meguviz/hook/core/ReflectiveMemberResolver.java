@@ -64,19 +64,46 @@ public final class ReflectiveMemberResolver implements MemberResolver {
             throw new BackendInstallException("cannot inspect " + descriptor.className() + ": " + error, error);
         }
 
-        Collections.sort(matches, new Comparator<Executable>() {
+        return sortedBySignature(matches);
+    }
+
+    /**
+     * Stable signature order. Each key is built once per candidate instead of twice per comparison,
+     * and zero or one candidate needs no key at all; the resulting order is unchanged.
+     */
+    static List<Executable> sortedBySignature(List<Executable> matches) {
+        int count = matches.size();
+        if (count < 2) {
+            return matches;
+        }
+        final String[] keys = new String[count];
+        Integer[] order = new Integer[count];
+        for (int i = 0; i < count; i++) {
+            keys[i] = signatureKey(matches.get(i));
+            order[i] = i;
+        }
+        // Arrays.sort on objects is a stable merge sort, like Collections.sort before.
+        java.util.Arrays.sort(order, new Comparator<Integer>() {
             @Override
-            public int compare(Executable left, Executable right) {
-                return signatureKey(left).compareTo(signatureKey(right));
+            public int compare(Integer left, Integer right) {
+                return keys[left].compareTo(keys[right]);
             }
         });
-        return matches;
+        List<Executable> sorted = new ArrayList<Executable>(count);
+        for (Integer index : order) {
+            sorted.add(matches.get(index));
+        }
+        return sorted;
     }
 
     private static boolean parametersMatch(Executable executable, TargetSpec.DescriptorTarget descriptor) {
         List<String> expected = descriptor.parameterTypeNames();
         if (expected == null) {
             return true;
+        }
+        // The arity check needs no parameter array copy; only same-arity candidates pay for one.
+        if (executable.getParameterCount() != expected.size()) {
+            return false;
         }
         Class<?>[] actual = executable.getParameterTypes();
         if (actual.length != expected.size()) {

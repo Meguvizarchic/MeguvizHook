@@ -565,8 +565,8 @@ public final class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver 
   public java.util.List<java.lang.reflect.Executable> resolve(io.github.jichuo1.meguviz.hook.api.TargetSpec$DescriptorTarget, java.lang.ClassLoader) throws io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 }
 Compiled from "ReflectiveMemberResolver.java"
-class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver$1 implements java.util.Comparator<java.lang.reflect.Executable> {
-  public int compare(java.lang.reflect.Executable, java.lang.reflect.Executable);
+class io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver$1 implements java.util.Comparator<java.lang.Integer> {
+  public int compare(java.lang.Integer, java.lang.Integer);
   public int compare(java.lang.Object, java.lang.Object);
 }
 Compiled from "SuccessResultDispatchChannel.java"

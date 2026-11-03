@@ -4,7 +4,9 @@ import io.github.jichuo1.meguviz.hook.api.TargetKind;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 import io.github.jichuo1.meguviz.hook.core.spi.MemberResolver;
+import io.github.jichuo1.meguviz.ref.api.descriptor.MemberDescriptor;
 import io.github.jichuo1.meguviz.ref.api.descriptor.MemberKind;
+import io.github.jichuo1.meguviz.ref.api.descriptor.TypeDescriptor;
 import io.github.jichuo1.meguviz.ref.api.query.Hierarchy;
 import io.github.jichuo1.meguviz.ref.api.query.QuerySpec;
 import io.github.jichuo1.meguviz.ref.api.query.Selection;
@@ -17,8 +19,8 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -229,18 +231,59 @@ public final class MeguvizRefMemberResolver implements MemberResolver {
         if (result.members().size() > MAX_RESULTS) throw new BackendInstallException("MeguvizRef result limit exceeded");
         if (result.members().size() == 1) {
             List<Executable> matches = new ArrayList<Executable>();
-            Executable executable = checkedExecutable(scope, owner, target, expected, result.members().get(0));
+            ResolvedMember token = result.members().get(0);
+            if (!mayMatch(token, target)) return matches;
+            Executable executable = checkedExecutable(scope, owner, target, expected, token);
             if (executable != null) matches.add(executable);
             return matches;
         }
         LinkedHashSet<Executable> unique = new LinkedHashSet<Executable>();
         for (ResolvedMember token : result.members()) {
+            if (!mayMatch(token, target)) continue;
             Executable executable = checkedExecutable(scope, owner, target, expected, token);
             if (executable != null) unique.add(executable);
         }
-        List<Executable> matches = new ArrayList<Executable>(unique);
-        matches.sort(Comparator.comparing(MeguvizRefMemberResolver::signature));
-        return matches;
+        return sortedBySignature(new ArrayList<Executable>(unique));
+    }
+
+    /**
+     * Cheap pre-export filter for the default descriptor path, using the JVM descriptor that Ref
+     * already holds for each token. It only rejects candidates whose parameter or return type
+     * cannot satisfy {@link #matches}; every accepted candidate is still exported and checked
+     * exactly. Skipping definite mismatches avoids exporting unrelated overloads, so under
+     * {@code TRY_SUPPRESS_JAVA_CHECKS} an inaccessible unrelated overload no longer fails the
+     * resolution. Custom queries keep their own constraints and are never pre-filtered here.
+     */
+    private boolean mayMatch(ResolvedMember token, TargetSpec.DescriptorTarget target) {
+        if (!exactDescriptor) return true;
+        MemberDescriptor descriptor = token.descriptor();
+        List<String> parameters = target.parameterTypeNames();
+        if (parameters != null) {
+            List<TypeDescriptor> actual = descriptor.parameters();
+            if (actual.size() != parameters.size()) return false;
+            for (int i = 0; i < parameters.size(); i++) {
+                if (!JvmTypeNames.mayMatch(actual.get(i).value(), parameters.get(i))) return false;
+            }
+        }
+        String returns = target.returnTypeName();
+        return returns == null || JvmTypeNames.mayMatch(descriptor.type().value(), returns);
+    }
+
+    /** Signature order with one key per candidate instead of two per comparison; order unchanged. */
+    private static List<Executable> sortedBySignature(List<Executable> matches) {
+        int count = matches.size();
+        if (count < 2) return matches;
+        String[] keys = new String[count];
+        Integer[] order = new Integer[count];
+        for (int i = 0; i < count; i++) {
+            keys[i] = signature(matches.get(i));
+            order[i] = i;
+        }
+        // Stable object sort, matching the previous List.sort with a key comparator.
+        Arrays.sort(order, (left, right) -> keys[left].compareTo(keys[right]));
+        List<Executable> sorted = new ArrayList<Executable>(count);
+        for (Integer index : order) sorted.add(matches.get(index));
+        return sorted;
     }
 
     static MeguvizRefResolutionException incomplete(ResolutionResult result) {
