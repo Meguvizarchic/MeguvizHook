@@ -50,11 +50,20 @@ final class Dispatcher {
      */
     static Object dispatchValue(BoundPlan plan, BackendInvocation backend, DiagnosticsSink diagnostics) throws Throwable {
         InvocationFrame frame = new InvocationFrame(plan, backend);
+        // Catch locally and rethrow after invalidation instead of try/finally: same order and
+        // identity, but a compiler can keep the frame method-local (HotSpot then scalar-replaces it).
+        Object value;
+        Throwable thrown;
         try {
-            return run(plan, frame, diagnostics);
-        } finally {
-            frame.invalidate();
+            value = run(plan, frame, diagnostics);
+            thrown = null;
+        } catch (Throwable failure) {
+            value = null;
+            thrown = failure;
         }
+        frame.invalidate();
+        if (thrown != null) throw thrown;
+        return value;
     }
 
     /**
@@ -86,11 +95,16 @@ final class Dispatcher {
     static Object dispatchSingleAfterValue(BoundPlan plan, AfterCallback callback,
                                            BackendInvocation backend, DiagnosticsSink diagnostics) throws Throwable {
         InvocationFrame frame = new InvocationFrame(plan, backend);
+        InvocationFrame.ResultSlot slot;
         try {
-            return dispatchSingleAfter(plan, callback, frame, diagnostics).dispatchValue();
-        } finally {
+            slot = dispatchSingleAfter(plan, callback, frame, diagnostics);
+        } catch (Throwable fatal) {
+            // Only fatal VM events escape the single-after state machine.
             frame.invalidate();
+            throw fatal;
         }
+        frame.invalidate();
+        return slot.dispatchValue();
     }
 
     /**
