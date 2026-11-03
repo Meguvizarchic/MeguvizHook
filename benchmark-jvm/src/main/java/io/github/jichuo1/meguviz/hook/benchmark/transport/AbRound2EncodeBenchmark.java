@@ -23,8 +23,9 @@ import java.util.concurrent.TimeUnit;
  * the current encoder. shape = message kind + frame count: none0 has no message, ascii* uses a
  * 900-char ASCII message (truncated to 512), unicode* the 400-char mixed CJK/escape message of
  * JsonLineEncodeBenchmark, cjk* 600 CJK chars (truncated to 512); the digit is maxFrames out of a
- * 40-frame trace. encode returns the exact-length record; send passes it to a consuming
- * RecordWriter. Host JVM only; not ART.
+ * 40-frame trace. encode returns the exact-length record; send passes it to a consuming writer
+ * (round1: exact-length copy to a RecordWriter; current: a slice to a SlicedRecordWriter).
+ * Host JVM only; not ART.
  */
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
@@ -55,7 +56,12 @@ public class AbRound2EncodeBenchmark {
                 : "cjk".equals(kind) ? TraceFixtures.cjkMessage(600) : null;
         event = TraceFixtures.event("bench.ab2.hook", new TraceFixtures.SyntheticFailure(message, 40));
         round1Writer = sink::consume;
-        transport = new JsonLineTraceTransport(sink::consume, includeMessage, maxFrames);
+        // The current side writes through a SlicedRecordWriter, as BinderTrace102.sender does.
+        JsonLineTraceTransport.SlicedRecordWriter sliced = (buffer, offset, length) -> {
+            sink.consume(buffer);
+            sink.consume(length);
+        };
+        transport = new JsonLineTraceTransport(sliced, includeMessage, maxFrames);
         byte[] a = Round1Transport.encode(event, includeMessage, maxFrames);
         byte[] b = JsonLineTraceTransport.encode(event, includeMessage, maxFrames);
         if (!Arrays.equals(a, b)) throw new IllegalStateException("encoders disagree");

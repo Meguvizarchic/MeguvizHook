@@ -20,6 +20,31 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
         void writeRecord(byte[] utf8JsonLine) throws Exception;
     }
 
+    /**
+     * Optional record writer that also accepts a record as a slice of a sender-owned buffer. When
+     * a writer implements this interface, {@link JsonLineTraceTransport#send},
+     * {@link BatchTraceTransport#sender} and the {@link BoundedTraceCompression} batch senders
+     * pass the slice instead of first trimming the encoded record or frame into an exact-length
+     * copy. Writers that only implement {@link RecordWriter} keep receiving exact-length arrays.
+     * The bytes, the acceptance meaning of a normal return and every failure rule are the same.
+     *
+     * <p>A call must have exactly the effect of
+     * {@code writeRecord(Arrays.copyOfRange(buffer, offset, offset + length))}: read only that
+     * range, and only during the call. The buffer belongs to the sender: do not retain, modify or
+     * forward it after returning, and do not read outside the range (those bytes are unspecified).
+     * For example, Android's {@code Parcel.writeByteArray(buffer, offset, length)} writes the same
+     * layout as {@code writeByteArray} of the copied range.
+     */
+    public interface SlicedRecordWriter extends RecordWriter {
+        void writeRecord(byte[] buffer, int offset, int length) throws Exception;
+
+        /** Writes the whole array as one record, like {@code writeRecord(record, 0, record.length)}. */
+        @Override
+        default void writeRecord(byte[] record) throws Exception {
+            writeRecord(record, 0, record.length);
+        }
+    }
+
     private static final int FIELD_CHARS = 128;
     private static final int MESSAGE_CHARS = 512;
     // Upper bound of any single field reservation (escaped message tail), used for frame slack.
@@ -33,19 +58,32 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
     };
     private final RecordWriter writer;
+    private final SlicedRecordWriter sliced;
     private final boolean includeMessage;
     private final int maxFrames;
 
     public JsonLineTraceTransport(RecordWriter writer, boolean includeMessage, int maxFrames) {
         this.writer = Objects.requireNonNull(writer, "writer");
+        this.sliced = writer instanceof SlicedRecordWriter ? (SlicedRecordWriter) writer : null;
         if (maxFrames < 0 || maxFrames > 32) throw new IllegalArgumentException("maxFrames must be 0..32");
         this.includeMessage = includeMessage;
         this.maxFrames = maxFrames;
     }
 
+    /**
+     * Encode and write one record. A {@link SlicedRecordWriter} receives the encoder's private
+     * buffer as a slice, saving the exact-length copy; any other writer receives that copy.
+     */
     @Override
     public void send(CallbackExceptionTracker.Event event) throws Exception {
-        writer.writeRecord(encode(event));
+        if (sliced == null) {
+            writer.writeRecord(encode(event));
+            return;
+        }
+        Objects.requireNonNull(event, "event");
+        Utf8 text = new Utf8();
+        write(text, event, includeMessage, maxFrames);
+        sliced.writeRecord(text.buffer(), 0, text.size());
     }
 
     /** Encode one event without sending it, for explicit synchronous batch transports. */
@@ -471,6 +509,9 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
         }
 
         byte[] finish() { return size == bytes.length ? bytes : Arrays.copyOf(bytes, size); }
+
+        /** The live buffer; bytes [0, size()) are the output, the rest is unspecified. */
+        byte[] buffer() { return bytes; }
     }
 
     static void putInt(byte[] bytes, int position, int value) {

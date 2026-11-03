@@ -2,6 +2,7 @@ package io.github.jichuo1.meguviz.hook.benchmark.transport;
 
 import io.github.jichuo1.meguviz.hook.core.BatchTraceTransport;
 import io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker;
+import io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -23,7 +24,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Round-2 same-run A/B of batch frame formation plus the hand-off to the record writer: round-1
- * sender copy against the current sender. records = events per frame (one stack frame each, no
+ * sender copy against the current sender with a plain writer (exact-length frame copy) and with a
+ * SlicedRecordWriter (frame buffer slice). records = events per frame (one stack frame each, no
  * message). The writer only consumes what it is given. Host JVM only; not ART evidence.
  */
 @State(Scope.Thread)
@@ -33,7 +35,8 @@ import java.util.concurrent.TimeUnit;
 public class AbBatchSendBenchmark {
     private static final int LIMIT = 65536;
 
-    @Param({"round1", "current"})
+    /** current-copy: plain RecordWriter (exact-length frame); current-slice: SlicedRecordWriter. */
+    @Param({"round1", "current-copy", "current-slice"})
     public String impl;
 
     @Param({"1", "16", "128"})
@@ -49,7 +52,13 @@ public class AbBatchSendBenchmark {
         round1 = "round1".equals(impl);
         events = Collections.unmodifiableList(TraceFixtures.events(records, null, 6));
         round1Writer = sink::consume;
-        sender = BatchTraceTransport.sender(sink::consume, false, 1, LIMIT, 1024);
+        JsonLineTraceTransport.SlicedRecordWriter sliced = (buffer, offset, length) -> {
+            sink.consume(buffer);
+            sink.consume(length);
+        };
+        sender = "current-slice".equals(impl)
+                ? BatchTraceTransport.sender(sliced, false, 1, LIMIT, 1024)
+                : BatchTraceTransport.sender(sink::consume, false, 1, LIMIT, 1024);
         List<byte[]> a = new ArrayList<byte[]>();
         List<byte[]> b = new ArrayList<byte[]>();
         Round1Transport.sendBatch(a::add, events, false, 1, LIMIT, 1024);

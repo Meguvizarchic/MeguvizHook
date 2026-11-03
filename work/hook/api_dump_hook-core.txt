@@ -443,6 +443,11 @@ public interface io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$Reco
   public abstract void writeRecord(byte[]) throws java.lang.Exception;
 }
 Compiled from "JsonLineTraceTransport.java"
+public interface io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$SlicedRecordWriter extends io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter {
+  public abstract void writeRecord(byte[], int, int) throws java.lang.Exception;
+  public default void writeRecord(byte[]) throws java.lang.Exception;
+}
+Compiled from "JsonLineTraceTransport.java"
 final class io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$Utf8 {
 }
 Compiled from "ModuleEntryRouter.java"

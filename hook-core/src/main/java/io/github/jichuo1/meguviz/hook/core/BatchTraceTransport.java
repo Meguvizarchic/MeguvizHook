@@ -31,6 +31,8 @@ public final class BatchTraceTransport {
      * Encode the largest prefix that fits in a single bounded frame. Call via deliverBatch on a
      * caller-owned worker. A single oversized head fails without sending; it must be handled by
      * the caller. A writer failure may follow an external side effect, so retry may duplicate it.
+     * A {@link JsonLineTraceTransport.SlicedRecordWriter} receives the frame as a slice of the
+     * sender's private, per-call buffer instead of an exact-length copy; the bytes are identical.
      */
     public static CallbackExceptionTracker.BatchTransport sender(
             JsonLineTraceTransport.RecordWriter writer, boolean includeMessage, int maxFrames,
@@ -38,6 +40,8 @@ public final class BatchTraceTransport {
         Objects.requireNonNull(writer, "writer");
         checkBounds(maxFrameBytes, maxRecords);
         if (maxFrames < 0 || maxFrames > 32) throw new IllegalArgumentException("maxFrames must be 0..32");
+        JsonLineTraceTransport.SlicedRecordWriter sliced = writer instanceof JsonLineTraceTransport.SlicedRecordWriter
+                ? (JsonLineTraceTransport.SlicedRecordWriter) writer : null;
         return events -> {
             Objects.requireNonNull(events, "events");
             // Records are encoded straight into one per-call frame buffer (no per-record arrays).
@@ -58,10 +62,11 @@ public final class BatchTraceTransport {
                 count++;
             }
             if (count == 0) throw new IllegalArgumentException("empty batch");
-            byte[] bytes = frame.finish();
-            putInt(bytes, 0, MAGIC);
-            putInt(bytes, 4, count);
-            writer.writeRecord(bytes);
+            byte[] buffer = frame.buffer();
+            putInt(buffer, 0, MAGIC);
+            putInt(buffer, 4, count);
+            if (sliced != null) sliced.writeRecord(buffer, 0, frame.size());
+            else writer.writeRecord(frame.finish());
             return count;
         };
     }

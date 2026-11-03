@@ -1,13 +1,17 @@
 package io.github.jichuo1.meguviz.hook.benchmark.transport;
 
+import io.github.jichuo1.meguviz.hook.core.BatchTraceTransport;
 import io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker;
 import io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport;
 
+import java.util.List;
 import java.util.Map;
 
 /** Cases for {@link InterleavedAb}: A is the round-1 copy, B the current implementation. */
 final class InterleavedCases {
     private InterleavedCases() { }
+
+    static volatile long sink;
 
     static Map<String, InterleavedAb.Op[]> all() {
         Map<String, InterleavedAb.Op[]> cases = InterleavedAb.newCases();
@@ -16,6 +20,31 @@ final class InterleavedCases {
             cases.put("encode:" + shape, new InterleavedAb.Op[] {
                 () -> Round1Transport.encode(s.event, s.includeMessage, s.maxFrames).length,
                 () -> JsonLineTraceTransport.encode(s.event, s.includeMessage, s.maxFrames).length,
+            });
+        }
+        // Hand-off to a writer: round-1 copy path against the current sender with a sliced writer.
+        Round1Transport.RecordWriter consume = record -> sink = record.length;
+        JsonLineTraceTransport.SlicedRecordWriter consumeSlice = (buffer, offset, length) -> sink = length;
+        for (String shape : new String[] {"none0", "ascii8", "unicode8"}) {
+            Shape s = new Shape(shape);
+            JsonLineTraceTransport transport = new JsonLineTraceTransport(consumeSlice, s.includeMessage, s.maxFrames);
+            cases.put("send-slice:" + shape, new InterleavedAb.Op[] {
+                () -> { Round1Transport.send(consume, s.event, s.includeMessage, s.maxFrames); return sink; },
+                () -> { transport.send(s.event); return sink; },
+            });
+        }
+        for (int records : new int[] {1, 16, 128}) {
+            List<CallbackExceptionTracker.Event> events = TraceFixtures.events(records, null, 6);
+            CallbackExceptionTracker.BatchTransport copying = BatchTraceTransport.sender(
+                    record -> sink = record.length, false, 1, 65536, 1024);
+            CallbackExceptionTracker.BatchTransport slicing = BatchTraceTransport.sender(consumeSlice, false, 1, 65536, 1024);
+            cases.put("batch-copy:" + records, new InterleavedAb.Op[] {
+                () -> Round1Transport.sendBatch(consume, events, false, 1, 65536, 1024),
+                () -> copying.sendBatch(events),
+            });
+            cases.put("batch-slice:" + records, new InterleavedAb.Op[] {
+                () -> Round1Transport.sendBatch(consume, events, false, 1, 65536, 1024),
+                () -> slicing.sendBatch(events),
             });
         }
         // Harness calibration: both sides run the very same code, so B/A should be about 1.
