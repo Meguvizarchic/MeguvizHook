@@ -10,7 +10,8 @@ package io.github.jichuo1.meguviz.hook.core.spi;
  *
  * <p>The accessor must not keep per-call state: one instance serves concurrent and reentrant calls,
  * each with its own chain. The core passes a chain only during the dispatch that received it, on the
- * thread that received it, and never retains it afterwards.
+ * thread that received it, and never uses it afterwards (an expired frame that a callback wrongly
+ * retained still references it, as it referenced the per-call adapter before, but cannot reach it).
  */
 public interface ChainAccessor<C> {
     /** The receiver, or null for a static target; see {@link BackendInvocation#thisObject()}. */

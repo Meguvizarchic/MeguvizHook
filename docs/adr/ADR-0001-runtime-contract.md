@@ -37,8 +37,8 @@ frame，不共享 ThreadLocal 可变数组。独立视图引入的分配成本�
 
 `READ_ARGS_VIEW` 是新增的显式选择，不改变 `READ_ARGS` 和 `ENTRY_SNAPSHOT` 的现有行为。
 101/102 按下标读取框架参数槽（`Chain.getArg`），不复制列表：经 flyweight 访问器（§6）时不创建视图对象，
-旧 core 上回退为同样按下标读取的只读视图；旧后端默认复制数组回退；对象本身仍共享。读取范围为声明的
-参数个数，越界抛 `IndexOutOfBoundsException`。视图不是可持久化快照，
+旧 core 上回退为同样按下标读取的只读视图，两者的读取范围均为声明的参数个数，越界抛
+`IndexOutOfBoundsException`；旧后端默认复制数组回退；对象本身仍共享。视图不是可持久化快照，
 也不承诺底层框架没有分配。框架继续使用原参数执行下游，而不是替换为 SDK 的数组。
 
 `MUTABLE_ARGS` 与 `AROUND` 在回调首次读写参数槽时向后端获取一次参数数组
@@ -230,8 +230,9 @@ frame 视图不实现 `InvocationResult`，因此强转不能扩大形状。
 hooker 绑定一次无状态 `ChainAccessor`，core 直接读取框架的每次调用链对象，后端不再为每次调用创建
 `BackendInvocation` 适配器，`READ_ARGS_VIEW` 也不创建视图对象。返回编码、标记转义、异常身份、致命
 事件、准入、在途租约、借用寿命、线程检查与 at-most-once proceed 均与直接值传输相同；frame 只在本次
-分发及所属线程内读取链对象，分发结束后不保留。101/102 优先使用它，core 不提供时回退 `CoreAfterBridge`，
-再回退 `dispatch()`；其他后端与 `FakeBackend` 不受影响。
+分发及所属线程内读取链对象，分发结束后不再访问它（与原适配器相同，被违规保留的过期 frame 仍持有其
+引用）。101/102 优先使用它，core 不提供时回退 `CoreAfterBridge`，再回退 `dispatch()`；其他后端与
+`FakeBackend` 不受影响。
 诊断默认关闭，容量有界（`BoundedDiagnosticsSink`）。未选择 native 时本切片新增 so=0（无 native 模块）。
 
 ## 7. 独立 oracle 与反例清单
