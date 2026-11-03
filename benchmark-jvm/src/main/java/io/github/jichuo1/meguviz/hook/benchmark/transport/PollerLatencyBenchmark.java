@@ -34,7 +34,8 @@ import java.util.concurrent.locks.LockSupport;
  * poll interval, so a single record below the trigger is quantized to the next tick (about 20 ms).
  * wake=signal wires the tracker's opt-in
  * CaptureSignal to TraceBatchPoller.requestPoll (one coalesced executor submission on the
- * capturing thread); wake=none is the default periodic polling. Host JVM only: no Binder, ART,
+ * capturing thread); wake=none is the default periodic polling. expiry=deadline adds the opt-in
+ * one-shot evaluation at observedAt + wait (TraceBatchPoller.WaitExpiry.DEADLINE). Host JVM only: no Binder, ART,
  * device scheduler or power management is represented, and the spin-wait adds no wake-up latency.
  */
 @State(Scope.Thread)
@@ -50,6 +51,10 @@ public class PollerLatencyBenchmark {
 
     @Param({"none", "signal"})
     public String wake;
+
+    /** poll = WaitExpiry.NEXT_POLL (default), deadline = WaitExpiry.DEADLINE. */
+    @Param({"poll", "deadline"})
+    public String expiry;
 
     private ScheduledThreadPoolExecutor executor;
     private CallbackExceptionTracker tracker;
@@ -82,7 +87,8 @@ public class PollerLatencyBenchmark {
                 new TraceFixtures.SyntheticFailure("latency", 4));
         CallbackExceptionTracker.BatchTransport transport = this::accept;
         poller = TraceBatchPoller.startDraining(executor, tracker, transport, trigger, 64, 4,
-                pollMillis, waitMillis, TimeUnit.MILLISECONDS);
+                pollMillis, waitMillis, TimeUnit.MILLISECONDS, System::nanoTime,
+                "deadline".equals(expiry) ? TraceBatchPoller.WaitExpiry.DEADLINE : TraceBatchPoller.WaitExpiry.NEXT_POLL);
         target.set(poller);
     }
 

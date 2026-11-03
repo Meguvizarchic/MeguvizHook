@@ -193,3 +193,36 @@ ART 或设备）。信号抛出的非致命异常计入 `trackingFailureCount()`
 排空，而不是把积压留到下一个周期；从未调用 `requestPoll()` 的 poller 行为不变。周期任务仍是唤醒丢失、执行器异常等情况的兜底，
 间隔可适当拉长以减少空闲唤醒。观察等待是否到期仍只在评估时检查，请求不会让等待提前结束；
 宿主测量结果见 [传输优化第一轮](research/transport-round-1.md)。
+
+## 按到期时刻评估观察等待（可选）
+
+默认（`WaitExpiry.NEXT_POLL`）下，低于数量门槛的记录要等到观察等待到期后的**下一次**评估才发送，
+因此比等待时间最多晚一个轮询间隔。显式选择 `WaitExpiry.DEADLINE` 后，评估结束时若观察窗口仍开着
+且等待尚未到期，poller 会用 `executor.schedule` 安排**一次**普通评估，延迟为剩余等待时间（按该次评估
+读取的时钟计算）：
+
+```java
+TraceBatchPoller poller = TraceBatchPoller.startDraining(
+        worker, tracker, transport, 16, 32, 4, 100, 20, TimeUnit.MILLISECONDS,
+        System::nanoTime, TraceBatchPoller.WaitExpiry.DEADLINE);
+```
+
+- 只有评估会安排这次评估，所以它总在执行器线程上发生，不会在 Hook 线程上执行；Hook 线程上的代价
+  仍只来自可选的 `CaptureSignal`。
+- 这是一次普通评估：数量门槛、排空上限、`BUSY`／`EMPTY`、失败暂停都与周期任务相同，它不会强制发送。
+  观察等待仍从**观察到**非空队列时算起。与 `CaptureSignal` 组合时，窗口在捕获后被唤醒的那次评估中
+  打开，单条记录大约在“捕获时刻 + 等待时间”发送；只用周期任务时，窗口仍在捕获后的第一次轮询打开，
+  省去的是结束一侧最多一个轮询间隔的量化。
+- 每个 poller 同时最多只有一个待执行的到期评估，每个观察窗口最多安排一次。窗口提前关闭（例如达到
+  数量门槛）时不取消它，它到时作为一次普通评估运行，如有新窗口则为新窗口安排；因此
+  `ScheduledThreadPoolExecutor` 的队列里不会堆积已取消的任务。
+- 到期评估遇到另一次评估正在进行、而那次评估读取的时钟尚未到期时，那次评估结束后会再提交一次普通
+  评估（与 `requestPoll()` 的后续评估相同，不会因此启用 `requestPoll()` 的积压排空行为）。
+- 自定义时钟与执行器的时间不一致、到期评估运行时时钟仍未到期，则不再重复安排，由周期任务兜底，
+  不会形成忙循环。执行器拒绝安排时异常记入 `schedulingFailure()`，poller 不暂停，该窗口由周期任务
+  兜底。暂停和关闭会以 `cancel(false)` 取消待执行的到期评估。观察等待为 0 时从不安排。
+- 这不是硬期限：执行器排队、同步传输、系统调度和暂停仍会增加延迟。`scheduleObservation()` 只观察
+  周期句柄，不包括到期评估。
+
+宿主测量（JDK 17 x86-64，不是 ART 或设备证据）见 [传输优化第二轮](research/transport-round-2.md)：
+轮询 5 ms、等待 20 ms、门槛 16 的单条记录，配合 `CaptureSignal` 时 p50 由约 22.7 ms 降到约 20.2 ms。
