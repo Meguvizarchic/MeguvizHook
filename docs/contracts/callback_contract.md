@@ -43,6 +43,13 @@ if (receipt.isInstalled()) {
 }
 ```
 
+- 当前开发源码提供类型化回调 `beforeArgs`、`beforeMutableArgs`、`afterArgs`：回调直接收到
+  `ReadArgsInvocation`／`MutableArgsInvocation`，上例可写为
+  `.beforeMutableArgs(invocation -> invocation.setArgument(0, 10))`，无需强转和 `access(...)`。
+  未显式选择形状时，只读类型化回调选 `READ_ARGS_VIEW`，出现 `beforeMutableArgs` 时选
+  `MUTABLE_ARGS`；显式 `access(...)`（顺序不限）保持不变，若无法满足类型化回调则 `build()` 失败。
+  类型化回调只是一个收窄调用类型的适配器，回调顺序、借用生命周期和异常规则不变；复用同一回调
+  对象时幂等安装仍视为同一回调。
 - 普通非 AROUND 形状至少一个 before 或 after；`AROUND` 与 before/after 互斥。显式
   `replaceConstant(value)` 与所有回调互斥，并且只允许 NO_ARGS；常量在安装前按目标返回类型校验。
 - `replaceResultOnSuccess(value)` 仅在原参数调用下游一次并正常返回后替换为所给引用；原异常保持身份，

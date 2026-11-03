@@ -23,7 +23,11 @@
     "opt-in libxposed advanced operations",
     "explicit epoch-bound Ref resolver session",
     "opt-in bounded concurrent preparation with serial checked commit",
-    "caller-owned trace batching, polling and compression sessions"
+    "caller-owned trace batching, polling and compression sessions",
+    "typed argument callbacks (beforeArgs, beforeMutableArgs, afterArgs)",
+    "index-based libxposed argument access and direct value transport for generic plans",
+    "single-lock trace queue snapshot, single-buffer trace encoding and opt-in capture-triggered polling",
+    "JVM-only JMH microbenchmarks (benchmark-jvm)"
   ],
   "verification": {
     "jvm_and_stub_tests": "covered",
@@ -34,7 +38,9 @@
     "advanced_framework_operations": "JVM and backend proxy tests only; device runtime not verified",
     "trace_session_and_ref_session": "JVM correctness and synthetic desktop probes; no Binder or ART runtime qualification",
     "durable_delivery": "not provided",
-    "device_performance": "not qualified"
+    "device_performance": "not qualified",
+    "jvm_microbenchmarks": "host JDK 17 x86-64 JMH only; not ART, framework or device evidence",
+    "ref_bridge_against_ref_1_1_snapshot": "bridge tests pass except two tests that intentionally pin Ref 1.0.0 API absence"
   },
   "performance_profile": "work/performance/performance_profile.json",
   "documentation": "docs/HANDOFF.md"
