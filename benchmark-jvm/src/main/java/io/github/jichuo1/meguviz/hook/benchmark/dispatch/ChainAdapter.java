@@ -23,7 +23,7 @@ public enum ChainAdapter {
     TO_ARRAY {
         @Override
         ModelHooker hooker(BoundPlan plan, DispatchChannel channel) {
-            return new ModelHooker(plan, channel) {
+            return new ModelHooker(plan, channel, true) {
                 @Override
                 BackendInvocation invocation(VectorLikeChain chain) {
                     return new ToArrayInvocation(target, chain);
@@ -35,7 +35,19 @@ public enum ChainAdapter {
     GET_ARG {
         @Override
         ModelHooker hooker(BoundPlan plan, DispatchChannel channel) {
-            return new ModelHooker(plan, channel) {
+            return new ModelHooker(plan, channel, true) {
+                @Override
+                BackendInvocation invocation(VectorLikeChain chain) {
+                    return new GetArgInvocation(target, chain, parameterCount);
+                }
+            };
+        }
+    },
+    /** GET_ARG without the optional bridge: always {@code dispatch()} plus a kind switch (isolates the transport). */
+    GET_ARG_DISPATCH {
+        @Override
+        ModelHooker hooker(BoundPlan plan, DispatchChannel channel) {
+            return new ModelHooker(plan, channel, false) {
                 @Override
                 BackendInvocation invocation(VectorLikeChain chain) {
                     return new GetArgInvocation(target, chain, parameterCount);
@@ -54,11 +66,11 @@ public enum ChainAdapter {
         private final Object notEntered = new Object();
         private final Function<BackendInvocation, Object> direct;
 
-        ModelHooker(BoundPlan plan, DispatchChannel channel) {
+        ModelHooker(BoundPlan plan, DispatchChannel channel, boolean bindBridge) {
             this.target = plan.target();
             this.parameterCount = target.getParameterCount();
             this.channel = channel;
-            this.direct = channel.requiresInvocation() ? CoreAfterBridge.bind(channel, notEntered) : null;
+            this.direct = bindBridge && channel.requiresInvocation() ? CoreAfterBridge.bind(channel, notEntered) : null;
         }
 
         abstract BackendInvocation invocation(VectorLikeChain chain);
