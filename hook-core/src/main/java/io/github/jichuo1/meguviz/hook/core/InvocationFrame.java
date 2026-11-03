@@ -174,6 +174,13 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         return new BorrowedInvocation();
     }
 
+    /** A distinct lease for one after callback that also serves as that callback's result view. */
+    AfterBorrow borrowAfter() {
+        // The dispatcher initializes the shared result slot before the first after callback.
+        check();
+        return new AfterBorrow();
+    }
+
     void rethrowObservedFatal() {
         if (observedFatal != null) {
             throw TypeChecks.fatal(observedFatal);
@@ -329,15 +336,19 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         return proceedState;
     }
 
-    /** A distinct lease for one callback, sharing only the enclosing frame's invocation state. */
-    final class BorrowedInvocation implements AroundInvocation, EntrySnapshotInvocation, MutableArgsInvocation {
+    /**
+     * A distinct lease for one callback, sharing only the enclosing frame's invocation state. Before
+     * callbacks get exactly this type, which never implements {@link InvocationResult}, so a cast
+     * cannot reach the result slot.
+     */
+    class BorrowedInvocation implements AroundInvocation, EntrySnapshotInvocation, MutableArgsInvocation {
         private boolean active = true;
 
-        void invalidate() {
+        final void invalidate() {
             active = false;
         }
 
-        private void checkBorrow() {
+        final void checkBorrow() {
             if (!active) {
                 // Preserve frame-expired / wrong-thread precedence for an inactive borrow.
                 InvocationFrame.this.check();
@@ -345,13 +356,6 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
             }
             // Every public forwarding method validates the frame in its target method. Avoid a
             // duplicate owner-thread and validity check while this particular borrow is active.
-        }
-
-        InvocationResult result() {
-            checkBorrow();
-            // Unlike public forwards, constructing a result view has no validating target method.
-            InvocationFrame.this.check();
-            return new BorrowedResult();
         }
 
         @Override public HookId id() { checkBorrow(); return InvocationFrame.this.id(); }
@@ -372,15 +376,21 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         @Override public boolean hasEarlyOutcome() { checkBorrow(); return InvocationFrame.this.hasEarlyOutcome(); }
         @Override public CallOutcome proceed() { checkBorrow(); return InvocationFrame.this.proceed(); }
         @Override public CallOutcome.State proceedState() { checkBorrow(); return InvocationFrame.this.proceedState(); }
+    }
 
-        private final class BorrowedResult implements InvocationResult {
-            @Override public boolean hasReturned() { checkBorrow(); return resultSlot.hasReturned(); }
-            @Override public boolean hasThrown() { checkBorrow(); return resultSlot.hasThrown(); }
-            @Override public Object getResult() { checkBorrow(); return resultSlot.getResult(); }
-            @Override public Throwable getThrowable() { checkBorrow(); return resultSlot.getThrowable(); }
-            @Override public void setResult(Object value) { checkBorrow(); resultSlot.setResult(value); }
-            @Override public void setThrowable(Throwable throwable) { checkBorrow(); resultSlot.setThrowable(throwable); }
-        }
+    /**
+     * After-callback lease passed as both the invocation and the result argument. Merging the two
+     * views removes one object per after callback without widening any shape: an after callback
+     * already holds the result view, and before, around and frame views never implement
+     * {@link InvocationResult}. Both views expire together when the callback returns.
+     */
+    final class AfterBorrow extends BorrowedInvocation implements InvocationResult {
+        @Override public boolean hasReturned() { checkBorrow(); return resultSlot.hasReturned(); }
+        @Override public boolean hasThrown() { checkBorrow(); return resultSlot.hasThrown(); }
+        @Override public Object getResult() { checkBorrow(); return resultSlot.getResult(); }
+        @Override public Throwable getThrowable() { checkBorrow(); return resultSlot.getThrowable(); }
+        @Override public void setResult(Object value) { checkBorrow(); resultSlot.setResult(value); }
+        @Override public void setThrowable(Throwable throwable) { checkBorrow(); resultSlot.setThrowable(throwable); }
     }
 
     /** After-stage result slot. Initial state is the downstream or early outcome. */

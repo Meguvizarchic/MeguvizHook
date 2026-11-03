@@ -381,10 +381,16 @@ final class io.github.jichuo1.meguviz.hook.core.InvocationFrame implements io.gi
   public io.github.jichuo1.meguviz.hook.api.CallOutcome$State proceedState();
 }
 Compiled from "InvocationFrame.java"
-class io.github.jichuo1.meguviz.hook.core.InvocationFrame$1 {
+final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$AfterBorrow extends io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
+  public boolean hasReturned();
+  public boolean hasThrown();
+  public java.lang.Object getResult();
+  public java.lang.Throwable getThrowable();
+  public void setResult(java.lang.Object);
+  public void setThrowable(java.lang.Throwable);
 }
 Compiled from "InvocationFrame.java"
-final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation implements io.github.jichuo1.meguviz.hook.api.AroundInvocation,io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation,io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation {
+class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation implements io.github.jichuo1.meguviz.hook.api.AroundInvocation,io.github.jichuo1.meguviz.hook.api.EntrySnapshotInvocation,io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation {
   public io.github.jichuo1.meguviz.hook.api.HookId id();
   public long generation();
   public java.lang.reflect.Executable target();
@@ -403,15 +409,6 @@ final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocati
   public boolean hasEarlyOutcome();
   public io.github.jichuo1.meguviz.hook.api.CallOutcome proceed();
   public io.github.jichuo1.meguviz.hook.api.CallOutcome$State proceedState();
-}
-Compiled from "InvocationFrame.java"
-final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$BorrowedInvocation$BorrowedResult implements io.github.jichuo1.meguviz.hook.api.InvocationResult {
-  public boolean hasReturned();
-  public boolean hasThrown();
-  public java.lang.Object getResult();
-  public java.lang.Throwable getThrowable();
-  public void setResult(java.lang.Object);
-  public void setThrowable(java.lang.Throwable);
 }
 Compiled from "InvocationFrame.java"
 final class io.github.jichuo1.meguviz.hook.core.InvocationFrame$ResultSlot implements io.github.jichuo1.meguviz.hook.api.InvocationResult {

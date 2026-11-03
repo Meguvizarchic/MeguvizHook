@@ -221,9 +221,9 @@ final class Dispatcher {
         Throwable firstAfterFailure = null;
         for (int i = afters.length - 1; i >= 0; i--) {
             try {
-                InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
+                InvocationFrame.AfterBorrow borrowed = frame.borrowAfter();
                 try {
-                    afters[i].after(borrowed, borrowed.result());
+                    afters[i].after(borrowed, borrowed);
                 } finally {
                     borrowed.invalidate();
                 }

@@ -152,6 +152,7 @@ backend 的 `BackendInstallException` 必须保证该次调用未安装入口，
   `HookContractException`。重入获得独立 frame。
 - 单 after 且无 before 时在绑定期选用专用 channel 并复用该调用的 frame；独立结果槽与 invocation 均在回调退出时失效。
   这不改变原方法、异常与诊断顺序，也不改变多回调各自的借用寿命。
+- 有多个回调时，after 回调收到的 `invocation` 与 `result` 可能是同一借用对象；不要依赖二者的对象身份。
 - `AroundInvocation.proceed()` 每次 invocation 至多一次；第二次、跨线程、回调后调用均为合同异常。
 - `entrySnapshot()` 是浅槽快照：数组复制、对象共享。
 - 在 `around` 中需要保存某个时刻的参数槽时，可显式调用
