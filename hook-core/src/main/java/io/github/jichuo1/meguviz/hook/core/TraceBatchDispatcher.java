@@ -166,5 +166,14 @@ public final class TraceBatchDispatcher {
         @Override protected int tryAcquireShared(int ignored) { return getState() == 0 ? 1 : -1; }
         @Override protected boolean tryReleaseShared(int ignored) { return getState() == 0; }
         @Override public void run() { attempt.run(); }
+
+        /**
+         * The synchronizer superclass is Serializable, the former method reference was not: an
+         * executor that serializes tasks must keep failing in execute instead of running a copy
+         * that is detached from its attempt.
+         */
+        private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+            throw new java.io.NotSerializableException(Completion.class.getName());
+        }
     }
 }

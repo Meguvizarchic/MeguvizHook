@@ -357,6 +357,30 @@ public final class TraceBatchDispatcherDifferentialTest {
         }
     }
 
+    @Test public void taskSerializingExecutorFailsInExecuteAsBefore() throws Exception {
+        for (Impl impl : new Impl[] {LEGACY, CURRENT}) {
+            CallbackExceptionTracker tracker = new CallbackExceptionTracker("dispatch-serial", 2);
+            new Hook(tracker).fail(1);
+            Executor serializing = task -> {
+                try (java.io.ObjectOutputStream out = new java.io.ObjectOutputStream(
+                        new java.io.ByteArrayOutputStream())) {
+                    out.writeObject(task);
+                } catch (java.io.IOException problem) {
+                    throw new java.util.concurrent.RejectedExecutionException(problem);
+                }
+            };
+            Object handle = impl.submit(serializing, tracker, events -> events.size(), 1);
+            Throwable submission = impl.submissionFailure(handle);
+            assertTrue(String.valueOf(submission), submission instanceof java.util.concurrent.RejectedExecutionException);
+            assertTrue(submission.getCause() instanceof java.io.NotSerializableException);
+            assertTrue(impl.future(handle).isDone());
+            Throwable outcome = TestSupport.capture(() -> impl.future(handle).get());
+            assertTrue(outcome instanceof java.util.concurrent.ExecutionException);
+            assertSame(submission, outcome.getCause());
+            assertEquals(1, tracker.pendingCount());
+        }
+    }
+
     @Test public void queuedTaskCannotReleaseWaitersEarly() throws Exception {
         CallbackExceptionTracker tracker = new CallbackExceptionTracker("dispatch-release", 2);
         new Hook(tracker).fail(1);
