@@ -7,7 +7,8 @@ import java.util.List;
 /**
  * One live invocation as seen by a backend. Argument materialization may be expensive, so the core
  * only calls {@link #arguments()} for shapes that actually need it, at most once per invocation:
- * at entry for {@code ENTRY_SNAPSHOT}, otherwise when a callback first reads or writes a slot. The
+ * at entry for {@code READ_ARGS} and {@code ENTRY_SNAPSHOT}; for {@code MUTABLE_ARGS} and
+ * {@code AROUND} only when a callback first reads or writes a slot. The
  * call may therefore happen inside a callback or after downstream returned, and must reflect the
  * incoming slots at that time.
  *

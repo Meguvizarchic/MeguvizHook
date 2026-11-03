@@ -27,9 +27,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.*;
 
 /**
- * READ_ARGS, MUTABLE_ARGS and AROUND obtain the backend array on the first slot access, at most once
- * per frame. Downstream receives that array if it was obtained before downstream, otherwise null
- * ("keep incoming"), and every stage still reads the slots downstream used (ADR-0001 §2).
+ * MUTABLE_ARGS and AROUND obtain the backend array on the first slot access, at most once per frame.
+ * Downstream receives that array if it was obtained before downstream, otherwise null ("keep
+ * incoming"), and every stage still reads the slots downstream used (ADR-0001 §2). READ_ARGS and
+ * ENTRY_SNAPSHOT keep materializing at entry.
  */
 public final class LazyArgumentMaterializationTest {
     private static final Executable ADD = TestSupport.method("add", int.class, int.class);
@@ -97,20 +98,25 @@ public final class LazyArgumentMaterializationTest {
         }
     }
 
-    @Test public void untouchedSlotsAreNeverMaterializedAndDownstreamKeepsIncomingArguments() throws Throwable {
-        for (ParameterAccess access : new ParameterAccess[]{ParameterAccess.READ_ARGS, ParameterAccess.MUTABLE_ARGS}) {
-            RecordingInvocation invocation = new RecordingInvocation(3, 4);
-            Object value = dispatch(TestSupport.spec("lazy.untouched." + access, ADD).access(access)
-                    .before(i -> {
-                        ReadArgsInvocation args = (ReadArgsInvocation) i;
-                        // Count and types come from the plan, not from the backend array.
-                        assertEquals(2, args.argumentCount());
-                        assertEquals(int.class, args.argumentType(1));
-                    })
-                    .after((i, result) -> assertEquals(7, result.getResult())).build(), invocation);
-            assertEquals(7, value);
-            assertEquals(access.toString(), java.util.Collections.singletonList("proceed()"), invocation.events);
-        }
+    @Test public void untouchedMutableSlotsAreNeverMaterializedAndDownstreamKeepsIncomingArguments() throws Throwable {
+        RecordingInvocation invocation = new RecordingInvocation(3, 4);
+        Object value = dispatch(TestSupport.spec("lazy.untouched", ADD).access(ParameterAccess.MUTABLE_ARGS)
+                .before(i -> {
+                    ReadArgsInvocation args = (ReadArgsInvocation) i;
+                    // Count and types come from the plan, not from the backend array.
+                    assertEquals(2, args.argumentCount());
+                    assertEquals(int.class, args.argumentType(1));
+                })
+                .after((i, result) -> assertEquals(7, result.getResult())).build(), invocation);
+        assertEquals(7, value);
+        assertEquals(java.util.Collections.singletonList("proceed()"), invocation.events);
+    }
+
+    @Test public void readArgsStaysEagerAndPassesItsArray() throws Throwable {
+        RecordingInvocation invocation = new RecordingInvocation(3, 4);
+        assertEquals(7, dispatch(TestSupport.spec("lazy.read.eager", ADD).access(ParameterAccess.READ_ARGS)
+                .before(i -> assertEquals(2, ((ReadArgsInvocation) i).argumentCount())).build(), invocation));
+        assertEquals(java.util.Arrays.asList("arguments", "proceed(materialized)"), invocation.events);
     }
 
     @Test public void aroundThatOnlyProceedsNeverMaterializes() throws Throwable {
@@ -170,7 +176,7 @@ public final class LazyArgumentMaterializationTest {
         IllegalStateException broken = new IllegalStateException("backend arguments failed");
         invocation.argumentsFailure = broken;
         AtomicReference<Throwable> seen = new AtomicReference<Throwable>();
-        assertEquals(7, dispatch(TestSupport.spec("lazy.failure.caught", ADD).access(ParameterAccess.READ_ARGS)
+        assertEquals(7, dispatch(TestSupport.spec("lazy.failure.caught", ADD).access(ParameterAccess.MUTABLE_ARGS)
                 .before(i -> seen.set(TestSupport.capture(() -> ((ReadArgsInvocation) i).getArgument(0))))
                 .build(), invocation));
         assertSame(broken, seen.get());
@@ -178,7 +184,7 @@ public final class LazyArgumentMaterializationTest {
         RecordingInvocation uncaught = new RecordingInvocation(3, 4);
         uncaught.argumentsFailure = broken;
         assertSame(broken, TestSupport.capture(() -> dispatch(TestSupport.spec("lazy.failure", ADD)
-                .access(ParameterAccess.READ_ARGS)
+                .access(ParameterAccess.MUTABLE_ARGS)
                 .before(i -> ((ReadArgsInvocation) i).getArgument(0)).build(), uncaught)));
         assertFalse("a failed before keeps downstream at zero", uncaught.events.contains("proceed()"));
     }

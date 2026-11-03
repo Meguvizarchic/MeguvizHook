@@ -36,7 +36,6 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     private CallOutcome.State proceedState = CallOutcome.State.NOT_CALLED;
     private CallOutcome proceedOutcome = CallOutcome.notCalled();
     private Throwable observedFatal;
-    private Throwable dispatchFailure;
 
     private boolean earlyOutcomeSet;
     private Object earlyResult;
@@ -53,14 +52,18 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         if (access == ParameterAccess.READ_ARGS_VIEW) {
             // Only the explicitly read-only shape borrows the adapter's argument view.
             this.argsView = Objects.requireNonNull(backend.readOnlyArguments(), "readOnlyArguments");
+        } else if (access == ParameterAccess.READ_ARGS) {
+            // The shape exists to read slots, so it materializes at entry: deferring would only add
+            // a branch, and keeps the frame easier to scalar-replace for JITs that can.
+            this.args = backend.arguments();
         } else if (access == ParameterAccess.ENTRY_SNAPSHOT) {
             // The snapshot is defined at entry, so this shape stays eager. Shallow slot copy: the
             // array is copied, the argument objects are shared.
             this.args = backend.arguments();
             this.entrySnapshot = args.clone();
         }
-        // READ_ARGS, MUTABLE_ARGS and AROUND obtain the backend array on first slot access (see
-        // slots()); NO_ARGS never does.
+        // MUTABLE_ARGS and AROUND obtain the backend array on first slot access (see slots());
+        // NO_ARGS never does.
     }
 
     /** The backend argument array, obtained at most once per frame on the first slot access. */
@@ -119,30 +122,18 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
 
     /**
      * The array callbacks read and wrote, so downstream and every stage observe the same slots. If
-     * no callback touched the slots before downstream runs, null keeps the incoming arguments (always
-     * for NO_ARGS and READ_ARGS_VIEW); a later slot access then obtains them from the backend.
+     * no MUTABLE_ARGS or AROUND callback touched the slots before downstream runs, null keeps the
+     * incoming arguments (always for NO_ARGS and READ_ARGS_VIEW); a later slot access then obtains
+     * them from the backend.
      */
     Object[] argsForProceed() {
         return args;
     }
 
-    /**
-     * Records the ordinary THREW outcome of this dispatch and returns null as its placeholder value.
-     * Never called with a fatal VM event; those are thrown directly.
-     */
-    Object fail(Throwable failure) {
-        dispatchFailure = failure;
-        return null;
-    }
-
-    /** THREW outcome recorded by the dispatcher, or null for a RETURNED outcome. */
-    Throwable dispatchFailure() {
-        return dispatchFailure;
-    }
-
-    /** The explicit early outcome as a dispatch value (a throwable is recorded with {@link #fail}). */
-    Object earlyOutcome() {
-        return earlyThrowable != null ? fail(earlyThrowable) : earlyResult;
+    /** The explicit early outcome: returns the early result or throws the early throwable. */
+    Object earlyOutcome() throws Throwable {
+        if (earlyThrowable != null) throw earlyThrowable;
+        return earlyResult;
     }
 
     void initializeEarlyResult(ResultSlot slot) {
@@ -420,12 +411,6 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
             return state == CallOutcome.State.THREW
                     ? DispatchResult.threw(throwable)
                     : DispatchResult.returned(state == CallOutcome.State.RETURNED ? value : null);
-        }
-
-        /** Final slot state as a dispatch value; a throwable is recorded on the frame. */
-        Object outcome() {
-            if (state == CallOutcome.State.THREW) return fail(throwable);
-            return state == CallOutcome.State.RETURNED ? value : null;
         }
 
         void restoreOriginal(Throwable original) {
