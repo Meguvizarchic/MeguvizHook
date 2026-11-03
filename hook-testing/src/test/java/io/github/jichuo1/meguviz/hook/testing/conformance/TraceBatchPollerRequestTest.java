@@ -5,6 +5,7 @@ import io.github.jichuo1.meguviz.hook.api.HookId;
 import io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker;
 import io.github.jichuo1.meguviz.hook.core.TraceBatchPoller;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Delayed;
@@ -151,6 +152,37 @@ public final class TraceBatchPollerRequestTest {
         }
     }
 
+    @Test public void backlogKeepsDrainingInFollowUpsOnlyOnceRequestsAreUsed() throws Exception {
+        ManualExecutor executor = new ManualExecutor();
+        CallbackExceptionTracker tracker = new CallbackExceptionTracker("backlog", 8);
+        Hook hook = new Hook(tracker);
+        List<Integer> batches = new ArrayList<Integer>();
+        TraceBatchPoller poller = TraceBatchPoller.start(executor, tracker, events -> {
+            batches.add(events.size());
+            return events.size();
+        }, 1, 2, 1, 0, TimeUnit.HOURS);
+        try {
+            for (int i = 0; i < 5; i++) hook.fail();
+            // Periodic-only use keeps the old behavior: one capped batch, no extra submission.
+            executor.periodic.run();
+            assertEquals(java.util.Collections.singletonList(2), batches);
+            assertEquals(0, executor.pendingSubmissions());
+            assertEquals(3, tracker.pendingCount());
+            // After an explicit request, a capped evaluation with records left asks for one more.
+            assertTrue(poller.requestPoll());
+            executor.take().run();
+            assertEquals(Arrays.asList(2, 2), batches);
+            assertEquals(1, executor.pendingSubmissions());
+            executor.take().run();
+            assertEquals(Arrays.asList(2, 2, 1), batches);
+            assertEquals("drained: no further follow-up", 0, executor.pendingSubmissions());
+            assertEquals(0, tracker.pendingCount());
+        } finally {
+            poller.close();
+            executor.shutdownNow();
+        }
+    }
+
     @Test public void inlineExecutionNeverRunsTheTransportOnTheRequestingThread() throws Exception {
         ManualExecutor executor = new ManualExecutor();
         CallbackExceptionTracker tracker = new CallbackExceptionTracker("inline", 8);
@@ -249,6 +281,63 @@ public final class TraceBatchPollerRequestTest {
         assertEquals(1, tracker.pendingCount());
     }
 
+    /**
+     * With an hour-long period the signal is the only timely trigger, so a lost wake-up would
+     * leave records behind. Exercised with one and with four executor threads (the latter makes
+     * requested evaluations meet in-flight ticks and take the follow-up path).
+     */
+    @Test public void signalledDeliveryLosesNoWakeUpUnderConcurrentProducers() throws Throwable {
+        for (int threads : new int[] {1, 4}) {
+            ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(threads);
+            AtomicReference<TraceBatchPoller> target = new AtomicReference<TraceBatchPoller>();
+            CallbackExceptionTracker tracker = new CallbackExceptionTracker("no-lost-wakeup", 8192, () -> {
+                TraceBatchPoller poller = target.get();
+                if (poller != null) poller.requestPoll();
+            });
+            AtomicInteger delivered = new AtomicInteger();
+            java.util.Random acceptance = new java.util.Random(threads);
+            int producers = 4;
+            int perProducer = 1500;
+            List<Thread> workers = new ArrayList<Thread>();
+            AtomicReference<Throwable> failure = new AtomicReference<Throwable>();
+            try {
+                target.set(TraceBatchPoller.startDraining(executor, tracker, events -> {
+                    int accepted;
+                    synchronized (acceptance) { accepted = 1 + acceptance.nextInt(events.size()); }
+                    delivered.addAndGet(accepted);
+                    return accepted;
+                }, 1, 16, 2, 1, 0, TimeUnit.HOURS));
+                for (int p = 0; p < producers; p++) {
+                    workers.add(new Thread(() -> {
+                        Hook hook = new Hook(tracker);
+                        java.util.Random pause = new java.util.Random();
+                        try {
+                            for (int i = 0; i < perProducer; i++) {
+                                hook.fail();
+                                if (pause.nextInt(64) == 0) Thread.sleep(1);
+                            }
+                        } catch (Throwable problem) {
+                            failure.compareAndSet(null, problem);
+                        }
+                    }, "signal-producer-" + p));
+                }
+                for (Thread worker : workers) worker.start();
+                for (Thread worker : workers) worker.join(30000);
+                if (failure.get() != null) throw failure.get();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                int expected = producers * perProducer - (int) tracker.droppedCount();
+                while (delivered.get() < expected && System.nanoTime() < deadline) Thread.sleep(5);
+                assertEquals("executor threads " + threads, expected, delivered.get());
+                assertEquals(0, tracker.pendingCount());
+                assertNull(target.get().lastFailure());
+                assertEquals(0, tracker.trackingFailureCount());
+            } finally {
+                if (target.get() != null) target.get().close();
+                executor.shutdownNow();
+            }
+        }
+    }
+
     @Test public void signalledPollerDeliversFromTheExecutorWithoutWaitingForThePeriod() throws Exception {
         ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1);
         AtomicReference<TraceBatchPoller> target = new AtomicReference<TraceBatchPoller>();
@@ -270,6 +359,9 @@ public final class TraceBatchPollerRequestTest {
             for (int i = 0; i < 5; i++) hook.fail();
             assertTrue("delivered via requestPoll", delivered.await(5, TimeUnit.SECONDS));
             for (Thread sender : senders) assertNotSame(Thread.currentThread(), sender);
+            // Progress is recorded after the transport returns, so it may trail the latch briefly.
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (target.get().progress().acceptedRecords() < 5 && System.nanoTime() < deadline) Thread.sleep(1);
             assertEquals(5, target.get().progress().acceptedRecords());
         } finally {
             if (target.get() != null) target.get().close();

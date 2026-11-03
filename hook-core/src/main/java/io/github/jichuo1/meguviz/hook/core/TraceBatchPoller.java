@@ -74,6 +74,8 @@ public final class TraceBatchPoller implements AutoCloseable {
     // Opt-in early trigger: at most one requested evaluation is submitted until it starts.
     private final AtomicBoolean pollRequested = new AtomicBoolean();
     private final AtomicReference<Thread> requesting = new AtomicReference<Thread>();
+    // Set by the first requestPoll; only then does a tick that hits its batch cap ask for more.
+    private volatile boolean requestsUsed;
     private boolean rerunRequested;
     private ScheduledFuture<?> future;
     private CallbackExceptionTracker.BatchAttempt lastAttempt;
@@ -199,7 +201,11 @@ public final class TraceBatchPoller implements AutoCloseable {
      * not force a send. Requests are coalesced: until the submitted evaluation starts, further
      * calls return true without submitting again. A request that arrives while an evaluation is
      * running is honoured by one follow-up evaluation, so a record queued after that evaluation
-     * read the queue is not left waiting for the next period.
+     * read the queue is not left waiting for the next period. Once this method has been used, an
+     * evaluation that stops at {@code maxBatchesPerTick} with its last batch accepted and records
+     * still pending also requests a follow-up evaluation, so a backlog keeps draining in bounded,
+     * executor-yielding steps instead of waiting for the next period. Pollers that never call this
+     * method keep exactly the periodic behavior.
      *
      * <p>Cost on the calling thread: two volatile reads and, when not coalesced, one CAS and one
      * {@code executor.execute}. It never waits for the poller's state lock and never performs
@@ -212,6 +218,7 @@ public final class TraceBatchPoller implements AutoCloseable {
      */
     public boolean requestPoll() {
         if (state != State.ACTIVE) return false;
+        if (!requestsUsed) requestsUsed = true;
         if (!pollRequested.compareAndSet(false, true)) return true;
         // A ticket read concurrently with close/suspend/resume is safe: tick rechecks it.
         long ticket = generation;
@@ -254,6 +261,7 @@ public final class TraceBatchPoller implements AutoCloseable {
             activeTracker = tracker;
             activeTransport = transport;
         }
+        boolean backlog = false;
         try {
             int count = activeTracker.pendingCount();
             long now = clock.nanoTime();
@@ -290,6 +298,7 @@ public final class TraceBatchPoller implements AutoCloseable {
                         }
                     }
                     if (!accepted || emptyAfterDelivery) break;
+                    if (batch == maxBatchesPerTick - 1) backlog = true;
                 }
             }
         } catch (Throwable failure) {
@@ -322,7 +331,7 @@ public final class TraceBatchPoller implements AutoCloseable {
                 rerun = rerunRequested;
                 rerunRequested = false;
             }
-            if (rerun) requestPoll();
+            if (rerun || (backlog && requestsUsed)) requestPoll();
         }
     }
 
