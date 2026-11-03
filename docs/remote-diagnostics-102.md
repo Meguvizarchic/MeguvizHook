@@ -105,8 +105,9 @@ SDK 不自动声明／导出服务，Binder 身份、畸形 Parcel 和真实跨�
 如果调用方需要在批量发送时避免持有 tracker 的交付锁，可显式选择
 [`tryDeliverBatch`](nonblocking-trace-delivery.md)；需要交给自己的执行器时可组合
 [`TraceBatchDispatcher`](trace-batch-dispatcher.md)，或使用调用方后台调度器进行
-[批量轮询](trace-batch-poller.md)。这些工具均保留真实回执边界，不自动创建线程、
-重试或提供持久化。压缩状态复用为单线程、显式关闭的
+[批量轮询](trace-batch-poller.md)。需要缩短捕获到投递的延迟时，可显式为 tracker 提供
+`CaptureSignal` 并调用 `poller.requestPoll()`，见[显式提前触发](trace-batch-poller.md#显式提前触发可选)；
+默认构造的 tracker 没有信号。这些工具均保留真实回执边界，不自动创建线程、重试或提供持久化。压缩状态复用为单线程、显式关闭的
 [可选会话](compression-session.md)。
 
 ## 显式批量与压缩

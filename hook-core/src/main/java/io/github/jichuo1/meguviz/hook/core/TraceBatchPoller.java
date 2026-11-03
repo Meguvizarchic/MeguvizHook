@@ -4,6 +4,8 @@ import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Explicit, caller-executor-owned polling of the existing non-waiting trace delivery API. */
 public final class TraceBatchPoller implements AutoCloseable {
@@ -62,11 +64,17 @@ public final class TraceBatchPoller implements AutoCloseable {
     private final long pollNanos;
     private final long waitNanos;
     private final Clock clock;
-    private State state = State.ACTIVE;
-    private long generation;
+    // Written under this monitor; volatile so requestPoll can check them without the monitor.
+    private volatile State state = State.ACTIVE;
+    private volatile long generation;
     private boolean inFlight;
+    // Owned by the tick holding inFlight; the monitor hand-off orders successive ticks.
     private boolean observedPending;
     private long observedAt;
+    // Opt-in early trigger: at most one requested evaluation is submitted until it starts.
+    private final AtomicBoolean pollRequested = new AtomicBoolean();
+    private final AtomicReference<Thread> requesting = new AtomicReference<Thread>();
+    private boolean rerunRequested;
     private ScheduledFuture<?> future;
     private CallbackExceptionTracker.BatchAttempt lastAttempt;
     private Throwable lastFailure;
@@ -148,6 +156,7 @@ public final class TraceBatchPoller implements AutoCloseable {
     public boolean resume() {
         synchronized (this) {
             if (state != State.SUSPENDED || inFlight) return false;
+            pollRequested.set(false);
             state = State.ACTIVE;
         }
         schedule();
@@ -163,7 +172,7 @@ public final class TraceBatchPoller implements AutoCloseable {
         ScheduledFuture<?> installed;
         try {
             installed = Objects.requireNonNull(executor.scheduleWithFixedDelay(
-                    () -> tick(ticket), 0, pollNanos, TimeUnit.NANOSECONDS), "scheduled future");
+                    () -> tick(ticket, false), 0, pollNanos, TimeUnit.NANOSECONDS), "scheduled future");
         } catch (Throwable failure) {
             synchronized (this) {
                 schedulingFailure = failure;
@@ -183,11 +192,64 @@ public final class TraceBatchPoller implements AutoCloseable {
         if (cancel) cancelFuture(installed);
     }
 
-    private void tick(long ticket) {
+    /**
+     * Opt-in early trigger: ask the caller's executor to run one extra ordinary evaluation now
+     * instead of waiting for the next fixed-delay tick. The evaluation applies exactly the count
+     * trigger, observed wait, drain bound, BUSY/EMPTY and failure rules of a periodic tick; it does
+     * not force a send. Requests are coalesced: until the submitted evaluation starts, further
+     * calls return true without submitting again. A request that arrives while an evaluation is
+     * running is honoured by one follow-up evaluation, so a record queued after that evaluation
+     * read the queue is not left waiting for the next period.
+     *
+     * <p>Cost on the calling thread: two volatile reads and, when not coalesced, one CAS and one
+     * {@code executor.execute}. It never waits for the poller's state lock and never performs
+     * transport work itself: if the executor runs the task inline, the task is skipped and the
+     * periodic tick remains responsible. Only call it from a hook thread when the executor's
+     * {@code execute} never blocks and never runs inline (for example ScheduledThreadPoolExecutor).
+     *
+     * @return false if the poller is not ACTIVE or the executor rejected the request (the failure
+     *         is kept in {@link #schedulingFailure()}); true if submitted or already pending
+     */
+    public boolean requestPoll() {
+        if (state != State.ACTIVE) return false;
+        if (!pollRequested.compareAndSet(false, true)) return true;
+        // A ticket read concurrently with close/suspend/resume is safe: tick rechecks it.
+        long ticket = generation;
+        if (state != State.ACTIVE) {
+            pollRequested.set(false);
+            return false;
+        }
+        Thread caller = Thread.currentThread();
+        requesting.set(caller);
+        try {
+            executor.execute(() -> requestedTick(ticket));
+            return true;
+        } catch (Throwable failure) {
+            pollRequested.set(false);
+            synchronized (this) { schedulingFailure = failure; }
+            if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+            return false;
+        } finally {
+            requesting.compareAndSet(caller, null);
+        }
+    }
+
+    private void requestedTick(long ticket) {
+        // Re-arm before evaluating, so a capture after this point can request another evaluation.
+        pollRequested.set(false);
+        if (requesting.get() == Thread.currentThread()) return; // executed inline by requestPoll
+        tick(ticket, true);
+    }
+
+    private void tick(long ticket, boolean requested) {
         CallbackExceptionTracker activeTracker;
         CallbackExceptionTracker.BatchTransport activeTransport;
         synchronized (this) {
-            if (state != State.ACTIVE || generation != ticket || inFlight) return;
+            if (state != State.ACTIVE || generation != ticket) return;
+            if (inFlight) {
+                if (requested) rerunRequested = true;
+                return;
+            }
             inFlight = true;
             activeTracker = tracker;
             activeTransport = transport;
@@ -196,17 +258,15 @@ public final class TraceBatchPoller implements AutoCloseable {
             int count = activeTracker.pendingCount();
             long now = clock.nanoTime();
             boolean send;
-            synchronized (this) {
-                if (count == 0) {
-                    observedPending = false;
-                    send = false;
-                } else {
-                    if (!observedPending) {
-                        observedPending = true;
-                        observedAt = now;
-                    }
-                    send = count >= triggerCount || now - observedAt >= waitNanos;
+            if (count == 0) {
+                observedPending = false;
+                send = false;
+            } else {
+                if (!observedPending) {
+                    observedPending = true;
+                    observedAt = now;
                 }
+                send = count >= triggerCount || now - observedAt >= waitNanos;
             }
             if (send) {
                 for (int batch = 0; batch < maxBatchesPerTick; batch++) {
@@ -219,14 +279,14 @@ public final class TraceBatchPoller implements AutoCloseable {
                     CallbackExceptionTracker.BatchAttempt result = activeTracker.tryDeliverBatch(activeTransport, batchLimit);
                     boolean accepted = result.status() == CallbackExceptionTracker.BatchAttemptStatus.ACCEPTED;
                     boolean emptyAfterDelivery = accepted && activeTracker.pendingCount() == 0;
+                    if (result.status() == CallbackExceptionTracker.BatchAttemptStatus.EMPTY || emptyAfterDelivery) {
+                        observedPending = false;
+                    }
                     synchronized (this) {
                         lastAttempt = result;
                         if (accepted) {
                             acceptedBatches++;
                             acceptedRecords += result.acceptedCount();
-                        }
-                        if (result.status() == CallbackExceptionTracker.BatchAttemptStatus.EMPTY || emptyAfterDelivery) {
-                            observedPending = false;
                         }
                     }
                     if (!accepted || emptyAfterDelivery) break;
@@ -256,7 +316,13 @@ public final class TraceBatchPoller implements AutoCloseable {
             }
             if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
         } finally {
-            synchronized (this) { inFlight = false; }
+            boolean rerun;
+            synchronized (this) {
+                inFlight = false;
+                rerun = rerunRequested;
+                rerunRequested = false;
+            }
+            if (rerun) requestPoll();
         }
     }
 

@@ -72,6 +72,18 @@ public final class CallbackExceptionTracker {
         int sendBatch(List<Event> events) throws Exception;
     }
 
+    /**
+     * Opt-in notification that a record was queued. It is invoked on the capturing hook thread,
+     * after the record was accepted by the bounded queue (never for dropped records), so it must be
+     * bounded and non-blocking and must not perform I/O; {@link TraceBatchPoller#requestPoll()} on a
+     * ScheduledThreadPoolExecutor is the intended target. A non-fatal throwable is counted in
+     * {@link #trackingFailureCount()} and never replaces the callback failure; fatal VM events
+     * propagate as for other tracking failures.
+     */
+    public interface CaptureSignal {
+        void recordQueued();
+    }
+
     /** Result of an explicitly non-waiting attempt to reserve the next batch. */
     public enum BatchAttemptStatus { BUSY, EMPTY, ACCEPTED }
 
@@ -97,15 +109,31 @@ public final class CallbackExceptionTracker {
     private final AtomicLong trackingFailures = new AtomicLong();
     private final AtomicLong discarded = new AtomicLong();
     private final ReentrantLock deliveryLock = new ReentrantLock();
+    private final CaptureSignal signal;
     private boolean delivering;
 
     public CallbackExceptionTracker(String source, int capacity) {
+        this(null, source, capacity);
+    }
+
+    /**
+     * Same tracker with an explicit capture signal (see {@link CaptureSignal}). Without this
+     * constructor no signal exists and the capture path only offers to the queue, as before.
+     *
+     * @throws NullPointerException if {@code signal} is null
+     */
+    public CallbackExceptionTracker(String source, int capacity, CaptureSignal signal) {
+        this(Objects.requireNonNull(signal, "signal"), source, capacity);
+    }
+
+    private CallbackExceptionTracker(CaptureSignal signal, String source, int capacity) {
         this.source = Objects.requireNonNull(source, "source");
         if (source.isEmpty() || source.length() > 128) {
             throw new IllegalArgumentException("source length must be 1..128");
         }
         if (capacity < 1) throw new IllegalArgumentException("capacity must be positive");
         this.pending = new ArrayBlockingQueue<Event>(capacity);
+        this.signal = signal;
     }
 
     /** Explicitly wraps only the supplied before callback; ordinary success adds no trace record. */
@@ -171,6 +199,7 @@ public final class CallbackExceptionTracker {
             Event event = new Event(source, invocation.id(), invocation.generation(), stage, failure);
             // offer never waits for free capacity, although the bounded queue uses a short lock.
             if (!pending.offer(event)) dropped.incrementAndGet();
+            else if (signal != null) signal.recordQueued();
         } catch (Throwable trackingFailure) {
             if (TypeChecks.isFatal(trackingFailure)) throw TypeChecks.fatal(trackingFailure);
             trackingFailures.incrementAndGet();
