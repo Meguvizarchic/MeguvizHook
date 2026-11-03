@@ -17,6 +17,8 @@ public final class BatchTraceTransport {
     static final int MAX_FRAME_BYTES = 65536;
     static final int MIN_FRAME_BYTES = HEADER_BYTES + 5;
     private static final int MAX_RECORDS = 1024;
+    // First frame-buffer allocation; it doubles (bounded by the frame limit) as records are added.
+    private static final int INITIAL_FRAME_BYTES = 512;
 
     private BatchTraceTransport() { }
 
@@ -38,33 +40,28 @@ public final class BatchTraceTransport {
         if (maxFrames < 0 || maxFrames > 32) throw new IllegalArgumentException("maxFrames must be 0..32");
         return events -> {
             Objects.requireNonNull(events, "events");
-            List<byte[]> records = new ArrayList<byte[]>();
-            int size = HEADER_BYTES;
+            // Records are encoded straight into one per-call frame buffer (no per-record arrays).
+            // Iteration, getter calls, fit decisions and the resulting bytes are unchanged.
+            JsonLineTraceTransport.Utf8 frame = JsonLineTraceTransport.Utf8.bounded(INITIAL_FRAME_BYTES, maxFrameBytes);
+            frame.skip(HEADER_BYTES);
             int count = 0;
             for (CallbackExceptionTracker.Event event : events) {
-                if (count == maxRecords || maxFrameBytes - size < 5) break;
-                byte[] record = JsonLineTraceTransport.encode(event, includeMessage, maxFrames);
-                if (record.length == 0 || record.length > maxFrameBytes - HEADER_BYTES - 4) {
+                if (count == maxRecords || maxFrameBytes - frame.size() < 5) break;
+                frame.beginRecord();
+                JsonLineTraceTransport.write(frame, event, includeMessage, maxFrames);
+                // A record fits only if it ends within maxFrameBytes; for the first record this is
+                // the same as fitting an otherwise empty frame.
+                if (!frame.endRecord()) {
                     if (count == 0) throw new IllegalArgumentException("trace record does not fit batch frame");
                     break;
                 }
-                if (record.length > maxFrameBytes - size - 4) break;
-                records.add(record);
-                size += 4 + record.length;
                 count++;
             }
             if (count == 0) throw new IllegalArgumentException("empty batch");
-            byte[] frame = new byte[size];
-            putInt(frame, 0, MAGIC);
-            putInt(frame, 4, count);
-            int position = HEADER_BYTES;
-            for (byte[] record : records) {
-                putInt(frame, position, record.length);
-                position += 4;
-                System.arraycopy(record, 0, frame, position, record.length);
-                position += record.length;
-            }
-            writer.writeRecord(frame);
+            byte[] bytes = frame.finish();
+            putInt(bytes, 0, MAGIC);
+            putInt(bytes, 4, count);
+            writer.writeRecord(bytes);
             return count;
         };
     }
