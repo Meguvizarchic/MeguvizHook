@@ -18,9 +18,11 @@ import java.util.Objects;
  *
  * <p>As a {@link BatchTraceTransport.BatchWriter} (for example behind
  * {@link BatchTraceTransport#receiver}) one batch uses one opened stream instead of one per record.
+ * As a {@link JsonLineTraceTransport.SlicedRecordWriter} (for example behind a module-side
+ * {@link JsonLineTraceTransport}) a record slice is written straight from the sender's buffer.
  */
 public final class ModuleRemoteTraceWriter102
-        implements JsonLineTraceTransport.RecordWriter, BatchTraceTransport.BatchWriter {
+        implements JsonLineTraceTransport.SlicedRecordWriter, BatchTraceTransport.BatchWriter {
     /** Open a fresh stream already positioned for append; the writer will close the returned stream. */
     public interface AppendStreamOpener {
         OutputStream openForAppend(String name) throws Exception;
@@ -48,6 +50,24 @@ public final class ModuleRemoteTraceWriter102
     }
 
     /**
+     * Same as {@link #writeRecord(byte[])} for the bytes {@code buffer[offset, offset + length)},
+     * written with {@code OutputStream.write(buffer, offset, length)}. The slice is checked
+     * against the buffer and the same bound before anything is opened; the buffer is not retained.
+     */
+    @Override
+    public void writeRecord(byte[] buffer, int offset, int length) throws Exception {
+        Objects.requireNonNull(buffer, "record");
+        if (offset < 0 || length < 0 || offset > buffer.length - length) {
+            throw new IndexOutOfBoundsException("record slice outside the buffer");
+        }
+        checkLength(length);
+        try (OutputStream stream = Objects.requireNonNull(opener.openForAppend(name), "append stream")) {
+            stream.write(buffer, offset, length);
+            stream.flush();
+        }
+    }
+
+    /**
      * Append every record of one batch, in order, through a single opened stream with one flush.
      * Every record is checked against the same bound first; if any is invalid nothing is opened.
      * The records are written as given (no concatenation copy). A failure after opening can leave a
@@ -69,7 +89,11 @@ public final class ModuleRemoteTraceWriter102
 
     private void checkRecord(byte[] record) {
         Objects.requireNonNull(record, "record");
-        if (record.length == 0 || record.length > maxRecordBytes) {
+        checkLength(record.length);
+    }
+
+    private void checkLength(int length) {
+        if (length == 0 || length > maxRecordBytes) {
             throw new IllegalArgumentException("record size is outside the configured bound");
         }
     }
