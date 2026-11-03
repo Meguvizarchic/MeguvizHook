@@ -7,8 +7,10 @@ import io.github.jichuo1.meguviz.hook.api.HookId;
 import io.github.jichuo1.meguviz.hook.api.HookInvocation;
 import io.github.jichuo1.meguviz.hook.api.InvocationResult;
 
-import java.util.ArrayList;
+import java.util.AbstractCollection;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -87,6 +89,7 @@ public final class CallbackExceptionTracker {
 
     private static final BatchAttempt BUSY = new BatchAttempt(BatchAttemptStatus.BUSY, 0);
     private static final BatchAttempt EMPTY = new BatchAttempt(BatchAttemptStatus.EMPTY, 0);
+    private static final Event[] NO_EVENTS = new Event[0];
 
     private final String source;
     private final ArrayBlockingQueue<Event> pending;
@@ -269,23 +272,15 @@ public final class CallbackExceptionTracker {
             if (delivering) throw new IllegalStateException("recursive delivery is not supported");
             delivering = true;
             try {
-                List<Event> batch = new ArrayList<Event>(Math.min(limit, pending.size()));
                 // Only capture can run concurrently; all removals hold deliveryLock. Thus the
-                // iterator observes a contiguous head even if additional events are appended.
-                for (Event event : pending) {
-                    if (batch.size() == limit) break;
-                    batch.add(event);
-                }
-                if (batch.isEmpty()) return 0;
-                int accepted = transport.sendBatch(Collections.unmodifiableList(batch));
-                if (accepted < 1 || accepted > batch.size()) {
+                // snapshot is a contiguous head even if additional events are appended.
+                Event[] batch = snapshot(limit);
+                if (batch == null) return 0;
+                int accepted = transport.sendBatch(Collections.unmodifiableList(Arrays.asList(batch)));
+                if (accepted < 1 || accepted > batch.length) {
                     throw new IllegalStateException("invalid accepted batch prefix");
                 }
-                for (int i = 0; i < accepted; i++) {
-                    if (pending.poll() != batch.get(i)) {
-                        throw new IllegalStateException("trace queue ownership lost");
-                    }
-                }
+                removePrefix(batch, accepted);
                 return accepted;
             } finally {
                 delivering = false;
@@ -318,26 +313,20 @@ public final class CallbackExceptionTracker {
         boolean reserved = false;
         try {
             if (delivering) return BUSY;
-            List<Event> batch = new ArrayList<Event>(Math.min(limit, pending.size()));
-            for (Event event : pending) {
-                if (batch.size() == limit) break;
-                batch.add(event);
-            }
-            if (batch.isEmpty()) return EMPTY;
+            Event[] batch = snapshot(limit);
+            if (batch == null) return EMPTY;
             // Establish the finally guard before publishing ownership; no external code runs here.
             reserved = true;
             delivering = true;
             deliveryLock.unlock();
-            int accepted = transport.sendBatch(Collections.unmodifiableList(batch));
+            int accepted = transport.sendBatch(Collections.unmodifiableList(Arrays.asList(batch)));
             // Reacquisition is not interruptible, like the previous monitor contract. A thread's
             // interrupt status is not consumed by the delivery lock.
             deliveryLock.lock();
-            if (accepted < 1 || accepted > batch.size()) {
+            if (accepted < 1 || accepted > batch.length) {
                 throw new IllegalStateException("invalid accepted batch prefix");
             }
-            for (int i = 0; i < accepted; i++) {
-                if (pending.poll() != batch.get(i)) throw new IllegalStateException("trace queue ownership lost");
-            }
+            removePrefix(batch, accepted);
             return new BatchAttempt(BatchAttemptStatus.ACCEPTED, accepted);
         } finally {
             if (reserved) {
@@ -346,5 +335,47 @@ public final class CallbackExceptionTracker {
             }
             deliveryLock.unlock();
         }
+    }
+
+    /**
+     * Ordered head snapshot taken with a single queue-lock acquisition (instead of one per
+     * iterator step), or null when empty. Must be called with deliveryLock held so that no other
+     * consumer can remove the head. The lock hold time is one copy of the pending references
+     * (bounded by capacity); the returned prefix holds at most {@code limit} references.
+     */
+    private Event[] snapshot(int limit) {
+        Event[] pendingNow = pending.toArray(NO_EVENTS);
+        if (pendingNow.length == 0) return null;
+        return pendingNow.length > limit ? Arrays.copyOf(pendingNow, limit) : pendingNow;
+    }
+
+    /**
+     * Removes the accepted prefix with one bulk drain (one queue-lock acquisition) and verifies
+     * that every removed element is the exact snapshot element, failing as before if not.
+     */
+    private void removePrefix(Event[] batch, int accepted) {
+        if (pending.drainTo(new PrefixCheck(batch), accepted) != accepted) {
+            throw new IllegalStateException("trace queue ownership lost");
+        }
+    }
+
+    /**
+     * Drain target that only checks identity; it runs under the queue lock, so it does no other
+     * work. A mismatch throws before that element is removed and leaves the queue to the caller.
+     */
+    private static final class PrefixCheck extends AbstractCollection<Event> {
+        private final Event[] expected;
+        private int next;
+
+        PrefixCheck(Event[] expected) { this.expected = expected; }
+
+        @Override public boolean add(Event event) {
+            if (event != expected[next]) throw new IllegalStateException("trace queue ownership lost");
+            next++;
+            return true;
+        }
+
+        @Override public Iterator<Event> iterator() { throw new UnsupportedOperationException(); }
+        @Override public int size() { return next; }
     }
 }
