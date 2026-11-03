@@ -30,7 +30,9 @@ import java.util.concurrent.locks.LockSupport;
  * transport has accepted all of them. An untimed per-invocation setup parks for a random fraction
  * of the poll interval so arrivals are not phase-locked to poll ticks.
  *
- * <p>config = pollMillis/waitMillis/triggerCount. wake=signal wires the tracker's opt-in
+ * <p>config = pollMillis/waitMillis/triggerCount; 10/15/16 is a wait that is not a multiple of the
+ * poll interval, so a single record below the trigger is quantized to the next tick (about 20 ms).
+ * wake=signal wires the tracker's opt-in
  * CaptureSignal to TraceBatchPoller.requestPoll (one coalesced executor submission on the
  * capturing thread); wake=none is the default periodic polling. Host JVM only: no Binder, ART,
  * device scheduler or power management is represented, and the spin-wait adds no wake-up latency.
@@ -40,7 +42,7 @@ import java.util.concurrent.locks.LockSupport;
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @Fork(1)
 public class PollerLatencyBenchmark {
-    @Param({"2/0/1", "10/0/1", "5/20/16"})
+    @Param({"2/0/1", "10/0/1", "5/20/16", "10/15/16"})
     public String config;
 
     @Param({"1", "16"})
