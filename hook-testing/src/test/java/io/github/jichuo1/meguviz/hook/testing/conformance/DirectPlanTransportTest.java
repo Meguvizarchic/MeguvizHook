@@ -12,7 +12,9 @@ import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation;
 import io.github.jichuo1.meguviz.hook.core.BoundPlan;
 import io.github.jichuo1.meguviz.hook.core.BoundedDiagnosticsSink;
+import io.github.jichuo1.meguviz.hook.core.ChainDispatchChannel;
 import io.github.jichuo1.meguviz.hook.core.CoreAfterBridge;
+import io.github.jichuo1.meguviz.hook.core.CoreChainBridge;
 import io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel;
 import io.github.jichuo1.meguviz.hook.core.DispatchChannel;
 import io.github.jichuo1.meguviz.hook.core.DispatchResult;
@@ -22,6 +24,7 @@ import io.github.jichuo1.meguviz.hook.core.spi.BackendCloseReport;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendContext;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
+import io.github.jichuo1.meguviz.hook.core.spi.ChainAccessor;
 import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 import io.github.jichuo1.meguviz.hook.testing.FakeBackend;
 import org.junit.Test;
@@ -42,36 +45,79 @@ import static org.junit.Assert.*;
 
 /**
  * The generic plan channel (before callbacks, several callbacks, around) is reachable through the
- * optional {@link CoreAfterBridge} value transport. Every scenario runs twice through the same chain
- * fake, once with that binding (as the libxposed backends use it) and once with ordinary
- * {@link DispatchChannel#dispatch}, and must observe identical outcomes.
+ * optional {@link CoreChainBridge} flyweight transport and the {@link CoreAfterBridge} value
+ * transport. Every scenario runs three times through the same chain fake: with the flyweight
+ * binding (as the libxposed backends now use it, no per-call adapter), with the direct-after
+ * binding (their fallback on an older core), and with ordinary {@link DispatchChannel#dispatch};
+ * all three must observe identical outcomes.
  */
 public final class DirectPlanTransportTest {
+    enum Transport { CHAIN, DIRECT, ORDINARY }
+
     private static final Executable ADD = TestSupport.method("add", int.class, int.class);
     private static final Executable OBJECT = TestSupport.method("nullableResult", boolean.class);
 
-    /** Chain fake mirroring the backend hooker: direct binding when available, else dispatch + kind switch. */
+    /** Chain fake mirroring the backend hooker: chain or direct binding when selected, else dispatch + kind switch. */
     private static final class ChainBackend implements HookBackend {
-        final boolean direct;
+        final Transport transport;
         final Object marker = new Object();
         final FakeBackend capabilities = FakeBackend.create();
         final List<Hook> hooks = new CopyOnWriteArrayList<Hook>();
         final AtomicInteger originalCalls = new AtomicInteger();
+        final AtomicInteger chainDispatches = new AtomicInteger();
         final AtomicInteger directDispatches = new AtomicInteger();
         final AtomicInteger ordinaryDispatches = new AtomicInteger();
+        final AtomicInteger materializations = new AtomicInteger();
+        final Accessor accessor = new Accessor();
         volatile FakeBackend.OriginalBehavior original = (self, args) -> null;
 
-        ChainBackend(boolean direct) {
-            this.direct = direct;
+        ChainBackend(Transport transport) {
+            this.transport = transport;
         }
 
         private final class Hook {
             final DispatchChannel channel;
+            final Function<Object, Object> chainBinding;
             final Function<BackendInvocation, Object> binding;
 
             Hook(DispatchChannel channel) {
                 this.channel = channel;
-                this.binding = direct && channel.requiresInvocation() ? CoreAfterBridge.bind(channel, marker) : null;
+                boolean invocation = channel.requiresInvocation();
+                this.chainBinding = transport == Transport.CHAIN && invocation
+                        ? CoreChainBridge.bind(channel, marker, accessor) : null;
+                this.binding = transport == Transport.DIRECT && invocation ? CoreAfterBridge.bind(channel, marker) : null;
+            }
+        }
+
+        /** The framework's per-call chain node: snapshot position and the slots it passes on. */
+        final class Node {
+            final List<Hook> snapshot;
+            final int index;
+            final Object[] args;
+
+            Node(List<Hook> snapshot, int index, Object[] args) {
+                this.snapshot = snapshot;
+                this.index = index;
+                this.args = args;
+            }
+        }
+
+        /** One stateless accessor for every call, as a backend binds it once per hooker. */
+        final class Accessor implements ChainAccessor<Node> {
+            @Override public Object thisObject(Node node) { return null; }
+
+            @Override public Object argument(Node node, int index) {
+                if (index < 0 || index >= node.args.length) throw new IndexOutOfBoundsException("slot " + index);
+                return node.args[index];
+            }
+
+            @Override public Object[] arguments(Node node) {
+                materializations.incrementAndGet();
+                return node.args.clone();
+            }
+
+            @Override public Object proceed(Node node, Object[] supplied) throws Throwable {
+                return next(node.snapshot, node.index + 1, supplied == null ? node.args : supplied);
             }
         }
 
@@ -81,7 +127,11 @@ public final class DirectPlanTransportTest {
 
         @Override public BackendHandle install(BoundPlan plan, DispatchChannel channel) {
             Hook hook = new Hook(channel);
-            if (direct) assertNotNull("generic and single-after channels offer the direct binding", hook.binding);
+            if (transport == Transport.CHAIN) {
+                assertTrue(channel instanceof ChainDispatchChannel);
+                assertNotNull("generic and single-after channels offer the chain binding", hook.chainBinding);
+            }
+            if (transport == Transport.DIRECT) assertNotNull("generic and single-after channels offer the direct binding", hook.binding);
             hooks.add(hook);
             return () -> {
                 hooks.remove(hook);
@@ -100,10 +150,19 @@ public final class DirectPlanTransportTest {
                 return original.invoke(null, args);
             }
             Hook hook = snapshot.get(index);
+            if (hook.chainBinding != null) {
+                chainDispatches.incrementAndGet();
+                Object value = hook.chainBinding.apply(new Node(snapshot, index, args));
+                if (value == marker) return next(snapshot, index + 1, args);
+                return value instanceof DispatchResult ? ((DispatchResult) value).value() : value;
+            }
             BackendInvocation invocation = new BackendInvocation() {
                 @Override public Executable target() { return ADD; }
                 @Override public Object thisObject() { return null; }
-                @Override public Object[] arguments() { return args.clone(); }
+                @Override public Object[] arguments() {
+                    materializations.incrementAndGet();
+                    return args.clone();
+                }
                 @Override public Object proceed(Object[] supplied) throws Throwable {
                     return next(snapshot, index + 1, supplied == null ? args : supplied);
                 }
@@ -125,21 +184,25 @@ public final class DirectPlanTransportTest {
         }
 
         void assertTransport() {
-            if (direct) assertEquals("ordinary path must not be used", 0, ordinaryDispatches.get());
-            else assertEquals("direct path must not be used", 0, directDispatches.get());
+            int used = (chainDispatches.get() > 0 ? 1 : 0) + (directDispatches.get() > 0 ? 1 : 0)
+                    + (ordinaryDispatches.get() > 0 ? 1 : 0);
+            assertTrue("exactly one transport is used", used <= 1);
+            if (transport == Transport.CHAIN) assertEquals("chain transport only", 0, directDispatches.get() + ordinaryDispatches.get());
+            if (transport == Transport.DIRECT) assertEquals("direct transport only", 0, chainDispatches.get() + ordinaryDispatches.get());
+            if (transport == Transport.ORDINARY) assertEquals("ordinary transport only", 0, chainDispatches.get() + directDispatches.get());
         }
     }
 
     private interface Scenario {
-        void run(boolean direct) throws Throwable;
+        void run(Transport transport) throws Throwable;
     }
 
-    private static void onBothTransports(Scenario scenario) throws Throwable {
-        for (boolean direct : new boolean[]{true, false}) {
+    private static void onEveryTransport(Scenario scenario) throws Throwable {
+        for (Transport transport : Transport.values()) {
             try {
-                scenario.run(direct);
+                scenario.run(transport);
             } catch (AssertionError failure) {
-                throw new AssertionError((direct ? "direct" : "ordinary") + " transport: " + failure.getMessage(), failure);
+                throw new AssertionError(transport + " transport: " + failure.getMessage(), failure);
             }
         }
     }
@@ -180,9 +243,9 @@ public final class DirectPlanTransportTest {
             HookSpec spec = shapes.get(index).build();
             Object expected = expectedValues[index];
             List<String> expectedOrder = expectedEvents.get(index);
-            onBothTransports(direct -> {
+            onEveryTransport(transport -> {
                 events.clear();
-                ChainBackend backend = new ChainBackend(direct);
+                ChainBackend backend = new ChainBackend(transport);
                 backend.original = (self, args) -> (Integer) args[0] + (Integer) args[1];
                 HookEnvironment env = environment(backend, new BoundedDiagnosticsSink(4));
                 try {
@@ -203,8 +266,8 @@ public final class DirectPlanTransportTest {
         RuntimeException before = new IllegalArgumentException("before");
         RuntimeException after = new UnsupportedOperationException("after");
         RuntimeException original = new IllegalStateException("original");
-        onBothTransports(direct -> {
-            ChainBackend backend = new ChainBackend(direct);
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
             BoundedDiagnosticsSink diagnostics = new BoundedDiagnosticsSink(4);
             HookEnvironment env = environment(backend, diagnostics);
             AtomicInteger afterRuns = new AtomicInteger();
@@ -250,8 +313,8 @@ public final class DirectPlanTransportTest {
     @Test public void aroundOutcomesMatchOrdinaryDispatch() throws Throwable {
         RuntimeException original = new IllegalStateException("original");
         RuntimeException callback = new IllegalArgumentException("around");
-        onBothTransports(direct -> {
-            ChainBackend backend = new ChainBackend(direct);
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
             HookEnvironment env = environment(backend, new BoundedDiagnosticsSink(4));
             backend.original = (self, args) -> {
                 if ((Integer) args[0] == 1) throw original;
@@ -289,8 +352,8 @@ public final class DirectPlanTransportTest {
         ThreadDeath caught = new ThreadDeath();
         OutOfMemoryError downstream = new OutOfMemoryError("downstream");
         StackOverflowError afterFatal = new StackOverflowError("after");
-        onBothTransports(direct -> {
-            ChainBackend backend = new ChainBackend(direct);
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
             HookEnvironment env = environment(backend, new BoundedDiagnosticsSink(4));
             AtomicInteger afterRuns = new AtomicInteger();
             backend.original = (self, args) -> {
@@ -331,8 +394,8 @@ public final class DirectPlanTransportTest {
     }
 
     @Test public void applicationValuesEqualToTransportMarkersRoundTrip() throws Throwable {
-        onBothTransports(direct -> {
-            ChainBackend backend = new ChainBackend(direct);
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
             Object escaped = DirectAfterDispatchChannel.escape(DirectAfterDispatchChannel.NOT_ENTERED);
             Object[] values = {null, new Object(), backend.marker, DirectAfterDispatchChannel.NOT_ENTERED, escaped,
                     DirectAfterDispatchChannel.escape(escaped), DispatchResult.passthrough(),
@@ -367,8 +430,8 @@ public final class DirectPlanTransportTest {
     }
 
     @Test public void closedRegistrationPassesThroughExactlyOnceWithoutCallbacks() throws Throwable {
-        onBothTransports(direct -> {
-            ChainBackend backend = new ChainBackend(direct);
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
             HookEnvironment env = environment(backend, new BoundedDiagnosticsSink(4));
             AtomicInteger callbacks = new AtomicInteger();
             backend.original = (self, args) -> 7;
@@ -394,8 +457,8 @@ public final class DirectPlanTransportTest {
     }
 
     @Test public void reentrantCallsGetIndependentFrames() throws Throwable {
-        onBothTransports(direct -> {
-            ChainBackend backend = new ChainBackend(direct);
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
             HookEnvironment env = environment(backend, new BoundedDiagnosticsSink(4));
             List<String> events = new ArrayList<String>();
             backend.original = (self, args) -> {
@@ -420,8 +483,8 @@ public final class DirectPlanTransportTest {
     }
 
     @Test public void closeDuringDownstreamKeepsTheAdmittedLease() throws Throwable {
-        onBothTransports(direct -> {
-            ChainBackend backend = new ChainBackend(direct);
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
             HookEnvironment env = environment(backend, new BoundedDiagnosticsSink(4));
             CountDownLatch entered = new CountDownLatch(1);
             CountDownLatch release = new CountDownLatch(1);
@@ -461,6 +524,100 @@ public final class DirectPlanTransportTest {
             assertEquals(70, value.get());
             assertEquals(2, backend.originalCalls.get());
             backend.assertTransport();
+        });
+    }
+
+    @Test public void borrowedFramesExpireAndStayOnTheirThreadOnEveryTransport() throws Throwable {
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
+            backend.original = (self, args) -> 7;
+            HookEnvironment env = environment(backend, new BoundedDiagnosticsSink(4));
+            List<HookSpec> specs = Arrays.asList(
+                    TestSupport.spec("expire.view", ADD).access(ParameterAccess.READ_ARGS_VIEW).before(i -> { }).build(),
+                    TestSupport.spec("expire.multi", ADD).access(ParameterAccess.READ_ARGS_VIEW)
+                            .before(i -> { }).after((i, r) -> { }).build(),
+                    TestSupport.spec("expire.around", ADD).around(i -> i.proceed()).build(),
+                    TestSupport.spec("expire.after", ADD).after((i, r) -> { }).build());
+            try {
+                for (HookSpec template : specs) {
+                    AtomicReference<io.github.jichuo1.meguviz.hook.api.HookInvocation> retained =
+                            new AtomicReference<io.github.jichuo1.meguviz.hook.api.HookInvocation>();
+                    AtomicReference<Throwable> foreign = new AtomicReference<Throwable>();
+                    AtomicReference<Throwable> outOfRange = new AtomicReference<Throwable>();
+                    HookSpec.Builder builder = TestSupport.spec(template.id() + "." + transport, ADD).access(template.access());
+                    io.github.jichuo1.meguviz.hook.api.BeforeCallback capture = i -> {
+                        retained.set(i);
+                        if (i.access() == ParameterAccess.READ_ARGS_VIEW) {
+                            outOfRange.set(TestSupport.capture(() -> ((ReadArgsInvocation) i).getArgument(2)));
+                        }
+                        Thread other = new Thread(() -> foreign.set(TestSupport.capture(i::thisObject)));
+                        other.start();
+                        other.join();
+                    };
+                    if (template.access() == ParameterAccess.AROUND) {
+                        builder.around(i -> { capture.before(i); i.proceed(); });
+                    } else if (template.beforeCallbacks().isEmpty()) {
+                        builder.after((i, r) -> capture.before(i));
+                    } else {
+                        builder.before(capture);
+                        if (!template.afterCallbacks().isEmpty()) builder.after((i, r) -> { });
+                    }
+                    HookRegistration registration = TestSupport.installOrFail(env, builder.build());
+                    assertEquals(7, backend.call(3, 4));
+                    assertTrue(foreign.get() instanceof HookContractException);
+                    if (template.access() == ParameterAccess.READ_ARGS_VIEW) {
+                        assertTrue("view reads are bounded", outOfRange.get() instanceof IndexOutOfBoundsException);
+                    }
+                    assertTrue("a retained frame is expired",
+                            TestSupport.capture(() -> retained.get().thisObject()) instanceof HookContractException);
+                    if (retained.get() instanceof ReadArgsInvocation && template.access() != ParameterAccess.NO_ARGS) {
+                        assertTrue(TestSupport.capture(() -> ((ReadArgsInvocation) retained.get()).getArgument(0))
+                                instanceof HookContractException);
+                    }
+                    registration.close();
+                }
+                backend.assertTransport();
+            } finally {
+                env.close();
+            }
+        });
+    }
+
+    @Test public void argumentsAreMaterializedOnlyWhereTheShapeRequiresOnEveryTransport() throws Throwable {
+        onEveryTransport(transport -> {
+            ChainBackend backend = new ChainBackend(transport);
+            backend.original = (self, args) -> (Integer) args[0] + (Integer) args[1];
+            HookEnvironment env = environment(backend, new BoundedDiagnosticsSink(4));
+            try {
+                // This fake's BackendInvocation keeps the default readOnlyArguments(), which copies
+                // through arguments() once; the flyweight view reads single slots instead.
+                int view = transport == Transport.CHAIN ? 0 : 1;
+                Object[][] cases = {
+                        {ParameterAccess.NO_ARGS, 0}, {ParameterAccess.READ_ARGS_VIEW, view},
+                        {ParameterAccess.READ_ARGS, 1}, {ParameterAccess.ENTRY_SNAPSHOT, 1},
+                        {ParameterAccess.MUTABLE_ARGS, 0}};
+                for (Object[] row : cases) {
+                    ParameterAccess access = (ParameterAccess) row[0];
+                    HookRegistration registration = TestSupport.installOrFail(env,
+                            TestSupport.spec("materialize." + access + "." + transport, ADD).access(access)
+                                    .before(i -> { }).after((i, r) -> { }).build());
+                    int before = backend.materializations.get();
+                    assertEquals(7, backend.call(3, 4));
+                    assertEquals(access.toString(), row[1], backend.materializations.get() - before);
+                    registration.close();
+                }
+                HookRegistration touched = TestSupport.installOrFail(env, TestSupport.spec("materialize.touch." + transport, ADD)
+                        .access(ParameterAccess.MUTABLE_ARGS)
+                        .before(i -> ((MutableArgsInvocation) i).setArgument(0, 10))
+                        .after((i, r) -> assertEquals(10, ((ReadArgsInvocation) i).getArgument(0))).build());
+                int before = backend.materializations.get();
+                assertEquals(14, backend.call(3, 4));
+                assertEquals("first slot access materializes once", 1, backend.materializations.get() - before);
+                touched.close();
+                backend.assertTransport();
+            } finally {
+                env.close();
+            }
         });
     }
 }

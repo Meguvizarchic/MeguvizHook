@@ -6,6 +6,7 @@ import io.github.jichuo1.meguviz.hook.api.CallOutcome;
 import io.github.jichuo1.meguviz.hook.api.HookContractException;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
+import io.github.jichuo1.meguviz.hook.core.spi.ChainAccessor;
 
 /**
  * Hot-path state machine for one bound plan. It only reads the frozen plan and executes business
@@ -49,7 +50,16 @@ final class Dispatcher {
      * while creating the frame propagate exactly as they do from {@code dispatch}.
      */
     static Object dispatchValue(BoundPlan plan, BackendInvocation backend, DiagnosticsSink diagnostics) throws Throwable {
-        InvocationFrame frame = new InvocationFrame(plan, backend);
+        return runValue(plan, new InvocationFrame(plan, backend), diagnostics);
+    }
+
+    /** {@link #dispatchValue} for the flyweight transport: the frame reads the chain directly. */
+    static <C> Object dispatchValue(BoundPlan plan, ChainAccessor<C> accessor, C chain, DiagnosticsSink diagnostics)
+            throws Throwable {
+        return runValue(plan, new InvocationFrame(plan, accessor, chain), diagnostics);
+    }
+
+    private static Object runValue(BoundPlan plan, InvocationFrame frame, DiagnosticsSink diagnostics) throws Throwable {
         // Catch locally and rethrow after invalidation instead of try/finally: same order and
         // identity, but a compiler can keep the frame method-local (HotSpot then scalar-replaces it).
         Object value;
@@ -94,7 +104,16 @@ final class Dispatcher {
 
     static Object dispatchSingleAfterValue(BoundPlan plan, AfterCallback callback,
                                            BackendInvocation backend, DiagnosticsSink diagnostics) throws Throwable {
-        InvocationFrame frame = new InvocationFrame(plan, backend);
+        return singleAfterValue(plan, callback, new InvocationFrame(plan, backend), diagnostics);
+    }
+
+    static <C> Object dispatchSingleAfterValue(BoundPlan plan, AfterCallback callback, ChainAccessor<C> accessor,
+                                               C chain, DiagnosticsSink diagnostics) throws Throwable {
+        return singleAfterValue(plan, callback, new InvocationFrame(plan, accessor, chain), diagnostics);
+    }
+
+    private static Object singleAfterValue(BoundPlan plan, AfterCallback callback, InvocationFrame frame,
+                                           DiagnosticsSink diagnostics) throws Throwable {
         InvocationFrame.ResultSlot slot;
         try {
             slot = dispatchSingleAfter(plan, callback, frame, diagnostics);
@@ -117,7 +136,7 @@ final class Dispatcher {
         InvocationFrame.ResultSlot slot = frame.resultSlot();
         Throwable originalFailure = null;
         try {
-            slot.initReturned(frame.backend().proceed(frame.argsForProceed()));
+            slot.initReturned(frame.proceedDownstream());
         } catch (Throwable failure) {
             if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
             originalFailure = failure;
@@ -170,7 +189,7 @@ final class Dispatcher {
         }
         if (frame.hasEarlyOutcomeForDispatch()) return frame.earlyOutcome();
         // A downstream throwable, fatal or not, propagates with its identity.
-        return frame.backend().proceed(frame.argsForProceed());
+        return frame.proceedDownstream();
     }
 
     private static Object runBeforeAfter(BoundPlan plan, InvocationFrame frame, DiagnosticsSink diagnostics)
@@ -204,7 +223,7 @@ final class Dispatcher {
         AfterCallback[] afters = plan.afters();
         if (afters.length == 0) {
             if (frame.hasEarlyOutcomeForDispatch()) return frame.earlyOutcome();
-            return frame.backend().proceed(frame.argsForProceed());
+            return frame.proceedDownstream();
         }
 
         InvocationFrame.ResultSlot slot = frame.resultSlot();
@@ -213,7 +232,7 @@ final class Dispatcher {
             frame.initializeEarlyResult(slot);
         } else {
             try {
-                slot.initReturned(frame.backend().proceed(frame.argsForProceed()));
+                slot.initReturned(frame.proceedDownstream());
             } catch (Throwable failure) {
                 if (TypeChecks.isFatal(failure)) {
                     throw TypeChecks.fatal(failure);

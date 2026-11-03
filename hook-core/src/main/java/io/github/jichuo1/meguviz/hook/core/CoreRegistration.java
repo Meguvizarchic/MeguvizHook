@@ -11,6 +11,7 @@ import io.github.jichuo1.meguviz.hook.core.spi.BackendCloseReport;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
+import io.github.jichuo1.meguviz.hook.core.spi.ChainAccessor;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -422,14 +423,27 @@ final class CoreRegistration implements HookRegistration {
 
     /**
      * Generic plan channel (before callbacks, several callbacks, around). Backends that bind the
-     * optional {@link CoreAfterBridge} use {@link #dispatchDirect}; others keep {@link #dispatch}.
-     * Both run the same state machine under the same admission and in-flight lease.
+     * optional {@link CoreChainBridge} use {@link #dispatchChain}, those that bind
+     * {@link CoreAfterBridge} use {@link #dispatchDirect}; others keep {@link #dispatch}. All three
+     * run the same state machine under the same admission and in-flight lease.
      */
-    private final class PlanChannel implements DirectAfterDispatchChannel {
+    private final class PlanChannel implements ChainDispatchChannel {
         private final BoundPlan plan;
 
         private PlanChannel(BoundPlan plan) {
             this.plan = plan;
+        }
+
+        @Override
+        public <C> Object dispatchChain(ChainAccessor<C> accessor, C chain) throws Throwable {
+            if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+            int lease = inFlight.enter();
+            try {
+                if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+                return DirectAfterDispatchChannel.escape(Dispatcher.dispatchValue(plan, accessor, chain, diagnostics));
+            } finally {
+                inFlight.exit(lease);
+            }
         }
 
         @Override
@@ -462,13 +476,26 @@ final class CoreRegistration implements HookRegistration {
     }
 
     /** Single-after specialization selected at bind; all other plans keep their original dispatch. */
-    private final class SingleAfterPlanChannel implements DirectAfterDispatchChannel {
+    private final class SingleAfterPlanChannel implements ChainDispatchChannel {
         private final BoundPlan plan;
         private final AfterCallback callback;
 
         private SingleAfterPlanChannel(BoundPlan plan, AfterCallback callback) {
             this.plan = plan;
             this.callback = callback;
+        }
+
+        @Override
+        public <C> Object dispatchChain(ChainAccessor<C> accessor, C chain) throws Throwable {
+            if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+            int lease = inFlight.enter();
+            try {
+                if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+                return DirectAfterDispatchChannel.escape(
+                        Dispatcher.dispatchSingleAfterValue(plan, callback, accessor, chain, diagnostics));
+            } finally {
+                inFlight.exit(lease);
+            }
         }
 
         @Override

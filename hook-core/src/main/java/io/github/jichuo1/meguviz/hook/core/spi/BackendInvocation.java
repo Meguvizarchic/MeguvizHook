@@ -17,6 +17,10 @@ import java.util.List;
  * registration whose callbacks did not touch the slots before downstream never forces argument
  * materialization. Fatal VM errors thrown by the
  * downstream are never converted into an ordinary outcome by the core.
+ *
+ * <p>A backend may instead bind a stateless {@link ChainAccessor} once per hooker (through
+ * {@code CoreChainBridge}), which gives the core the same operations over the framework's own chain
+ * object without a per-call adapter.
  */
 public interface BackendInvocation {
     Executable target();

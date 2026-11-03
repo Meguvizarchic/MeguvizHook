@@ -70,7 +70,8 @@ public class DispatchShapeBenchmark {
         }
         System.out.println("[dispatch] shape=" + shape + " adapter=" + adapter + " profile=" + profile
                 + " channel=" + backend.lastChannel().getClass().getSimpleName()
-                + " directTransport=" + hooker.usesDirectTransport());
+                + " directTransport=" + hooker.usesDirectTransport()
+                + " chainTransport=" + hooker.usesChainTransport());
     }
 
     @TearDown(Level.Trial)
