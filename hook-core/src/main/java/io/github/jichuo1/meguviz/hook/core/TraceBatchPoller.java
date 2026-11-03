@@ -238,13 +238,16 @@ public final class TraceBatchPoller implements AutoCloseable {
             installed = Objects.requireNonNull(executor.scheduleWithFixedDelay(
                     () -> tick(ticket, PERIODIC, 0L), 0, pollNanos, TimeUnit.NANOSECONDS), "scheduled future");
         } catch (Throwable failure) {
+            ScheduledFuture<?> cancelDeadline = null;
             synchronized (this) {
                 schedulingFailure = failure;
                 if (state == State.ACTIVE && generation == ticket) {
                     state = State.SUSPENDED;
                     generation++;
+                    cancelDeadline = clearDeadline();
                 }
             }
+            cancelOnSuspend(cancelDeadline, failure);
             if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
             return;
         }
