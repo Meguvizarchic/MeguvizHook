@@ -36,6 +36,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     private CallOutcome.State proceedState = CallOutcome.State.NOT_CALLED;
     private CallOutcome proceedOutcome = CallOutcome.notCalled();
     private Throwable observedFatal;
+    private Throwable dispatchFailure;
 
     private boolean earlyOutcomeSet;
     private Object earlyResult;
@@ -125,8 +126,23 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         return args;
     }
 
-    DispatchResult earlyDispatchResult() {
-        return earlyThrowable != null ? DispatchResult.threw(earlyThrowable) : DispatchResult.returned(earlyResult);
+    /**
+     * Records the ordinary THREW outcome of this dispatch and returns null as its placeholder value.
+     * Never called with a fatal VM event; those are thrown directly.
+     */
+    Object fail(Throwable failure) {
+        dispatchFailure = failure;
+        return null;
+    }
+
+    /** THREW outcome recorded by the dispatcher, or null for a RETURNED outcome. */
+    Throwable dispatchFailure() {
+        return dispatchFailure;
+    }
+
+    /** The explicit early outcome as a dispatch value (a throwable is recorded with {@link #fail}). */
+    Object earlyOutcome() {
+        return earlyThrowable != null ? fail(earlyThrowable) : earlyResult;
     }
 
     void initializeEarlyResult(ResultSlot slot) {
@@ -394,6 +410,12 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
             return state == CallOutcome.State.THREW
                     ? DispatchResult.threw(throwable)
                     : DispatchResult.returned(state == CallOutcome.State.RETURNED ? value : null);
+        }
+
+        /** Final slot state as a dispatch value; a throwable is recorded on the frame. */
+        Object outcome() {
+            if (state == CallOutcome.State.THREW) return fail(throwable);
+            return state == CallOutcome.State.RETURNED ? value : null;
         }
 
         void restoreOriginal(Throwable original) {

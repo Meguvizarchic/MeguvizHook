@@ -211,6 +211,9 @@ callback 失败分别分类；本切片无 native 路径。
 发现、磁盘/网络配置读取、同步 shell、类路径扫描、无界日志、service 连接、线程池、JNI、IPC。
 无 before 且恰好一个 after 时，注册绑定时选用专用 channel，frame 直接作为该回调的唯一 invocation 借用，结果槽仍为独立对象；
 回调结束即共同失效，原方法异常、after 异常及诊断优先级与通用路径相同。多个回调仍各用独立借用。
+通用 plan channel（before、多回调、around）同样提供可选的直接值传输（`DirectAfterDispatchChannel`
+经 `CoreAfterBridge` 绑定）：返回值或原样抛出 THREW 异常，未准入时返回标记并由后端恰好执行一次原方法，
+与 `dispatch()` 共用同一状态机、准入与在途租约；未绑定的后端继续使用 `DispatchResult`。
 诊断默认关闭，容量有界（`BoundedDiagnosticsSink`）。未选择 native 时本切片新增 so=0（无 native 模块）。
 
 ## 7. 独立 oracle 与反例清单

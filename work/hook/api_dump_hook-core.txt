@@ -215,7 +215,8 @@ final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$ConstantPlanCha
   public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
 }
 Compiled from "CoreRegistration.java"
-final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$PlanChannel implements io.github.jichuo1.meguviz.hook.core.DispatchChannel {
+final class io.github.jichuo1.meguviz.hook.core.CoreRegistration$PlanChannel implements io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel {
+  public java.lang.Object dispatchDirect(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation) throws java.lang.Throwable;
   public io.github.jichuo1.meguviz.hook.core.DispatchResult dispatch(io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation);
 }
 Compiled from "CoreRegistration.java"
