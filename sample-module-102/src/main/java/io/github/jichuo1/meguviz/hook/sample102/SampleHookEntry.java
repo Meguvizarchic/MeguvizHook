@@ -7,7 +7,6 @@ import io.github.jichuo1.meguviz.hook.api.HookId;
 import io.github.jichuo1.meguviz.hook.api.HookOwner;
 import io.github.jichuo1.meguviz.hook.api.HookSpec;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
-import io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
 import io.github.jichuo1.meguviz.hook.backend.libxposed102.LibXposed102Backend;
@@ -201,8 +200,7 @@ public final class SampleHookEntry extends XposedModule {
         return new HookSpec.Builder(HookId.of("sample.textutils.is-empty"),
                 HookOwner.of("meguvizhook-sample-102"), TargetSpec.ofMember(target))
                 .access(ParameterAccess.READ_ARGS)
-                .before(invocation -> {
-                    ReadArgsInvocation args = (ReadArgsInvocation) invocation;
+                .beforeArgs(args -> {
                     if (args.argumentCount() != 1) {
                         throw new IllegalStateException("unexpected TextUtils.isEmpty signature");
                     }

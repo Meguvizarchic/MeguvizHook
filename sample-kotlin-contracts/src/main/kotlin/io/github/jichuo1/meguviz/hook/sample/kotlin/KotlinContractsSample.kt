@@ -1,7 +1,5 @@
 package io.github.jichuo1.meguviz.hook.sample.kotlin
 
-import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation
-import io.github.jichuo1.meguviz.hook.api.ParameterAccess
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment
 import io.github.jichuo1.meguviz.hook.dsl.install
 import io.github.jichuo1.meguviz.hook.dsl.member
@@ -27,8 +25,7 @@ fun main() {
             returning("int")
         }
         val mutable = environment.install("sample.kotlin.mutable", "kotlin-sample", descriptor) {
-            access(ParameterAccess.MUTABLE_ARGS)
-            before { invocation -> (invocation as MutableArgsInvocation).setArgument(0, 10) }
+            beforeMutableArgs { invocation -> invocation.setArgument(0, 10) }
         }
         println("install mutable: $mutable")
         check(mutable.isInstalled) { "mutable install failed: $mutable" }
