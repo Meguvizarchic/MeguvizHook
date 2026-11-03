@@ -10,10 +10,7 @@ import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Objects;
 
@@ -173,15 +170,13 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public Object thisObject() {
         check();
-        Executable target = plan.target();
-        return target instanceof Method && !Modifier.isStatic(target.getModifiers())
-                ? backend.thisObject() : null;
+        return plan.isInstanceMethod() ? backend.thisObject() : null;
     }
 
     @Override
     public Object constructorReceiver() {
         check();
-        return plan.target() instanceof Constructor<?> ? backend.thisObject() : null;
+        return plan.isConstructor() ? backend.thisObject() : null;
     }
 
     @Override
@@ -242,7 +237,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public void setEarlyResult(Object value) {
         check();
-        TypeChecks.checkResultValue(plan.target(), value);
+        TypeChecks.checkResultValue(plan, value);
         earlyOutcomeSet = true;
         earlyResult = value;
         earlyThrowable = null;
@@ -408,7 +403,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         @Override
         public void setResult(Object value) {
             check();
-            TypeChecks.checkResultValue(plan.target(), value);
+            TypeChecks.checkResultValue(plan, value);
             initReturned(value);
         }
 

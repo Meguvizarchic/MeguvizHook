@@ -7,8 +7,6 @@ import io.github.jichuo1.meguviz.hook.api.HookContractException;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
 
-import java.util.List;
-
 /**
  * Hot-path state machine for one bound plan. It only reads the frozen plan and executes business
  * callbacks plus the required type/lifetime checks: no declaration re-parsing, no manager
@@ -140,11 +138,11 @@ final class Dispatcher {
     }
 
     private static DispatchResult dispatchBeforeAfter(BoundPlan plan, InvocationFrame frame, DiagnosticsSink diagnostics) {
-        // HookSpec freezes callbacks into an unmodifiable ArrayList at construction, so indexed
-        // iteration preserves the same order and early-stop semantics without an Iterator per call.
-        List<BeforeCallback> befores = plan.beforeCallbacks();
-        for (int i = 0, count = befores.size(); i < count; i++) {
-            BeforeCallback callback = befores.get(i);
+        // The plan freezes callbacks into arrays at bind time, so indexed iteration preserves the
+        // same order and early-stop semantics without a List or Iterator per call.
+        BeforeCallback[] befores = plan.befores();
+        for (int i = 0; i < befores.length; i++) {
+            BeforeCallback callback = befores[i];
             try {
                 InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
                 try {
@@ -166,8 +164,8 @@ final class Dispatcher {
             }
         }
 
-        List<AfterCallback> afters = plan.afterCallbacks();
-        if (afters.isEmpty()) {
+        AfterCallback[] afters = plan.afters();
+        if (afters.length == 0) {
             if (frame.hasEarlyOutcome()) return frame.earlyDispatchResult();
             try {
                 return DispatchResult.returned(frame.backend().proceed(frame.argsForProceed()));
@@ -194,11 +192,11 @@ final class Dispatcher {
         }
 
         Throwable firstAfterFailure = null;
-        for (int i = afters.size() - 1; i >= 0; i--) {
+        for (int i = afters.length - 1; i >= 0; i--) {
             try {
                 InvocationFrame.BorrowedInvocation borrowed = frame.borrow();
                 try {
-                    afters.get(i).after(borrowed, borrowed.result());
+                    afters[i].after(borrowed, borrowed.result());
                 } finally {
                     borrowed.invalidate();
                 }
@@ -244,7 +242,7 @@ final class Dispatcher {
                 // An around plan has exactly one callback, so its invocation frame itself is the
                 // sole borrow. The frame stays valid during proceed(), including reentry, and is
                 // expired at callback exit before any result processing or error handling.
-                plan.spec().aroundCallback().around(frame);
+                plan.aroundCallback().around(frame);
             } finally {
                 frame.invalidate();
             }

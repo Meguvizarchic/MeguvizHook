@@ -23,6 +23,12 @@ public final class io.github.jichuo1.meguviz.hook.core.BoundPlan {
   public java.util.List<io.github.jichuo1.meguviz.hook.api.AfterCallback> afterCallbacks();
   public java.lang.String toString();
 }
+Compiled from "BoundPlan.java"
+final class io.github.jichuo1.meguviz.hook.core.BoundPlan$ResultType {
+}
+Compiled from "BoundPlan.java"
+final class io.github.jichuo1.meguviz.hook.core.BoundPlan$Signature {
+}
 Compiled from "BoundedDiagnosticsSink.java"
 public final class io.github.jichuo1.meguviz.hook.core.BoundedDiagnosticsSink implements io.github.jichuo1.meguviz.hook.core.DiagnosticsSink {
   public io.github.jichuo1.meguviz.hook.core.BoundedDiagnosticsSink(int);
