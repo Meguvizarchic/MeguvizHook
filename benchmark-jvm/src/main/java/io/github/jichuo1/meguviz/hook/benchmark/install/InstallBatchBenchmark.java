@@ -90,4 +90,20 @@ public class InstallBatchBenchmark {
         }
         return installed;
     }
+
+    /** Same specs through one installAll call: one class load and one declared-member copy per owner. */
+    @Benchmark
+    public int installAll() {
+        HookEnvironment environment = HookEnvironment.create(new CapturingBackend());
+        int installed = 0;
+        try {
+            for (RegistrationReceipt receipt : environment.installAll(specs)) {
+                if (!receipt.isInstalled()) throw new IllegalStateException(receipt.toString());
+                installed++;
+            }
+        } finally {
+            environment.close();
+        }
+        return installed;
+    }
 }
