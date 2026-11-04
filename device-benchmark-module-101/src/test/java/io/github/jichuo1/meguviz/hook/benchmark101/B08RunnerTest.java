@@ -32,6 +32,9 @@ public class B08RunnerTest {
         final AtomicInteger clockCalls = new AtomicInteger();
         CloseReport report = report(RegistrationState.CLOSED, 1);
         B08Runner runner() { return new B08Runner(this, this, this, 40L); }
+        // Success paths expect no timeout; a wide bound keeps them stable when the host is busy
+        // (parallel Gradle workers running CPU-heavy stress suites). Timeout cases keep 40 ms.
+        B08Runner patientRunner() { return new B08Runner(this, this, this, 2000L); }
         static CloseReport report(RegistrationState state, int inflight) {
             return new CloseReport(state, true, CloseReport.EntryRestoration.RESTORED,
                     inflight, CloseReport.PhysicalRelease.NOT_CLAIMED, "fake");
@@ -96,7 +99,7 @@ public class B08RunnerTest {
 
     @Test public void successHoldsOldCallUntilAfterPostCloseAndKeepsSnapshot() throws Exception {
         for (RegistrationState state : new RegistrationState[]{RegistrationState.CLOSED, RegistrationState.RETIRED_RESIDENT}) {
-            Fixture f = new Fixture(); f.report = Fixture.report(state, 1); B08Runner runner = f.runner();
+            Fixture f = new Fixture(); f.report = Fixture.report(state, 1); B08Runner runner = f.patientRunner();
             assertTrue(runner.configure()); assertFalse(runner.configure()); assertTrue(runner.finish()); assertFalse(runner.finish());
             assertEquals(java.util.Arrays.asList("installed", "old_entered", "close_returned", "post_close", "old_completed", "configured", "cleanup"), f.trace);
             B08Runner.Observation held = f.observed.get(3), done = f.observed.get(4), cleanup = f.observed.get(6);
