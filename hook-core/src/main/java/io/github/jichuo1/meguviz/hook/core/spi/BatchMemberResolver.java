@@ -17,13 +17,19 @@ import java.util.List;
  * batch must return exactly what {@link MemberResolver#resolve} would return for the same target
  * and loader at that moment (same members in the same stable order); it may only skip repeated
  * work. It must never remember a missing target: a negative result is recomputed for every target.
- * Ordinary {@code install} never opens a batch.
+ * Reuse inside a batch relies on {@link BackendContext#codeEpoch()} never returning to an earlier
+ * value. Ordinary {@code install} never opens a batch.
+ *
+ * <p>Each {@link #openBatch} call must return a new, independent batch. Several batches of one
+ * resolver can be open at the same time: a nested {@code installAll} from a resolver, backend or
+ * receipt callback, or two environments sharing this resolver on different threads. One batch is
+ * used by one thread at a time.
  */
 public interface BatchMemberResolver extends MemberResolver {
     /**
-     * Opens a batch for {@code loader}; may return null to resolve this call's targets through
-     * {@link #resolve} instead. A {@link BackendInstallException} fails only the target that caused
-     * the batch to be opened, like a resolution failure of that target.
+     * Opens a batch for {@code loader}; may return null to resolve the targets of this loader and
+     * epoch through {@link #resolve} instead. A {@link BackendInstallException} is reported to the
+     * environment's diagnostics sink and has the same effect as returning null.
      */
     Batch openBatch(ClassLoader loader) throws BackendInstallException;
 
@@ -32,7 +38,10 @@ public interface BatchMemberResolver extends MemberResolver {
         /** Same contract as {@link MemberResolver#resolve} for the batch's loader. */
         List<Executable> resolve(TargetSpec.DescriptorTarget descriptor) throws BackendInstallException;
 
-        /** Releases what the batch retained. Must not throw; it is called once. */
+        /**
+         * Releases what the batch retained; it is called once. It should not throw: a non-fatal
+         * throwable is reported to the environment's diagnostics sink and ignored.
+         */
         @Override
         void close();
     }

@@ -104,12 +104,23 @@ public final class HookEnvironment implements AutoCloseable {
      * Install several specs in order, each with exactly the checks, ordering and receipt of
      * {@link #install(HookSpec)}, under one acquisition of the environment monitor. Specs are
      * independent: one failing, conflicting or missing target never skips or rolls back another,
-     * and no cross-spec atomicity is claimed. When the environment's resolver is a
-     * {@link BatchMemberResolver}, descriptor targets that observe the same loader and code epoch
-     * share one {@link BatchMemberResolver.Batch}, which is closed before this method returns or
-     * throws; the default {@link ReflectiveMemberResolver} then loads each class and copies its
-     * declared members once per call instead of once per spec. No result outlives the call and no
-     * missing target is remembered.
+     * and no cross-spec atomicity is claimed. A {@code close()} from another thread waits until the
+     * whole call returns.
+     *
+     * <p>When the environment's resolver is a {@link BatchMemberResolver}, descriptor targets that
+     * observe the same loader and code epoch share one {@link BatchMemberResolver.Batch}. A target
+     * that observes a different loader or epoch closes it and opens a new one, and the last one is
+     * closed before this method returns or throws, so nothing is reused after the call and no
+     * missing target is remembered. The default {@link ReflectiveMemberResolver} then loads each
+     * class and copies its declared members once per call instead of once per spec; specs on one
+     * class therefore receive the same {@code Method}/{@code Constructor} instances, which their
+     * callbacks see through {@code HookInvocation.target()} (as with several
+     * {@code TargetSpec.ofMember} specs sharing one object). Batch reuse relies on the backend's
+     * code epoch never returning to an earlier value. If {@code openBatch} throws
+     * {@link BackendInstallException}, or a batch's {@code close} throws a non-fatal throwable,
+     * the event goes to the environment's {@link DiagnosticsSink} as {@code BACKEND_FAILURE} and
+     * the affected targets resolve through {@link BatchMemberResolver#resolve} as {@code install}
+     * would; fatal VM events propagate.
      *
      * <p>An unchecked exception or error from one install propagates as it would from
      * {@code install}, and the remaining specs are not attempted. Registrations installed by
@@ -136,7 +147,7 @@ public final class HookEnvironment implements AutoCloseable {
         Objects.requireNonNull(specs, "specs");
         Objects.requireNonNull(receipts, "receipts");
         InstallBatch batch = resolver instanceof BatchMemberResolver
-                ? new InstallBatch((BatchMemberResolver) resolver) : null;
+                ? new InstallBatch((BatchMemberResolver) resolver, diagnostics) : null;
         Throwable primary = null;
         try {
             for (HookSpec spec : specs) {
@@ -144,9 +155,9 @@ public final class HookEnvironment implements AutoCloseable {
             }
         } catch (Throwable failure) {
             primary = failure;
-            throw rethrowUnchecked(failure);
+            throw TypeChecks.rethrow(failure);
         } finally {
-            if (batch != null) batch.close(primary);
+            if (batch != null) batch.finish(primary);
         }
     }
 
@@ -156,53 +167,78 @@ public final class HookEnvironment implements AutoCloseable {
      */
     private static final class InstallBatch {
         private final BatchMemberResolver source;
+        private final DiagnosticsSink diagnostics;
         private BatchMemberResolver.Batch current;
+        // No batch for the bound identity: openBatch declined or failed; resolve per target.
         private boolean unavailable;
         private ClassLoader loader;
         private long epoch;
+        private HookId lastId;
 
-        InstallBatch(BatchMemberResolver source) {
+        InstallBatch(BatchMemberResolver source, DiagnosticsSink diagnostics) {
             this.source = source;
+            this.diagnostics = diagnostics;
         }
 
-        List<Executable> resolve(TargetSpec.DescriptorTarget target, ClassLoader targetLoader, long targetEpoch)
+        List<Executable> resolve(HookId id, TargetSpec.DescriptorTarget target, ClassLoader targetLoader, long targetEpoch)
                 throws BackendInstallException {
+            lastId = id;
             if ((current != null || unavailable) && (targetLoader != loader || targetEpoch != epoch)) {
-                closeCurrent();
+                closeCurrent(null);
             }
             if (current == null && !unavailable) {
                 loader = targetLoader;
                 epoch = targetEpoch;
-                current = source.openBatch(targetLoader);
+                try {
+                    current = source.openBatch(targetLoader);
+                } catch (BackendInstallException failure) {
+                    report(id, failure, "member batch could not be opened; resolving each target separately");
+                    current = null;
+                }
                 unavailable = current == null;
             }
             return current == null ? source.resolve(target, targetLoader) : current.resolve(target);
         }
 
-        private void closeCurrent() {
+        /** Closes the open batch; a non-fatal failure is reported, a fatal one propagates. */
+        private void closeCurrent(Throwable primary) {
             BatchMemberResolver.Batch closing = current;
             current = null;
             unavailable = false;
-            if (closing != null) closing.close();
-        }
-
-        void close(Throwable primary) {
+            if (closing == null) return;
             try {
-                closeCurrent();
+                closing.close();
             } catch (Throwable cleanup) {
-                if (primary == null) throw rethrowUnchecked(cleanup);
-                if (TypeChecks.isFatal(cleanup) && !TypeChecks.isFatal(primary)) {
-                    cleanup.addSuppressed(primary);
-                    throw rethrowUnchecked(cleanup);
+                if (TypeChecks.isFatal(cleanup)) {
+                    if (primary == null) throw TypeChecks.fatal(cleanup);
+                    if (!TypeChecks.isFatal(primary)) {
+                        suppressPreservingFatal(cleanup, primary);
+                        throw TypeChecks.fatal(cleanup);
+                    }
+                    suppressPreservingFatal(primary, cleanup);
+                    return;
                 }
-                if (cleanup != primary) primary.addSuppressed(cleanup);
+                if (primary != null) {
+                    suppressPreservingFatal(primary, cleanup);
+                } else {
+                    report(lastId, cleanup, "member batch close failed; the call continues");
+                }
             }
         }
-    }
 
-    @SuppressWarnings("unchecked")
-    private static <T extends Throwable> RuntimeException rethrowUnchecked(Throwable failure) throws T {
-        throw (T) failure;
+        void finish(Throwable primary) {
+            closeCurrent(primary);
+        }
+
+        private void report(HookId id, Throwable failure, String message) {
+            try {
+                diagnostics.record(new DiagnosticsSink.Event(DiagnosticsSink.Event.Kind.BACKEND_FAILURE,
+                        id, -1L, failure, message));
+            } catch (Throwable sinkFailure) {
+                if (TypeChecks.isFatal(sinkFailure)) throw TypeChecks.fatal(sinkFailure);
+                // A failing diagnostics sink never changes an installation outcome.
+            }
+        }
     }
 
     /**
@@ -609,7 +645,7 @@ public final class HookEnvironment implements AutoCloseable {
             try {
                 TargetSpec.DescriptorTarget descriptor = (TargetSpec.DescriptorTarget) spec.target();
                 candidates = batch != null
-                        ? batch.resolve(descriptor, loaderBefore, epochBefore)
+                        ? batch.resolve(id, descriptor, loaderBefore, epochBefore)
                         : resolver.resolve(descriptor, loaderBefore);
             } catch (BackendInstallException failure) {
                 if (capture != null) capture.failure = failure;

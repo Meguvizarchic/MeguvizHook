@@ -13,10 +13,18 @@ public final class io.github.jichuo1.meguviz.hook.dsl.DescriptorTargetDsl {
 }
 Compiled from "HookDsl.kt"
 public final class io.github.jichuo1.meguviz.hook.dsl.HookBatchDsl {
+  public static final java.lang.String OWNER_IN_BATCH;
   public io.github.jichuo1.meguviz.hook.dsl.HookBatchDsl(io.github.jichuo1.meguviz.hook.dsl.HookOwnerScope);
   public final void hook(java.lang.String, io.github.jichuo1.meguviz.hook.api.TargetSpec, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl, kotlin.Unit>);
   public final void hook(java.lang.String, java.lang.reflect.Executable, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl, kotlin.Unit>);
-  public final java.util.List<io.github.jichuo1.meguviz.hook.api.HookSpec> specs$io_github_jichuo1_meguviz_hook_hook_dsl();
+  public final java.lang.Void hook(java.lang.String, java.lang.String, io.github.jichuo1.meguviz.hook.api.TargetSpec, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl, kotlin.Unit>);
+  public final java.lang.Void hook(io.github.jichuo1.meguviz.hook.api.HookId, io.github.jichuo1.meguviz.hook.api.HookOwner, io.github.jichuo1.meguviz.hook.api.TargetSpec, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl, kotlin.Unit>);
+  public final java.lang.Void hook(io.github.jichuo1.meguviz.hook.api.HookId, io.github.jichuo1.meguviz.hook.api.HookOwner, java.lang.reflect.Executable, kotlin.jvm.functions.Function1<? super io.github.jichuo1.meguviz.hook.dsl.HookSpecDsl, kotlin.Unit>);
+  public final java.util.List<io.github.jichuo1.meguviz.hook.api.HookSpec> seal$io_github_jichuo1_meguviz_hook_hook_dsl();
+}
+Compiled from "HookDsl.kt"
+final class io.github.jichuo1.meguviz.hook.dsl.HookBatchDsl$Companion {
+  public io.github.jichuo1.meguviz.hook.dsl.HookBatchDsl$Companion(kotlin.jvm.internal.DefaultConstructorMarker);
 }
 Compiled from "HookDsl.kt"
 public interface io.github.jichuo1.meguviz.hook.dsl.HookDsl extends java.lang.annotation.Annotation {

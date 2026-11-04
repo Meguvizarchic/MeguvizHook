@@ -63,6 +63,25 @@ public class ReflectiveMemberBatchTest {
         assertTrue("the comparison must cover real matches", nonEmpty > targets.size());
     }
 
+    @Test public void batchReusesOneMemberTablePerClass() throws Exception {
+        ReflectiveMemberResolver resolver = new ReflectiveMemberResolver();
+        ClassLoader loader = getClass().getClassLoader();
+        TargetSpec.DescriptorTarget length = TargetSpec.descriptor(TargetKind.METHOD, "java.lang.String", "length").build();
+        TargetSpec.DescriptorTarget init = TargetSpec.descriptor(TargetKind.CONSTRUCTOR, "java.lang.String", "<init>")
+                .parameters("java.lang.String").build();
+        assertNotSame("the stateless path copies members on every call",
+                resolver.resolve(length, loader).get(0), resolver.resolve(length, loader).get(0));
+        try (BatchMemberResolver.Batch batch = resolver.openBatch(loader)) {
+            assertSame(batch.resolve(length).get(0), batch.resolve(length).get(0));
+            assertSame(batch.resolve(init).get(0), batch.resolve(init).get(0));
+        }
+        try (BatchMemberResolver.Batch first = resolver.openBatch(loader);
+             BatchMemberResolver.Batch second = resolver.openBatch(loader)) {
+            assertNotSame("batches are independent", first, second);
+            assertNotSame(first.resolve(length).get(0), second.resolve(length).get(0));
+        }
+    }
+
     @Test public void missingClassIsLookedUpAgainWithinOneBatch() throws Exception {
         AtomicInteger requests = new AtomicInteger();
         ClassLoader flaky = new ClassLoader(getClass().getClassLoader()) {

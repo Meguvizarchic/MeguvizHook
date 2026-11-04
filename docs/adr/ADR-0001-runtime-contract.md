@@ -14,7 +14,11 @@
 - `BoundPlan` 含运行时引用，不跨进程、不跨启动复用；可持久化的是 `DescriptorTarget`。
 - 接受 raw `Member`（`TargetSpec.ofMember`）是显式 owner escape：`close()` 不撤销反射对象，
   不承诺 defining loader 可回收。
-- 本切片**不实现任何解析缓存**，因此不存在跨 epoch 复用的负缓存；未来引入缓存时键必须覆盖
+- 不存在跨调用的解析缓存，也不存在任何负缓存。唯一的正向复用是 `installAll` 的调用期批次：
+  `BatchMemberResolver.Batch` 绑定打开它的目标所观察到的 loader 与 code epoch，后续目标观察到
+  不同 loader 或 epoch 时关闭并重开，调用返回或抛出前关闭；默认解析器在其中按（名字、是否初始化）
+  复用已加载的类，按类复用声明成员表，成员种类、名字、参数与返回类型仍逐目标筛选，未找到的目标
+  每次重新查找。复用依赖 epoch 单调、不回到旧值（无 ABA）。未来引入跨调用缓存时，键必须覆盖
   loader、成员种类、参数、返回类型、静态性、查找策略与初始化要求。
 
 ## 2. 参数形状

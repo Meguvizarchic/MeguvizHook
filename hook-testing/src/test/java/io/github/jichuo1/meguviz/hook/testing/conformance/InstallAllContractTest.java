@@ -1,6 +1,7 @@
 package io.github.jichuo1.meguviz.hook.testing.conformance;
 
 import io.github.jichuo1.meguviz.hook.api.BeforeCallback;
+import io.github.jichuo1.meguviz.hook.api.Capability;
 import io.github.jichuo1.meguviz.hook.api.HookSpec;
 import io.github.jichuo1.meguviz.hook.api.MatchPolicy;
 import io.github.jichuo1.meguviz.hook.api.ProcessFilter;
@@ -8,6 +9,7 @@ import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetInstallReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetKind;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
+import io.github.jichuo1.meguviz.hook.core.DiagnosticsSink;
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment;
 import io.github.jichuo1.meguviz.hook.core.ReflectiveMemberResolver;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
@@ -59,7 +61,9 @@ public final class InstallAllContractTest {
                 add,
                 HookSpec.builder("batch.add", "conformance", method("add", "int", "int")).before(invocation -> { }).build(),
                 HookSpec.builder("batch.filtered", "conformance", method("concat", "java.lang.String", "java.lang.String"))
-                        .processes(ProcessFilter.only("other.process")).before(NOOP).build());
+                        .processes(ProcessFilter.only("other.process")).before(NOOP).build(),
+                HookSpec.builder("batch.capability", "conformance", method("concat", "java.lang.String", "java.lang.String"))
+                        .require(Capability.HOT_RELOAD).before(NOOP).build());
     }
 
     @Test public void receiptsMatchSequentialInstallInOrder() {
@@ -82,6 +86,8 @@ public final class InstallAllContractTest {
                 assertEquals("spec " + i, targets(expected), targets(actual));
                 assertEquals("spec " + i, expected.message(), actual.message());
                 assertEquals(expected.registration() != null, actual.registration() != null);
+                assertEquals("spec " + i, expected.generation(), actual.generation());
+                assertEquals("spec " + i, targetStatuses(expected), targetStatuses(actual));
             }
             assertEquals(first.installCount(), second.installCount());
             assertEquals(RegistrationReceipt.Status.INSTALLED, receipts.get(0).status());
@@ -90,6 +96,7 @@ public final class InstallAllContractTest {
             assertEquals(RegistrationReceipt.Status.ALREADY_INSTALLED, receipts.get(8).status());
             assertEquals(RegistrationReceipt.Status.CONFLICT, receipts.get(9).status());
             assertEquals(RegistrationReceipt.Status.FILTERED, receipts.get(10).status());
+            assertEquals(RegistrationReceipt.Status.UNSUPPORTED_CAPABILITY, receipts.get(11).status());
         } finally { batched.close(); }
     }
 
@@ -194,10 +201,11 @@ public final class InstallAllContractTest {
         } finally { second.close(); }
     }
 
-    @Test public void unavailableOrFailingBatchFallsBackPerTarget() {
+    @Test public void declinedOrFailingOpenResolvesEachTargetSeparately() {
         CountingResolver declines = new CountingResolver();
         declines.declineBatch = true;
-        HookEnvironment env = HookEnvironment.create(FakeBackend.create(), declines);
+        FakeBackend backend = FakeBackend.create();
+        HookEnvironment env = HookEnvironment.create(backend, declines);
         try {
             List<RegistrationReceipt> receipts = env.installAll(Arrays.asList(
                     spec("decline.add", method("add", "int", "int")),
@@ -206,21 +214,172 @@ public final class InstallAllContractTest {
             assertTrue(receipts.get(1).isInstalled());
             assertEquals("a declined batch is asked once per loader and epoch", 1, declines.openAttempts.get());
             assertEquals(2, declines.plainResolves.get());
+
+            // A new epoch between specs, not caused by an install, asks again.
+            env.installAll(Arrays.asList(
+                    spec("decline.missing", method("absent")),
+                    spec("decline.member", TargetSpec.ofMember(TestSupport.method("noArguments")))),
+                    receipt -> backend.bumpCodeEpoch());
+            env.installAll(Arrays.asList(
+                    spec("decline.one", method("absent")),
+                    spec("decline.two", method("absent"))),
+                    receipt -> backend.bumpCodeEpoch());
+            assertEquals(4, declines.openAttempts.get());
         } finally { env.close(); }
 
         CountingResolver failsOnce = new CountingResolver();
         failsOnce.failNextOpen = true;
-        HookEnvironment second = HookEnvironment.create(FakeBackend.create(), failsOnce);
+        List<DiagnosticsSink.Event> events = new ArrayList<DiagnosticsSink.Event>();
+        HookEnvironment second = HookEnvironment.create(FakeBackend.create(), failsOnce, events::add);
         try {
             List<RegistrationReceipt> receipts = second.installAll(Arrays.asList(
                     spec("open.add", method("add", "int", "int")),
                     spec("open.concat", method("concat", "java.lang.String", "java.lang.String"))));
-            assertEquals(RegistrationReceipt.Status.FAILED, receipts.get(0).status());
-            assertTrue(receipts.get(0).message(), receipts.get(0).message().contains("open failed"));
-            assertTrue("the next target opens a new batch", receipts.get(1).isInstalled());
-            assertEquals(2, failsOnce.openAttempts.get());
-            assertEquals(1, failsOnce.closed.get());
+            assertTrue("a failed open resolves like install would", receipts.get(0).isInstalled());
+            assertTrue(receipts.get(1).isInstalled());
+            assertEquals("the failure is not retried for the same identity", 1, failsOnce.openAttempts.get());
+            assertEquals(2, failsOnce.plainResolves.get());
+            assertEquals(1, events.size());
+            assertEquals(DiagnosticsSink.Event.Kind.BACKEND_FAILURE, events.get(0).kind());
+            assertEquals("open.add", events.get(0).id().value());
+            assertTrue(events.get(0).failure() instanceof BackendInstallException);
         } finally { second.close(); }
+
+        CountingResolver unchecked = new CountingResolver();
+        IllegalStateException openBug = new IllegalStateException("open bug");
+        unchecked.uncheckedOpen = openBug;
+        HookEnvironment third = HookEnvironment.create(FakeBackend.create(), unchecked);
+        try {
+            assertSame(openBug, TestSupport.capture(() -> third.installAll(Collections.singletonList(
+                    spec("open.bug", method("add", "int", "int"))))));
+            assertEquals(0, third.activeRegistrationCount());
+        } finally { third.close(); }
+    }
+
+    @Test public void closeFailuresAreReportedOrPropagatedByFatality() {
+        CountingResolver nonFatal = new CountingResolver();
+        nonFatal.closeFailure = new IllegalStateException("close bug");
+        List<DiagnosticsSink.Event> events = new ArrayList<DiagnosticsSink.Event>();
+        FakeBackend backend = FakeBackend.create();
+        HookEnvironment env = HookEnvironment.create(backend, nonFatal, events::add);
+        try {
+            // The consumer bumps the epoch, so the second target closes the first batch (rebind)
+            // and the end of the call closes the second one: two non-fatal close failures.
+            List<RegistrationReceipt> receipts = new ArrayList<RegistrationReceipt>();
+            env.installAll(Arrays.asList(
+                    spec("close.add", method("add", "int", "int")),
+                    spec("close.concat", method("concat", "java.lang.String", "java.lang.String"))),
+                    receipt -> { receipts.add(receipt); backend.bumpCodeEpoch(); });
+            assertEquals(2, receipts.size());
+            assertTrue(receipts.get(0).isInstalled());
+            assertTrue(receipts.get(1).isInstalled());
+            assertEquals(2, events.size());
+            assertEquals("close.concat", events.get(0).id().value());
+            assertSame(nonFatal.closeFailure, events.get(0).failure());
+        } finally { env.close(); }
+
+        CountingResolver fatal = new CountingResolver();
+        SimulatedVmError vmError = new SimulatedVmError();
+        fatal.closeFailure = vmError;
+        HookEnvironment second = HookEnvironment.create(FakeBackend.create(), fatal);
+        try {
+            assertSame(vmError, TestSupport.capture(() -> second.installAll(Collections.singletonList(
+                    spec("fatal.add", method("add", "int", "int"))))));
+        } finally { second.close(); }
+
+        CountingResolver fatalAfterPrimary = new CountingResolver();
+        SimulatedVmError laterError = new SimulatedVmError();
+        fatalAfterPrimary.closeFailure = laterError;
+        fatalAfterPrimary.failOn = "add";
+        fatalAfterPrimary.failure = new IllegalStateException("resolver bug");
+        HookEnvironment third = HookEnvironment.create(FakeBackend.create(), fatalAfterPrimary);
+        try {
+            Throwable thrown = TestSupport.capture(() -> third.installAll(Collections.singletonList(
+                    spec("fatal.primary", method("add", "int", "int")))));
+            assertSame("a fatal close failure wins over an ordinary primary", laterError, thrown);
+            assertSame(fatalAfterPrimary.failure, thrown.getSuppressed()[0]);
+        } finally { third.close(); }
+
+        CountingResolver ordinaryAfterPrimary = new CountingResolver();
+        ordinaryAfterPrimary.closeFailure = new IllegalStateException("close bug");
+        ordinaryAfterPrimary.failOn = "add";
+        ordinaryAfterPrimary.failure = new IllegalArgumentException("resolver bug");
+        HookEnvironment fourth = HookEnvironment.create(FakeBackend.create(), ordinaryAfterPrimary);
+        try {
+            Throwable thrown = TestSupport.capture(() -> fourth.installAll(Collections.singletonList(
+                    spec("ordinary.primary", method("add", "int", "int")))));
+            assertSame(ordinaryAfterPrimary.failure, thrown);
+            assertSame(ordinaryAfterPrimary.closeFailure, thrown.getSuppressed()[0]);
+        } finally { fourth.close(); }
+    }
+
+    @Test public void reentrantAndClosingCallsKeepOrdinaryInstallSemantics() {
+        FakeBackend backend = FakeBackend.create();
+        CountingResolver resolver = new CountingResolver();
+        HookEnvironment env = HookEnvironment.create(backend, resolver);
+        try {
+            AtomicInteger seen = new AtomicInteger();
+            List<RegistrationReceipt> nested = new ArrayList<RegistrationReceipt>();
+            List<RegistrationReceipt> receipts = new ArrayList<RegistrationReceipt>();
+            env.installAll(Arrays.asList(
+                    spec("reenter.add", method("add", "int", "int")),
+                    spec("reenter.concat", method("concat", "java.lang.String", "java.lang.String"))),
+                    receipt -> {
+                        receipts.add(receipt);
+                        if (seen.getAndIncrement() == 0) {
+                            nested.add(env.install(spec("reenter.nested", method("noArguments"))));
+                            nested.addAll(env.installAll(Collections.singletonList(
+                                    spec("reenter.nested-all", method("append", "java.lang.StringBuilder", "java.lang.String")))));
+                        }
+                    });
+            assertTrue(receipts.get(0).isInstalled());
+            assertTrue(receipts.get(1).isInstalled());
+            assertTrue(nested.get(0).isInstalled());
+            assertTrue(nested.get(1).isInstalled());
+            assertEquals("the nested installAll has its own batch", 2, resolver.opened.get());
+            assertEquals(2, resolver.closed.get());
+        } finally { env.close(); }
+
+        CountingResolver closing = new CountingResolver();
+        HookEnvironment closed = HookEnvironment.create(FakeBackend.create(), closing);
+        List<RegistrationReceipt> afterClose = closed.installAll(Arrays.asList(
+                spec("closing.add", method("add", "int", "int")),
+                spec("closing.concat", method("concat", "java.lang.String", "java.lang.String"))));
+        assertTrue(afterClose.get(0).isInstalled());
+        List<RegistrationReceipt> results = new ArrayList<RegistrationReceipt>();
+        HookEnvironment requested = HookEnvironment.create(FakeBackend.create(), closing);
+        requested.installAll(Arrays.asList(
+                spec("request.add", method("add", "int", "int")),
+                spec("request.concat", method("concat", "java.lang.String", "java.lang.String"))),
+                receipt -> { results.add(receipt); requested.requestClose(); });
+        assertTrue(results.get(0).isInstalled());
+        assertEquals(RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE, results.get(1).status());
+        requested.close();
+        closed.close();
+        assertEquals(closing.opened.get(), closing.closed.get());
+
+        List<RegistrationReceipt> closedMidCall = new ArrayList<RegistrationReceipt>();
+        HookEnvironment selfClosing = HookEnvironment.create(FakeBackend.create(), closing);
+        selfClosing.installAll(Arrays.asList(
+                spec("self.add", method("add", "int", "int")),
+                spec("self.concat", method("concat", "java.lang.String", "java.lang.String"))),
+                receipt -> { closedMidCall.add(receipt); if (closedMidCall.size() == 1) selfClosing.close(); });
+        assertEquals(RegistrationReceipt.Status.TEMPORARILY_UNAVAILABLE, closedMidCall.get(1).status());
+        assertEquals(closing.opened.get(), closing.closed.get());
+    }
+
+    @Test public void initializingDescriptorTargetsInitializeThroughTheBatch() {
+        assertFalse(InitProbe.initialized);
+        HookEnvironment env = HookEnvironment.create(FakeBackend.create());
+        try {
+            String owner = InitTarget.class.getName();
+            List<RegistrationReceipt> receipts = env.installAll(Arrays.asList(
+                    spec("init.lazy", TargetSpec.descriptor(TargetKind.METHOD, owner, "value").build()),
+                    spec("init.eager", TargetSpec.descriptor(TargetKind.METHOD, owner, "other").initializeClass(true).build())));
+            assertTrue(receipts.get(0).isInstalled());
+            assertTrue(receipts.get(1).isInstalled());
+            assertTrue("initializeClass(true) initializes even after an uninitialized lookup", InitProbe.initialized);
+        } finally { env.close(); }
     }
 
     @Test public void resolverWithoutBatchSupportUsesOrdinaryResolution() {
@@ -240,6 +399,24 @@ public final class InstallAllContractTest {
         } finally { env.close(); }
     }
 
+    private static List<TargetInstallReceipt.Status> targetStatuses(RegistrationReceipt receipt) {
+        List<TargetInstallReceipt.Status> result = new ArrayList<TargetInstallReceipt.Status>();
+        for (TargetInstallReceipt target : receipt.targets()) result.add(target.status());
+        return result;
+    }
+
+    static final class InitProbe { static boolean initialized; }
+
+    static final class InitTarget {
+        static { InitProbe.initialized = true; }
+        static int value() { return 1; }
+        static int other() { return 2; }
+    }
+
+    static final class SimulatedVmError extends VirtualMachineError {
+        private static final long serialVersionUID = 1L;
+    }
+
     private static List<Executable> targets(RegistrationReceipt receipt) {
         List<Executable> result = new ArrayList<Executable>();
         for (TargetInstallReceipt target : receipt.targets()) result.add(target.target());
@@ -257,6 +434,8 @@ public final class InstallAllContractTest {
         final List<ClassLoader> loaders = new ArrayList<ClassLoader>();
         boolean declineBatch;
         boolean failNextOpen;
+        RuntimeException uncheckedOpen;
+        Throwable closeFailure;
         String failOn;
         Runnable afterBatchResolve;
         RuntimeException failure;
@@ -274,6 +453,7 @@ public final class InstallAllContractTest {
                 failNextOpen = false;
                 throw new BackendInstallException("open failed");
             }
+            if (uncheckedOpen != null) throw uncheckedOpen;
             if (declineBatch) return null;
             opened.incrementAndGet();
             loaders.add(loader);
@@ -291,6 +471,9 @@ public final class InstallAllContractTest {
                 @Override public void close() {
                     closed.incrementAndGet();
                     inner.close();
+                    Throwable failure = closeFailure;
+                    if (failure instanceof Error) throw (Error) failure;
+                    if (failure != null) throw (RuntimeException) failure;
                 }
             };
         }

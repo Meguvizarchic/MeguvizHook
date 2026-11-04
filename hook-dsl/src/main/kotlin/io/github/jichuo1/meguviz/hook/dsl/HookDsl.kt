@@ -248,9 +248,14 @@ public class HookOwnerScope internal constructor(
      *     hook("feature.log", method("com.example.Foo", "log")) { beforeArgs { trace(it.getArgument(0)) } }
      * }
      * ```
+     *
+     * If one installation throws, the exception propagates, the remaining specs are not attempted
+     * and no receipts are returned, while registrations installed before it stay owned by the
+     * environment and close with it. To receive every receipt as it is produced, build the specs
+     * with [spec] and call `environment.installAll(specs) { receipt -> ... }`.
      */
     public fun installAll(configure: HookBatchDsl.() -> Unit): List<RegistrationReceipt> =
-        environment.installAll(HookBatchDsl(this).apply(configure).specs())
+        environment.installAll(HookBatchDsl(this).apply(configure).seal())
 
     /** Explicit single-target replacement; no automatic retry or lifecycle ownership is added. */
     public fun replace(id: String, target: TargetSpec, configure: HookSpecDsl.() -> Unit): RegistrationReceipt =
@@ -267,24 +272,55 @@ public class HookOwnerScope internal constructor(
         forceReplace(id, member(target), configure)
 }
 
-/** Collects specs for [HookOwnerScope.installAll]; nothing is installed until the block returns. */
+/**
+ * Collects specs for [HookOwnerScope.installAll]; nothing is installed until the block returns, and
+ * the collector rejects further use afterwards. Every spec uses the scope's owner.
+ */
 @HookDsl
 public class HookBatchDsl internal constructor(
     private val scope: HookOwnerScope,
 ) {
     private val specs = ArrayList<HookSpec>()
+    private var sealed = false
 
     /** Add a spec for a descriptor or member target; it is installed in the order added. */
     public fun hook(id: String, target: TargetSpec, configure: HookSpecDsl.() -> Unit) {
-        specs += scope.spec(id, target, configure)
+        add(scope.spec(id, target, configure))
     }
 
     /** Add a spec for an already resolved method or constructor. */
     public fun hook(id: String, target: Executable, configure: HookSpecDsl.() -> Unit) {
-        specs += scope.spec(id, target, configure)
+        add(scope.spec(id, target, configure))
     }
 
-    internal fun specs(): List<HookSpec> = ArrayList(specs)
+    // The top-level spec builders also take an owner; inside a batch they would build a spec and
+    // silently drop it. These members win overload resolution and turn such calls into errors.
+    @Deprecated(OWNER_IN_BATCH, level = DeprecationLevel.ERROR)
+    public fun hook(id: String, owner: String, target: TargetSpec, configure: HookSpecDsl.() -> Unit): Nothing =
+        throw UnsupportedOperationException(OWNER_IN_BATCH)
+
+    @Deprecated(OWNER_IN_BATCH, level = DeprecationLevel.ERROR)
+    public fun hook(id: HookId, owner: HookOwner, target: TargetSpec, configure: HookSpecDsl.() -> Unit): Nothing =
+        throw UnsupportedOperationException(OWNER_IN_BATCH)
+
+    @Deprecated(OWNER_IN_BATCH, level = DeprecationLevel.ERROR)
+    public fun hook(id: HookId, owner: HookOwner, target: Executable, configure: HookSpecDsl.() -> Unit): Nothing =
+        throw UnsupportedOperationException(OWNER_IN_BATCH)
+
+    private fun add(spec: HookSpec) {
+        check(!sealed) { "installAll has already collected this batch" }
+        specs += spec
+    }
+
+    internal fun seal(): List<HookSpec> {
+        sealed = true
+        return ArrayList(specs)
+    }
+
+    private companion object {
+        const val OWNER_IN_BATCH: String =
+            "A batch uses its scope's owner; use hook(id, target) { } or a separate forOwner(owner).installAll { }"
+    }
 }
 
 @HookDsl
