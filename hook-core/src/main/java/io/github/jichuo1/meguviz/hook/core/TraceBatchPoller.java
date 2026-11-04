@@ -53,6 +53,24 @@ public final class TraceBatchPoller implements AutoCloseable {
     }
     /** A monotonic nanosecond source; called only outside the poller's state lock. */
     public interface Clock { long nanoTime(); }
+
+    /**
+     * When records below the count trigger are found to have waited {@code maxObservedWait}.
+     * Either way the wait starts when an evaluation first observes the non-empty queue.
+     */
+    public enum WaitExpiry {
+        /** Default: the next evaluation after expiry sends, up to one poll interval late. */
+        NEXT_POLL,
+        /**
+         * Additionally schedule one ordinary evaluation for the moment the observed wait expires,
+         * with {@code executor.schedule}, from the executor thread that observed the window.
+         */
+        DEADLINE
+    }
+
+    private static final int PERIODIC = 0;
+    private static final int REQUESTED = 1;
+    private static final int DEADLINE_DUE = 2;
     private static final long MAX_DURATION_NANOS = TimeUnit.DAYS.toNanos(1);
 
     private final ScheduledExecutorService executor;
@@ -64,6 +82,7 @@ public final class TraceBatchPoller implements AutoCloseable {
     private final long pollNanos;
     private final long waitNanos;
     private final Clock clock;
+    private final boolean deadlines;
     // Written under this monitor; volatile so requestPoll can check them without the monitor.
     private volatile State state = State.ACTIVE;
     private volatile long generation;
@@ -77,6 +96,16 @@ public final class TraceBatchPoller implements AutoCloseable {
     // Set by the first requestPoll; only then does a tick that hits its batch cap ask for more.
     private volatile boolean requestsUsed;
     private boolean rerunRequested;
+    // WaitExpiry.DEADLINE only, guarded by this monitor. At most one one-shot is pending; each
+    // observation window arms its deadline at most once (armedDeadline); a one-shot that finds an
+    // evaluation in flight records its target so that evaluation can follow up (missedDeadline).
+    private ScheduledFuture<?> deadlineFuture;
+    private long deadlineSeq;
+    private boolean deadlinePending;
+    private boolean deadlineArmed;
+    private long armedDeadline;
+    private boolean deadlineMissed;
+    private long missedDeadline;
     private ScheduledFuture<?> future;
     private CallbackExceptionTracker.BatchAttempt lastAttempt;
     private Throwable lastFailure;
@@ -86,7 +115,8 @@ public final class TraceBatchPoller implements AutoCloseable {
 
     private TraceBatchPoller(ScheduledExecutorService executor, CallbackExceptionTracker tracker,
                              CallbackExceptionTracker.BatchTransport transport, int triggerCount,
-                             int batchLimit, int maxBatchesPerTick, long pollNanos, long waitNanos, Clock clock) {
+                             int batchLimit, int maxBatchesPerTick, long pollNanos, long waitNanos, Clock clock,
+                             boolean deadlines) {
         this.executor = executor;
         this.tracker = tracker;
         this.transport = transport;
@@ -96,6 +126,7 @@ public final class TraceBatchPoller implements AutoCloseable {
         this.pollNanos = pollNanos;
         this.waitNanos = waitNanos;
         this.clock = clock;
+        this.deadlines = deadlines;
     }
 
     /**
@@ -136,11 +167,41 @@ public final class TraceBatchPoller implements AutoCloseable {
     public static TraceBatchPoller startDraining(ScheduledExecutorService executor, CallbackExceptionTracker tracker,
             CallbackExceptionTracker.BatchTransport transport, int triggerCount, int batchLimit,
             int maxBatchesPerTick, long pollInterval, long maxObservedWait, TimeUnit unit, Clock clock) {
+        return startDraining(executor, tracker, transport, triggerCount, batchLimit, maxBatchesPerTick,
+                pollInterval, maxObservedWait, unit, clock, WaitExpiry.NEXT_POLL);
+    }
+
+    /**
+     * Same draining contract with an explicit {@link WaitExpiry}. {@link WaitExpiry#NEXT_POLL} is
+     * exactly the other factories. With {@link WaitExpiry#DEADLINE}, an evaluation that leaves an
+     * observation window open with its wait not yet expired arms one ordinary evaluation through
+     * {@code executor.schedule} for the remaining wait, measured from that evaluation's clock
+     * reading (taken again after any sends). Only evaluations arm, so this happens on the
+     * executor, never on a hook thread.
+     *
+     * <p>Rules: at most one such one-shot is pending per poller, and each window arms its deadline
+     * at most once. A window that closes early does not cancel the one-shot; it then runs once as
+     * an ordinary evaluation and arms the current window's deadline if one is open, so cancelled
+     * tasks never pile up in a ScheduledThreadPoolExecutor queue. If the one-shot finds another
+     * evaluation in flight and that evaluation leaves the window open, it submits one follow-up
+     * evaluation when it ends, as for {@link #requestPoll()}. If the one-shot runs before the
+     * supplied clock reports the expiry (a clock other than {@code System.nanoTime()}), it is not
+     * re-armed and the periodic tick remains responsible. A rejected schedule is kept in
+     * {@link #schedulingFailure()} without suspending; that window then waits for the periodic
+     * tick. Suspension, resume and close cancel the pending one-shot with {@code cancel(false)}. A zero
+     * wait never arms. The count trigger, drain bound, BUSY/EMPTY and failure rules are unchanged,
+     * and no hard deadline is promised: executor queueing and transport time still add latency.
+     */
+    public static TraceBatchPoller startDraining(ScheduledExecutorService executor, CallbackExceptionTracker tracker,
+            CallbackExceptionTracker.BatchTransport transport, int triggerCount, int batchLimit,
+            int maxBatchesPerTick, long pollInterval, long maxObservedWait, TimeUnit unit, Clock clock,
+            WaitExpiry expiry) {
         Objects.requireNonNull(executor, "executor");
         Objects.requireNonNull(tracker, "tracker");
         Objects.requireNonNull(transport, "transport");
         Objects.requireNonNull(unit, "unit");
         Objects.requireNonNull(clock, "clock");
+        Objects.requireNonNull(expiry, "expiry");
         if (triggerCount < 1 || batchLimit < 1 || maxBatchesPerTick < 1 || pollInterval < 1 || maxObservedWait < 0) {
             throw new IllegalArgumentException("invalid polling bounds");
         }
@@ -149,7 +210,7 @@ public final class TraceBatchPoller implements AutoCloseable {
         if (pollNanos <= 0 || pollNanos > MAX_DURATION_NANOS || waitNanos < 0
                 || waitNanos > MAX_DURATION_NANOS) throw new IllegalArgumentException("duration exceeds one day");
         TraceBatchPoller poller = new TraceBatchPoller(executor, tracker, transport, triggerCount,
-                batchLimit, maxBatchesPerTick, pollNanos, waitNanos, clock);
+                batchLimit, maxBatchesPerTick, pollNanos, waitNanos, clock, expiry == WaitExpiry.DEADLINE);
         poller.schedule();
         return poller;
     }
@@ -159,6 +220,8 @@ public final class TraceBatchPoller implements AutoCloseable {
         synchronized (this) {
             if (state != State.SUSPENDED || inFlight) return false;
             pollRequested.set(false);
+            clearDeadline();
+            deadlineArmed = false;
             state = State.ACTIVE;
         }
         schedule();
@@ -167,22 +230,31 @@ public final class TraceBatchPoller implements AutoCloseable {
 
     private void schedule() {
         final long ticket;
+        ScheduledFuture<?> stale;
         synchronized (this) {
             if (state != State.ACTIVE) return;
             ticket = ++generation;
+            // An evaluation that ran between resume() and this increment may have armed a
+            // one-shot under the previous ticket; it can never evaluate, so free its slot.
+            stale = clearDeadline();
+            deadlineArmed = false;
         }
+        if (stale != null) cancelFuture(stale);
         ScheduledFuture<?> installed;
         try {
             installed = Objects.requireNonNull(executor.scheduleWithFixedDelay(
-                    () -> tick(ticket, false), 0, pollNanos, TimeUnit.NANOSECONDS), "scheduled future");
+                    () -> tick(ticket, PERIODIC, 0L), 0, pollNanos, TimeUnit.NANOSECONDS), "scheduled future");
         } catch (Throwable failure) {
+            ScheduledFuture<?> cancelDeadline = null;
             synchronized (this) {
                 schedulingFailure = failure;
                 if (state == State.ACTIVE && generation == ticket) {
                     state = State.SUSPENDED;
                     generation++;
+                    cancelDeadline = clearDeadline();
                 }
             }
+            cancelOnSuspend(cancelDeadline, failure);
             if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
             return;
         }
@@ -219,6 +291,11 @@ public final class TraceBatchPoller implements AutoCloseable {
     public boolean requestPoll() {
         if (state != State.ACTIVE) return false;
         if (!requestsUsed) requestsUsed = true;
+        return submitRequest();
+    }
+
+    /** The coalesced submission behind requestPoll; internal follow-ups do not mark requests used. */
+    private boolean submitRequest() {
         if (!pollRequested.compareAndSet(false, true)) return true;
         // A ticket read concurrently with close/suspend/resume is safe: tick rechecks it.
         long ticket = generation;
@@ -245,16 +322,31 @@ public final class TraceBatchPoller implements AutoCloseable {
         // Re-arm before evaluating, so a capture after this point can request another evaluation.
         pollRequested.set(false);
         if (requesting.get() == Thread.currentThread()) return; // executed inline by requestPoll
-        tick(ticket, true);
+        tick(ticket, REQUESTED, 0L);
     }
 
-    private void tick(long ticket, boolean requested) {
+    private void deadlineTick(long ticket, long seq, long target) {
+        synchronized (this) {
+            if (deadlineSeq == seq && deadlinePending) {
+                deadlinePending = false;
+                deadlineFuture = null;
+            }
+        }
+        tick(ticket, DEADLINE_DUE, target);
+    }
+
+    private void tick(long ticket, int kind, long target) {
         CallbackExceptionTracker activeTracker;
         CallbackExceptionTracker.BatchTransport activeTransport;
         synchronized (this) {
             if (state != State.ACTIVE || generation != ticket) return;
             if (inFlight) {
-                if (requested) rerunRequested = true;
+                if (kind == REQUESTED) {
+                    rerunRequested = true;
+                } else if (kind == DEADLINE_DUE) {
+                    deadlineMissed = true;
+                    missedDeadline = target;
+                }
                 return;
             }
             inFlight = true;
@@ -262,9 +354,12 @@ public final class TraceBatchPoller implements AutoCloseable {
             activeTransport = transport;
         }
         boolean backlog = false;
+        boolean windowOpen = false;
+        long windowDeadline = 0L;
+        long now = 0L;
         try {
             int count = activeTracker.pendingCount();
-            long now = clock.nanoTime();
+            now = clock.nanoTime();
             boolean send;
             if (count == 0) {
                 observedPending = false;
@@ -301,8 +396,15 @@ public final class TraceBatchPoller implements AutoCloseable {
                     if (batch == maxBatchesPerTick - 1) backlog = true;
                 }
             }
+            if (deadlines && observedPending) {
+                windowOpen = true;
+                windowDeadline = observedAt + waitNanos;
+                // A one-shot's delay counts from when it is scheduled: re-read after sending.
+                if (send) now = clock.nanoTime();
+            }
         } catch (Throwable failure) {
             ScheduledFuture<?> cancel = null;
+            ScheduledFuture<?> cancelDeadline = null;
             synchronized (this) {
                 lastFailure = failure;
                 if (state == State.ACTIVE && generation == ticket) {
@@ -310,28 +412,87 @@ public final class TraceBatchPoller implements AutoCloseable {
                     generation++;
                     cancel = future;
                     future = null;
+                    cancelDeadline = clearDeadline();
                 }
             }
-            if (cancel != null) {
-                try {
-                    cancelFuture(cancel);
-                } catch (Error cancelFailure) {
-                    if (!TypeChecks.isFatal(failure)) throw cancelFailure;
-                    if (cancelFailure != failure) {
-                        try { failure.addSuppressed(cancelFailure); }
-                        catch (Throwable ignored) { /* Preserve the original fatal event. */ }
-                    }
-                }
-            }
+            cancelOnSuspend(cancel, failure);
+            cancelOnSuspend(cancelDeadline, failure);
             if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
         } finally {
             boolean rerun;
+            long armSeq = 0L;
+            long armDelay = 0L;
             synchronized (this) {
                 inFlight = false;
                 rerun = rerunRequested;
                 rerunRequested = false;
+                boolean missed = deadlineMissed && missedDeadline == windowDeadline;
+                deadlineMissed = false;
+                if (windowOpen && state == State.ACTIVE && generation == ticket) {
+                    if (missed) {
+                        // This window's one-shot ran while this evaluation was in flight and so
+                        // did nothing: evaluate once more instead of waiting a period.
+                        rerun = true;
+                    } else if (windowDeadline - now > 0 && !rerun && !deadlinePending
+                            && !(deadlineArmed && armedDeadline == windowDeadline)) {
+                        deadlinePending = true;
+                        deadlineArmed = true;
+                        armedDeadline = windowDeadline;
+                        armSeq = ++deadlineSeq;
+                        armDelay = windowDeadline - now;
+                    }
+                }
             }
-            if (rerun || (backlog && requestsUsed)) requestPoll();
+            if (armDelay > 0) scheduleDeadline(ticket, armSeq, windowDeadline, armDelay);
+            if ((rerun || (backlog && requestsUsed)) && state == State.ACTIVE) submitRequest();
+        }
+    }
+
+    /** One-shot evaluation at a window's expiry (WaitExpiry.DEADLINE); see startDraining. */
+    private void scheduleDeadline(long ticket, long seq, long target, long delay) {
+        ScheduledFuture<?> installed;
+        try {
+            installed = executor.schedule(() -> deadlineTick(ticket, seq, target), delay, TimeUnit.NANOSECONDS);
+        } catch (Throwable failure) {
+            synchronized (this) {
+                schedulingFailure = failure;
+                if (deadlineSeq == seq) deadlinePending = false;
+            }
+            if (TypeChecks.isFatal(failure)) throw TypeChecks.fatal(failure);
+            return;
+        }
+        boolean cancel = false;
+        synchronized (this) {
+            if (state != State.ACTIVE || generation != ticket) {
+                cancel = installed != null; // closed, suspended or resumed before installation
+                if (deadlineSeq == seq) deadlinePending = false;
+            } else if (deadlineSeq == seq && deadlinePending) {
+                deadlineFuture = installed;
+            }
+        }
+        if (cancel) cancelFuture(installed);
+    }
+
+    /** Must hold the monitor: forget the pending one-shot and return its handle to cancel. */
+    private ScheduledFuture<?> clearDeadline() {
+        ScheduledFuture<?> pending = deadlineFuture;
+        deadlineFuture = null;
+        deadlinePending = false;
+        deadlineMissed = false;
+        return pending;
+    }
+
+    /** Cancel a handle after a failed evaluation, keeping the original fatal event if both fail. */
+    private void cancelOnSuspend(ScheduledFuture<?> task, Throwable failure) {
+        if (task == null) return;
+        try {
+            cancelFuture(task);
+        } catch (Error cancelFailure) {
+            if (!TypeChecks.isFatal(failure)) throw cancelFailure;
+            if (cancelFailure != failure) {
+                try { failure.addSuppressed(cancelFailure); }
+                catch (Throwable ignored) { /* Preserve the original fatal event. */ }
+            }
         }
     }
 
@@ -394,6 +555,7 @@ public final class TraceBatchPoller implements AutoCloseable {
     /** Close the claim gate and cancel the periodic task, without interrupting claimed work. */
     @Override public void close() {
         ScheduledFuture<?> cancel;
+        ScheduledFuture<?> cancelDeadline;
         synchronized (this) {
             if (state == State.CLOSED) return;
             state = State.CLOSED;
@@ -402,8 +564,10 @@ public final class TraceBatchPoller implements AutoCloseable {
             transport = null;
             cancel = future;
             future = null;
+            cancelDeadline = clearDeadline();
         }
         if (cancel != null) cancelFuture(cancel);
+        if (cancelDeadline != null) cancelFuture(cancelDeadline);
     }
 
     private void cancelFuture(ScheduledFuture<?> task) {

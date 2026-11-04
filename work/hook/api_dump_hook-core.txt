@@ -463,6 +463,11 @@ public interface io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$Reco
   public abstract void writeRecord(byte[]) throws java.lang.Exception;
 }
 Compiled from "JsonLineTraceTransport.java"
+public interface io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$SlicedRecordWriter extends io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$RecordWriter {
+  public abstract void writeRecord(byte[], int, int) throws java.lang.Exception;
+  public default void writeRecord(byte[]) throws java.lang.Exception;
+}
+Compiled from "JsonLineTraceTransport.java"
 final class io.github.jichuo1.meguviz.hook.core.JsonLineTraceTransport$Utf8 {
 }
 Compiled from "ModuleEntryRouter.java"
@@ -623,12 +628,17 @@ final class io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher$Attempt$Sta
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher$Attempt$State[] values();
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher$Attempt$State valueOf(java.lang.String);
 }
+Compiled from "TraceBatchDispatcher.java"
+final class io.github.jichuo1.meguviz.hook.core.TraceBatchDispatcher$Completion extends java.util.concurrent.locks.AbstractQueuedSynchronizer implements java.lang.Runnable {
+  public void run();
+}
 Compiled from "TraceBatchPoller.java"
 public final class io.github.jichuo1.meguviz.hook.core.TraceBatchPoller implements java.lang.AutoCloseable {
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller start(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, long, long, java.util.concurrent.TimeUnit);
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller start(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, long, long, java.util.concurrent.TimeUnit, io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$Clock);
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller startDraining(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, int, long, long, java.util.concurrent.TimeUnit);
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller startDraining(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, int, long, long, java.util.concurrent.TimeUnit, io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$Clock);
+  public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller startDraining(java.util.concurrent.ScheduledExecutorService, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker, io.github.jichuo1.meguviz.hook.core.CallbackExceptionTracker$BatchTransport, int, int, int, long, long, java.util.concurrent.TimeUnit, io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$Clock, io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$WaitExpiry);
   public boolean resume();
   public boolean requestPoll();
   public synchronized io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$State state();
@@ -677,6 +687,13 @@ public final class io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$State ex
   public static final io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$State CLOSED;
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$State[] values();
   public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$State valueOf(java.lang.String);
+}
+Compiled from "TraceBatchPoller.java"
+public final class io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$WaitExpiry extends java.lang.Enum<io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$WaitExpiry> {
+  public static final io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$WaitExpiry NEXT_POLL;
+  public static final io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$WaitExpiry DEADLINE;
+  public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$WaitExpiry[] values();
+  public static io.github.jichuo1.meguviz.hook.core.TraceBatchPoller$WaitExpiry valueOf(java.lang.String);
 }
 Compiled from "TypeChecks.java"
 final class io.github.jichuo1.meguviz.hook.core.TypeChecks {

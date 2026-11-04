@@ -42,14 +42,47 @@ public final class BinderTrace102 {
         boolean isAllowed(int callingUid);
     }
 
-    /** Synchronous sender to a Binder supplied by the caller; no connection is established here. */
+    /**
+     * Synchronous sender to a Binder supplied by the caller; no connection is established here.
+     * The returned writer is also a {@link JsonLineTraceTransport.SlicedRecordWriter}: batch and
+     * JSONL senders can hand it their encoding buffer, which is written with
+     * {@code Parcel.writeByteArray(buffer, offset, length)}. In AOSP the whole-array overload
+     * delegates to that one with offset 0, so the Parcel layout is the same as for a copy.
+     */
     public static JsonLineTraceTransport.RecordWriter sender(IBinder endpoint, String name, int maxRecordBytes) {
         Objects.requireNonNull(endpoint, "endpoint");
-        TraceRecordPolicy102 policy = new TraceRecordPolicy102(name, maxRecordBytes);
-        byte[] fingerprint = policy.fingerprint();
-        return record -> {
+        return new Sender(endpoint, new TraceRecordPolicy102(name, maxRecordBytes));
+    }
+
+    private static final class Sender implements JsonLineTraceTransport.SlicedRecordWriter {
+        private final IBinder endpoint;
+        private final TraceRecordPolicy102 policy;
+        private final byte[] fingerprint;
+
+        Sender(IBinder endpoint, TraceRecordPolicy102 policy) {
+            this.endpoint = endpoint;
+            this.policy = policy;
+            this.fingerprint = policy.fingerprint();
+        }
+
+        @Override
+        public void writeRecord(byte[] record) throws RemoteException {
             Objects.requireNonNull(record, "record");
             policy.checkLength(record.length);
+            transact(record, 0, record.length);
+        }
+
+        @Override
+        public void writeRecord(byte[] buffer, int offset, int length) throws RemoteException {
+            Objects.requireNonNull(buffer, "record");
+            if (offset < 0 || length < 0 || offset > buffer.length - length) {
+                throw new IndexOutOfBoundsException("record slice outside the buffer");
+            }
+            policy.checkLength(length);
+            transact(buffer, offset, length);
+        }
+
+        private void transact(byte[] bytes, int offset, int length) throws RemoteException {
             Parcel data = Parcel.obtain();
             Parcel reply = Parcel.obtain();
             try {
@@ -58,8 +91,8 @@ public final class BinderTrace102 {
                 data.writeByteArray(fingerprint);
                 // Explicit outer length is checked before the receiver allocates its array;
                 // readByteArray also checks the inner length written by writeByteArray.
-                data.writeInt(record.length);
-                data.writeByteArray(record);
+                data.writeInt(length);
+                data.writeByteArray(bytes, offset, length);
                 if (!endpoint.transact(SUBMIT, data, reply, 0)) {
                     throw new RemoteException("trace transaction rejected or unavailable; outcome unknown");
                 }
@@ -74,7 +107,7 @@ public final class BinderTrace102 {
                 reply.recycle();
                 data.recycle();
             }
-        };
+        }
     }
 
     /**

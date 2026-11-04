@@ -20,6 +20,31 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
         void writeRecord(byte[] utf8JsonLine) throws Exception;
     }
 
+    /**
+     * Optional record writer that also accepts a record as a slice of a sender-owned buffer. When
+     * a writer implements this interface, {@link JsonLineTraceTransport#send},
+     * {@link BatchTraceTransport#sender} and the {@link BoundedTraceCompression} batch senders
+     * pass the slice instead of first trimming the encoded record or frame into an exact-length
+     * copy. Writers that only implement {@link RecordWriter} keep receiving exact-length arrays.
+     * The bytes, the acceptance meaning of a normal return and every failure rule are the same.
+     *
+     * <p>A call must have exactly the effect of
+     * {@code writeRecord(Arrays.copyOfRange(buffer, offset, offset + length))}: read only that
+     * range, and only during the call. The buffer belongs to the sender: do not retain, modify or
+     * forward it after returning, and do not read outside the range (those bytes are unspecified).
+     * For example, Android's {@code Parcel.writeByteArray(buffer, offset, length)} writes the same
+     * layout as {@code writeByteArray} of the copied range.
+     */
+    public interface SlicedRecordWriter extends RecordWriter {
+        void writeRecord(byte[] buffer, int offset, int length) throws Exception;
+
+        /** Writes the whole array as one record, like {@code writeRecord(record, 0, record.length)}. */
+        @Override
+        default void writeRecord(byte[] record) throws Exception {
+            writeRecord(record, 0, record.length);
+        }
+    }
+
     private static final int FIELD_CHARS = 128;
     private static final int MESSAGE_CHARS = 512;
     // Upper bound of any single field reservation (escaped message tail), used for frame slack.
@@ -33,19 +58,32 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
     };
     private final RecordWriter writer;
+    private final SlicedRecordWriter sliced;
     private final boolean includeMessage;
     private final int maxFrames;
 
     public JsonLineTraceTransport(RecordWriter writer, boolean includeMessage, int maxFrames) {
         this.writer = Objects.requireNonNull(writer, "writer");
+        this.sliced = writer instanceof SlicedRecordWriter ? (SlicedRecordWriter) writer : null;
         if (maxFrames < 0 || maxFrames > 32) throw new IllegalArgumentException("maxFrames must be 0..32");
         this.includeMessage = includeMessage;
         this.maxFrames = maxFrames;
     }
 
+    /**
+     * Encode and write one record. A {@link SlicedRecordWriter} receives the encoder's private
+     * buffer as a slice, saving the exact-length copy; any other writer receives that copy.
+     */
     @Override
     public void send(CallbackExceptionTracker.Event event) throws Exception {
-        writer.writeRecord(encode(event));
+        if (sliced == null) {
+            writer.writeRecord(encode(event));
+            return;
+        }
+        Objects.requireNonNull(event, "event");
+        Utf8 text = new Utf8();
+        write(text, event, includeMessage, maxFrames);
+        sliced.writeRecord(text.buffer(), 0, text.size());
     }
 
     /** Encode one event without sending it, for explicit synchronous batch transports. */
@@ -176,7 +214,8 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
     /**
      * Per-call JSON byte emitter; no buffer is reused or shared across calls. Every write is
      * preceded by one capacity reservation covering its worst case, so runs of plain ASCII are
-     * copied without a per-character check. A bounded emitter (batch frames) discards the bytes
+     * copied without a per-character check (a single record's non-ASCII tail is written in chunks
+     * that fit instead, see singleRecordTail). A bounded emitter (batch frames) discards the bytes
      * of a record once it can no longer fit, while the record's getters still run to completion.
      */
     static final class Utf8 {
@@ -184,23 +223,29 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
         private int size;
         private final int overflowAt;
         private final int maxCapacity;
+        // Single-record emitter: non-ASCII tails are written in chunks that fit (see
+        // singleRecordTail) and growth targets the corrected record estimate, not doubling.
+        private final boolean singleRecord;
+        private int estimateEnd;
+        private boolean grownPastEstimate;
         private int recordStart = -1;
         private boolean overflowed;
 
         /** Unbounded emitter; the first reservation allocates the estimated record size. */
         Utf8() {
-            this(0, Integer.MAX_VALUE, Integer.MAX_VALUE);
+            this(0, Integer.MAX_VALUE, Integer.MAX_VALUE, true);
         }
 
-        private Utf8(int initialCapacity, int overflowAt, int maxCapacity) {
+        private Utf8(int initialCapacity, int overflowAt, int maxCapacity, boolean singleRecord) {
             this.bytes = new byte[initialCapacity];
             this.overflowAt = overflowAt;
             this.maxCapacity = maxCapacity;
+            this.singleRecord = singleRecord;
         }
 
         /** Emitter for one bounded batch frame; capacity stays below limit + one reservation. */
         static Utf8 bounded(int initialCapacity, int limit) {
-            return new Utf8(Math.min(initialCapacity, limit), limit, limit + MAX_RESERVATION + 64);
+            return new Utf8(Math.min(initialCapacity, limit), limit, limit + MAX_RESERVATION + 64, false);
         }
 
         int size() { return size; }
@@ -234,7 +279,9 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
          * bound for this, so a record that turns out not to fit does not grow the frame buffer.
          */
         void reserveRecord(int estimate) {
-            reserve(Math.max(0, Math.min(estimate, overflowAt - size)));
+            int reservation = Math.max(0, Math.min(estimate, overflowAt - size));
+            estimateEnd = size + reservation;
+            reserve(reservation);
         }
 
         private void reserve(int count) {
@@ -250,9 +297,20 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
         }
 
         private void grow(int required) {
-            int expanded = bytes.length * 2 + 2;
-            if (expanded < 0 || expanded > maxCapacity) expanded = maxCapacity;
-            if (expanded < required) expanded = required;
+            int expanded;
+            if (singleRecord) {
+                // Single record: grow to the corrected record estimate (the ASCII estimate plus
+                // the real shortfall of the non-ASCII tails written so far). Should the same
+                // record need to grow again (many non-ASCII fields beyond the estimate's slack),
+                // later steps are at least 1.5x so the number of copies stays logarithmic.
+                expanded = estimateEnd;
+                if (grownPastEstimate) expanded = Math.max(expanded, bytes.length + (bytes.length >> 1));
+                if (bytes.length != 0) grownPastEstimate = true;
+            } else {
+                expanded = bytes.length * 2 + 2;
+                if (expanded < 0 || expanded > maxCapacity) expanded = maxCapacity;
+            }
+            if (expanded < required) expanded = required; // also covers int overflow
             bytes = Arrays.copyOf(bytes, expanded);
         }
 
@@ -311,7 +369,14 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
             if (i < limit) escapedTail(value, i, limit);
         }
 
+        // A single-record tail grows the buffer once fewer units than this provably fit.
+        private static final int MIN_CHUNK = 32;
+
         private void escapedTail(String value, int start, int limit) {
+            if (singleRecord) {
+                singleRecordTail(value, start, limit);
+                return;
+            }
             // Budget: three bytes per remaining UTF-16 unit covers every encoding except \\uXXXX
             // escapes (control characters and surrogates), which top the budget up as they occur.
             reserve((limit - start) * 3);
@@ -354,6 +419,85 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
             size = position;
         }
 
+        /**
+         * Single-record tail (no record bound, so reserve never rolls back). The record estimate
+         * counted one byte per unit here; the capacity beyond it is reserved for the rest of the
+         * record. If even six bytes per unit fit, the tail is written in one pass. Otherwise,
+         * instead of reserving three bytes per unit up front, it is written in chunks that
+         * provably fit the current capacity (three bytes per unit plus twelve bytes of headroom
+         * for one escape or surrogate pair). Only when fewer than MIN_CHUNK units fit
+         * does the buffer grow, to the record estimate corrected by what was written so far and
+         * by three bytes per remaining unit. At the end the estimated record end moves by the
+         * tail's real shortfall, so a later growth goes straight to the corrected record size
+         * instead of doubling. Nothing is scanned twice, and the chunk loop never re-checks
+         * capacity, which keeps its array loop-invariant for the JIT.
+         */
+        private void singleRecordTail(String value, int start, int limit) {
+            int base = estimateEnd;
+            int tailStart = size;
+            if (bytes.length - size >= 6 * (limit - start)) {
+                // Even the worst case (six bytes per unit) fits: one pass, no chunks.
+                writeChunk(value, start, limit, limit, false);
+            } else {
+                int i = start;
+                while (i < limit) {
+                    int remaining = limit - i;
+                    int room = (bytes.length - size - 12) / 3;
+                    if (room < remaining && room < MIN_CHUNK) {
+                        estimateEnd = base + (size - tailStart) - (i - start) + 2 * remaining + 12;
+                        reserve(3 * remaining + 12);
+                        continue;
+                    }
+                    i = writeChunk(value, i, i + Math.min(room, remaining), limit, true);
+                }
+            }
+            estimateEnd = base + (size - tailStart) - (limit - start);
+        }
+
+        /**
+         * Escaped UTF-8 of value[i, chunkEnd) into reserved capacity. For a chunk (stopAfterEscape)
+         * that capacity is three bytes per unit plus twelve bytes of headroom: a unit that needs a
+         * six-byte escape (control character, unpaired surrogate) or a surrogate pair (twelve
+         * bytes, possibly reading the unit at chunkEnd) uses the headroom, so the chunk ends right
+         * after it. Otherwise six bytes per unit are reserved. Returns the next index.
+         */
+        private int writeChunk(String value, int i, int chunkEnd, int limit, boolean stopAfterEscape) {
+            byte[] out = bytes;
+            int position = size;
+            while (i < chunkEnd) {
+                char c = value.charAt(i++);
+                if (c >= 0x20 && c <= 0x7f && c != '"' && c != '\\') {
+                    out[position++] = (byte) c;
+                } else if (c == '"' || c == '\\') {
+                    out[position++] = (byte) '\\';
+                    out[position++] = (byte) c;
+                } else if (c >= 0x80 && c < 0x800) {
+                    out[position++] = (byte) (0xc0 | (c >>> 6));
+                    out[position++] = (byte) (0x80 | (c & 0x3f));
+                } else if (c >= 0x800 && !Character.isSurrogate(c)) {
+                    out[position++] = (byte) (0xe0 | (c >>> 12));
+                    out[position++] = (byte) (0x80 | ((c >>> 6) & 0x3f));
+                    out[position++] = (byte) (0x80 | (c & 0x3f));
+                } else {
+                    if (c < 0x20) {
+                        position = unicode(out, position, c);
+                    } else if (Character.isHighSurrogate(c)) {
+                        if (i < limit && Character.isLowSurrogate(value.charAt(i))) {
+                            position = unicode(out, position, c);
+                            position = unicode(out, position, value.charAt(i++));
+                        } else {
+                            position = unicode(out, position, '\ufffd');
+                        }
+                    } else {
+                        position = unicode(out, position, '\ufffd'); // unpaired low surrogate
+                    }
+                    if (stopAfterEscape) break;
+                }
+            }
+            size = position;
+            return i;
+        }
+
         private static int unicode(byte[] out, int position, char c) {
             out[position++] = (byte) '\\';
             out[position++] = (byte) 'u';
@@ -365,6 +509,9 @@ public final class JsonLineTraceTransport implements CallbackExceptionTracker.Tr
         }
 
         byte[] finish() { return size == bytes.length ? bytes : Arrays.copyOf(bytes, size); }
+
+        /** The live buffer; bytes [0, size()) are the output, the rest is unspecified. */
+        byte[] buffer() { return bytes; }
     }
 
     static void putInt(byte[] bytes, int position, int value) {

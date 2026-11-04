@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.CRC32;
@@ -245,13 +246,14 @@ public final class BoundedTraceCompression {
             Objects.requireNonNull(writer, "writer");
             checkOwner();
             if (closed || broken) throw new IllegalStateException("compression session is not available");
-            return BatchTraceTransport.sender(frame -> {
+            JsonLineTraceTransport.SlicedRecordWriter frames = (buffer, offset, length) -> {
                 begin();
                 Encoding encoded;
-                try { encoded = encodeInternal(frame, this, false); }
+                try { encoded = encodeInternal(buffer, offset, length, this, false); }
                 finally { busy = false; }
                 writer.writeRecord(encoded.frame);
-            }, includeMessage, maxFrames, maxBatchBytes, maxRecords);
+            };
+            return BatchTraceTransport.sender(frames, includeMessage, maxFrames, maxBatchBytes, maxRecords);
         }
 
         /** Caller must arrange bounded worker execution and verify the sender independently. */
@@ -355,18 +357,19 @@ public final class BoundedTraceCompression {
                 boolean includeMessage, int maxFrames, int maxBatchBytes, int maxRecords) {
             Objects.requireNonNull(writer, "writer");
             checkAvailable();
-            return BatchTraceTransport.sender(frame -> {
+            JsonLineTraceTransport.SlicedRecordWriter frames = (buffer, offset, length) -> {
                 Encoding encoded;
                 enter();
                 try {
                     delegate.begin();
-                    try { encoded = encodeInternal(frame, delegate, false); }
+                    try { encoded = encodeInternal(buffer, offset, length, delegate, false); }
                     finally { delegate.busy = false; }
                 } finally {
                     gate.unlock();
                 }
                 writer.writeRecord(encoded.frame);
-            }, includeMessage, maxFrames, maxBatchBytes, maxRecords);
+            };
+            return BatchTraceTransport.sender(frames, includeMessage, maxFrames, maxBatchBytes, maxRecords);
         }
 
         /**
@@ -421,32 +424,47 @@ public final class BoundedTraceCompression {
 
     private Encoding encodeInternal(byte[] input, Session session, boolean snapshot) throws IOException {
         Objects.requireNonNull(input, "input");
-        if (input.length > maxPlainBytes) throw new IOException("plain trace exceeds limit");
-        boolean rawFits = input.length <= maxFrameBytes - HEADER_BYTES;
-        boolean attempt = input.length > 0 && (input.length >= thresholdBytes || !rawFits);
+        return encodeInternal(input, 0, input.length, session, snapshot);
+    }
+
+    /**
+     * Encode input[offset, offset + length). A snapshot is taken only for whole caller arrays
+     * (offset 0, full length); internal batch senders pass their private frame buffer as a slice
+     * without one, so the frame is never trimmed into a copy before compression. The resulting
+     * frame and decision depend only on the bytes of the range.
+     */
+    private Encoding encodeInternal(byte[] input, int offset, int length, Session session, boolean snapshot)
+            throws IOException {
+        if (length > maxPlainBytes) throw new IOException("plain trace exceeds limit");
+        boolean rawFits = length <= maxFrameBytes - HEADER_BYTES;
+        boolean attempt = length > 0 && (length >= thresholdBytes || !rawFits);
         // A RAW frame that needs no compression attempt copies the input once, straight into
         // the frame; that copy is also the snapshot the checksum covers (for every size).
         if (snapshot && !attempt && rawFits) {
             // The final payload is also the snapshot used by the checksum. Concurrent input
             // mutation during the copy is not atomic, just as with the ordinary clone path.
-            ByteBuffer frame = ByteBuffer.allocate(HEADER_BYTES + input.length).order(ByteOrder.BIG_ENDIAN);
+            ByteBuffer frame = ByteBuffer.allocate(HEADER_BYTES + length).order(ByteOrder.BIG_ENDIAN);
             frame.position(HEADER_BYTES);
-            frame.put(input);
+            frame.put(input, offset, length);
             CRC32 crc = session == null ? new CRC32() : session.crc();
-            crc.update(frame.array(), HEADER_BYTES, input.length);
+            crc.update(frame.array(), HEADER_BYTES, length);
             frame.position(0);
             frame.putInt(MAGIC).put((byte) VERSION).put((byte) RAW).putShort((short) 0);
-            frame.putInt(input.length).putInt(input.length).putInt((int) crc.getValue());
-            return new Encoding(frame.array(), input.length, Decision.BELOW_THRESHOLD);
+            frame.putInt(length).putInt(length).putInt((int) crc.getValue());
+            return new Encoding(frame.array(), length, Decision.BELOW_THRESHOLD);
         }
-        if (snapshot) input = input.clone();
+        if (snapshot) {
+            input = Arrays.copyOfRange(input, offset, offset + length);
+            offset = 0;
+        }
         byte[] payload = input;
-        int payloadLength = input.length;
+        int payloadOffset = offset;
+        int payloadLength = length;
         int method = RAW;
         Decision decision = attempt ? Decision.INSUFFICIENT_SAVINGS : Decision.BELOW_THRESHOLD;
         if (attempt) {
             // Require a strict net improvement unless the only alternative is an oversized frame.
-            long usefulLimit = (long) input.length - HEADER_BYTES - Math.max(1, minSavingBytes);
+            long usefulLimit = (long) length - HEADER_BYTES - Math.max(1, minSavingBytes);
             int maxCandidate = rawFits
                     ? (int) Math.min((long) maxFrameBytes - HEADER_BYTES, Math.max(0L, usefulLimit))
                     : maxFrameBytes - HEADER_BYTES;
@@ -459,7 +477,7 @@ public final class BoundedTraceCompression {
                 Throwable primary = null;
                 try {
                     if (algorithm == Algorithm.TRACE_SCHEMA_V1) compressor.setDictionary(DICTIONARY);
-                    compressor.setInput(input);
+                    compressor.setInput(input, offset, length);
                     compressor.finish();
                     int used = 0;
                     if (staged) {
@@ -484,6 +502,7 @@ public final class BoundedTraceCompression {
                     }
                     if (compressor.finished()) {
                         payload = candidate;
+                        payloadOffset = 0;
                         payloadLength = used;
                         method = algorithm == Algorithm.TRACE_SCHEMA_V1 ? TRACE_SCHEMA : ZLIB;
                         decision = rawFits ? Decision.COMPRESSED : Decision.COMPRESSED_TO_FIT;
@@ -498,11 +517,12 @@ public final class BoundedTraceCompression {
         }
         if (method == RAW && !rawFits) throw new IOException("trace frame exceeds limit");
         CRC32 crc = session == null ? new CRC32() : session.crc();
-        crc.update(input);
+        crc.update(input, offset, length);
         ByteBuffer frame = ByteBuffer.allocate(HEADER_BYTES + payloadLength).order(ByteOrder.BIG_ENDIAN);
         frame.putInt(MAGIC).put((byte) VERSION).put((byte) method).putShort((short) 0);
-        frame.putInt(input.length).putInt(payloadLength).putInt((int) crc.getValue()).put(payload, 0, payloadLength);
-        return new Encoding(frame.array(), input.length, decision);
+        frame.putInt(length).putInt(payloadLength).putInt((int) crc.getValue())
+                .put(payload, payloadOffset, payloadLength);
+        return new Encoding(frame.array(), length, decision);
     }
 
     /**
@@ -594,8 +614,9 @@ public final class BoundedTraceCompression {
     public CallbackExceptionTracker.BatchTransport batchSender(JsonLineTraceTransport.RecordWriter writer,
             boolean includeMessage, int maxFrames, int maxBatchBytes, int maxRecords) {
         Objects.requireNonNull(writer, "writer");
-        return BatchTraceTransport.sender(frame -> writer.writeRecord(encodeInternal(frame, null, false).frame),
-                includeMessage, maxFrames, maxBatchBytes, maxRecords);
+        JsonLineTraceTransport.SlicedRecordWriter frames = (buffer, offset, length) ->
+                writer.writeRecord(encodeInternal(buffer, offset, length, null, false).frame);
+        return BatchTraceTransport.sender(frames, includeMessage, maxFrames, maxBatchBytes, maxRecords);
     }
 
     /** Call from a bounded worker after authentication, not directly on a Binder thread. */
