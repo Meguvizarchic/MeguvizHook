@@ -145,9 +145,10 @@ public class LibXposed101BackendTest {
             }
             return previous.dispatch(invocation);
         };
-        java.lang.reflect.Constructor<?> routeConstructor = route.getClass().getDeclaredConstructor(DispatchChannel.class);
+        java.lang.reflect.Constructor<?> routeConstructor =
+                route.getClass().getDeclaredConstructor(DispatchChannel.class, int.class);
         routeConstructor.setAccessible(true);
-        field.set(framework.hooker, routeConstructor.newInstance(delayed));
+        field.set(framework.hooker, routeConstructor.newInstance(delayed, 2));
         AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread caller = new Thread(() -> {
             try {
@@ -322,7 +323,7 @@ public class LibXposed101BackendTest {
     }
 
     @Test
-    public void directAfterPreservesReservedResultsAndClosedPassthrough() throws Throwable {
+    public void valueTransportPreservesReservedResultsAndClosedPassthrough() throws Throwable {
         Method target = SampleTargets.class.getMethod("objectValue");
         Object marker = DirectAfterDispatchChannel.NOT_ENTERED;
         Object escaped = DirectAfterDispatchChannel.escape(marker);
@@ -336,9 +337,9 @@ public class LibXposed101BackendTest {
             Field routeField = framework.hooker.getClass().getDeclaredField("route");
             routeField.setAccessible(true);
             Object route = routeField.get(framework.hooker);
-            Field bindingField = route.getClass().getDeclaredField("directAfter");
+            Field bindingField = route.getClass().getDeclaredField("chainDirect");
             bindingField.setAccessible(true);
-            assertTrue("direct route must be selected", bindingField.get(route) != null);
+            assertTrue("flyweight route must be selected", bindingField.get(route) != null);
             Object downstream = new Object();
             framework.proceedResult = downstream;
             assertSame(expected, framework.invokeHook(target, null));

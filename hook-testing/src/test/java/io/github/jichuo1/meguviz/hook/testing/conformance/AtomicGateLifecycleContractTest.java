@@ -202,13 +202,18 @@ public class AtomicGateLifecycleContractTest {
         }
     }
 
-    @Test public void countWrapKeepsStateAndSignedIntReport() throws Exception {
+    /**
+     * Admission is decided by registration state, never by the count. A wrapped shared word cannot
+     * arise from real leases; the report then saturates instead of exposing a negative count.
+     */
+    @Test public void countWrapKeepsStateAndNonNegativeReport() throws Exception {
         CapturingBackend backend = new CapturingBackend();
         HookEnvironment env = HookEnvironment.create(backend);
         HookRegistration registration = TestSupport.installOrFail(env, single("gate.wrap", "fixed"));
         FusedConstantDispatchChannel channel = backend.channels.get(0);
         Field field = registration.getClass().getDeclaredField("inFlight");
         field.setAccessible(true);
+        // The shared word of the contention-adaptive counter is its inherited AtomicInteger value.
         AtomicInteger gate = (AtomicInteger) field.get(registration);
         // Synthetic seed; no real leases correspond to the injected count.
         gate.set(Integer.MAX_VALUE);
@@ -216,16 +221,15 @@ public class AtomicGateLifecycleContractTest {
         try {
             assertTrue(channel.tryEnter());
             entered = true;
-            assertEquals(Integer.MIN_VALUE, gate.get());
+            assertEquals("the lease itself stays on the shared word", Integer.MIN_VALUE, gate.get());
             assertEquals(RegistrationState.INSTALLED, registration.state());
             CloseReport report = registration.close();
-            assertEquals(Integer.MIN_VALUE, report.inFlightAtClose());
+            assertEquals(0, report.inFlightAtClose());
             assertEquals(RegistrationState.CLOSED, report.state());
             assertFalse(channel.tryEnter());
             assertEquals(Integer.MIN_VALUE, gate.get());
             channel.exit();
             entered = false;
-            assertEquals(Integer.MAX_VALUE, gate.get());
             assertEquals(RegistrationState.CLOSED, registration.state());
         } finally {
             if (entered) channel.exit();

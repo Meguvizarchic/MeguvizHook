@@ -23,7 +23,7 @@
 |---|---|---|
 | NO_ARGS | 不调用 backend 的 `arguments()`；参数读取抛 `HookContractException` | `InvocationFrame` 构造分支 |
 | READ_ARGS | 仅当前线程、当前回调内读取；逃逸/跨线程抛合同异常 | `InvocationFrame.check()` |
-| READ_ARGS_VIEW | 显式借用入口只读参数视图，回调结束即不可访问；保留原参数下传，不承诺深拷贝或框架零分配 | `BackendInvocation.readOnlyArguments()` |
+| READ_ARGS_VIEW | 显式借用入口只读参数视图，回调结束即不可访问；保留原参数下传，不承诺深拷贝或框架零分配 | `BackendInvocation.readOnlyArguments()`；flyweight 传输为 `ChainAccessor.argument` |
 | ENTRY_SNAPSHOT | 进入注册时的**浅槽快照**：复制数组、共享对象；不深拷贝、不回滚对象内部 | `args.clone()` |
 | MUTABLE_ARGS | 写入经 primitive/引用/null 校验，对下游 continuation 生效；首次访问参数槽时获取后端参数数组，下游前已获取则传给下游 | `InvocationFrame`、`TypeChecks` |
 | AROUND | 与 before/after 互斥（本版）；continuation at-most-once | `Dispatcher.dispatchAround` |
@@ -36,7 +36,9 @@ frame，不共享 ThreadLocal 可变数组。独立视图引入的分配成本�
 执行下游前即失效。该优化不复用跨调用对象，也不放宽重入、跨线程或回调结束后的访问限制。
 
 `READ_ARGS_VIEW` 是新增的显式选择，不改变 `READ_ARGS` 和 `ENTRY_SNAPSHOT` 的现有行为。
-101/102 使用按下标读取框架参数槽（`Chain.getArg`）的只读视图，不复制列表；旧后端默认复制数组回退；对象本身仍共享。视图不是可持久化快照，
+101/102 按下标读取框架参数槽（`Chain.getArg`），不复制列表：经 flyweight 访问器（§6）时不创建视图对象，
+旧 core 上回退为同样按下标读取的只读视图，两者的读取范围均为声明的参数个数，越界抛
+`IndexOutOfBoundsException`；旧后端默认复制数组回退；对象本身仍共享。视图不是可持久化快照，
 也不承诺底层框架没有分配。框架继续使用原参数执行下游，而不是替换为 SDK 的数组。
 
 `MUTABLE_ARGS` 与 `AROUND` 在回调首次读写参数槽时向后端获取一次参数数组
@@ -146,6 +148,16 @@ callback 失败分别分类；本切片无 native 路径。
 - `CloseReport` 分别声明：是否拒绝新回调、入口恢复（`RESTORED/NOT_RESTORED/UNKNOWN`）、
   close 时观察到的在途数、物理释放（默认 `NOT_CLAIMED`）、`CLOSED` 或 `RETIRED_RESIDENT`。
   SDK lease 归零不证明机器码返回地址已离开；本切片无 native，故不引入 dlclose 议题。
+- 在途数只用于报告：准入仍由“状态读、计数加、状态再读”线性化，close 不等待它。close（以及
+  替换、隔离生成的报告）在注册离开 `INSTALLED` 之后读取计数。读取期间没有调用进入或退出时，
+  它恰好等于未结束的 SDK 租约数（含尚未完成状态再读的试探性计数）；与进出并发时它不是原子
+  快照：读取全程在途的租约一定计入，读取期间进入或退出的租约可能计入也可能不计入（每个线程
+  至多为其当时的重入深度），结果从不为负。这些并发界限要求拆分式 `tryEnter`/`exit` 在同一线程
+  调用（框架 continuation 总是如此）；跨线程调用时静止总数仍然精确。计数无争用时是单个共享字；
+  某次计数加观察到另一租约仍在途（另一线程或同线程重入）后只记下争用，之后的某次进入在自身
+  计数之前发布按线程选择的填充计数单元表，所以分配失败或栈溢出不会留下未配对的计数。在一次
+  通道调用内完成的租约总在同一位置加减；拆分式租约若在单元表发布前进入、发布后退出，由“先读
+  单元、后读共享字”的读取顺序保证不会只计退出而漏计进入。
 - 关闭或未发布安装的回滚若入口恢复为 `NOT_RESTORED/UNKNOWN`，当前环境保留句柄并拒绝同 ID
   重装；`RESTORED` 可重试，即使物理制品仍驻留。回滚回执包含聚合关闭结果，`ROLLED_BACK` 仅表示
   已尝试关闭。隔离不跨环境或 ID，幂等 close 不提供卸载重试。
@@ -216,6 +228,13 @@ frame 视图不实现 `InvocationResult`，因此强转不能扩大形状。
 通用 plan channel（before、多回调、around）同样提供可选的直接值传输（`DirectAfterDispatchChannel`
 经 `CoreAfterBridge` 绑定）：返回值或原样抛出 THREW 异常，未准入时返回标记并由后端恰好执行一次原方法，
 与 `dispatch()` 共用同一状态机、准入与在途租约；未绑定的后端继续使用 `DispatchResult`。
+这两类通道还提供可选的 flyweight 传输（`ChainDispatchChannel` 经 `CoreChainBridge` 绑定）：后端为每个
+hooker 绑定一次无状态 `ChainAccessor`，core 直接读取框架的每次调用链对象，后端不再为每次调用创建
+`BackendInvocation` 适配器，`READ_ARGS_VIEW` 也不创建视图对象。返回编码、标记转义、异常身份、致命
+事件、准入、在途租约、借用寿命、线程检查与 at-most-once proceed 均与直接值传输相同；frame 只在本次
+分发及所属线程内读取链对象，分发结束后不再访问它（与原适配器相同，被违规保留的过期 frame 仍持有其
+引用）。101/102 优先使用它，core 不提供时回退 `CoreAfterBridge`，再回退 `dispatch()`；其他后端与
+`FakeBackend` 不受影响。
 诊断默认关闭，容量有界（`BoundedDiagnosticsSink`）。未选择 native 时本切片新增 so=0（无 native 模块）。
 
 ## 7. 独立 oracle 与反例清单

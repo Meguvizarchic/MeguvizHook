@@ -8,7 +8,15 @@ import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.api.ReadArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.RegistrationReceipt;
 import io.github.jichuo1.meguviz.hook.api.TargetSpec;
+import io.github.jichuo1.meguviz.hook.core.BoundPlan;
+import io.github.jichuo1.meguviz.hook.core.DirectAfterDispatchChannel;
+import io.github.jichuo1.meguviz.hook.core.DispatchChannel;
+import io.github.jichuo1.meguviz.hook.core.DispatchResult;
 import io.github.jichuo1.meguviz.hook.core.HookEnvironment;
+import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
+import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
+import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 import io.github.libxposed.api.XposedInterface;
 import org.junit.Test;
 
@@ -112,18 +120,22 @@ public class ChainArguments102Test {
         try {
             RegistrationReceipt receipt = env.install(spec.build());
             assertTrue(receipt.toString(), receipt.isInstalled());
-            assertTrue("generic plans use the direct value transport", hasDirectBinding(framework.hooker.get()));
+            assertEquals("generic plans use the flyweight chain transport", "chain", transport(framework.hooker.get()));
             return framework.hooker.get().intercept(chain.chain());
         } finally {
             env.close();
         }
     }
 
-    private static boolean hasDirectBinding(XposedInterface.Hooker hooker) {
+    /** 102 binds one hooker per channel; the captured binding type names its transport. */
+    static String transport(XposedInterface.Hooker hooker) {
+        String transport = "dispatch";
         for (java.lang.reflect.Field field : hooker.getClass().getDeclaredFields()) {
-            if (field.getType().getSimpleName().equals("AfterBinding")) return true;
+            String type = field.getType().getSimpleName();
+            if (type.equals("ChainBinding")) return "chain";
+            if (type.equals("AfterBinding")) transport = "direct";
         }
-        return false;
+        return transport;
     }
 
     private HookSpec.Builder spec(String id) throws NoSuchMethodException {
@@ -201,6 +213,108 @@ public class ChainArguments102Test {
         assertArrayEquals(new Object[]{3, null}, materialized);
         Object[] empty = new LibXposed102Backend.Chain102Invocation(null, new RecordingChain(0).chain(), 0).arguments();
         assertEquals(0, empty.length);
+    }
+
+    @Test public void flyweightAccessorReadsBoundedSlotsWithoutAnAdapter() throws Throwable {
+        RecordingChain recording = new RecordingChain(2, 3, null);
+        LibXposed102Backend.ChainAccessor102 accessor = new LibXposed102Backend.ChainAccessor102(2);
+        XposedInterface.Chain chain = recording.chain();
+        assertNull(accessor.thisObject(chain));
+        assertEquals(3, accessor.argument(chain, 0));
+        assertNull(accessor.argument(chain, 1));
+        assertTrue(captureThrowable(() -> accessor.argument(chain, 2)) instanceof IndexOutOfBoundsException);
+        assertTrue(captureThrowable(() -> accessor.argument(chain, -1)) instanceof IndexOutOfBoundsException);
+        assertArrayEquals(new Object[]{3, null}, accessor.arguments(chain));
+        assertFalse("single reads never copy through getArgs()", recording.calls.contains("getArgs"));
+        RecordingChain shorter = new RecordingChain(1, 3, 4);
+        assertArrayEquals("fewer chain slots fall back to the list form", new Object[]{3},
+                accessor.arguments(shorter.chain()));
+        RecordingChain proceeding = new RecordingChain(2, 3, 4);
+        assertEquals(7, accessor.proceed(proceeding.chain(), null));
+        assertEquals(11, accessor.proceed(proceeding.chain(), new Object[]{5, 6}));
+        assertEquals(Arrays.asList("proceed()", "proceed(args)"), proceeding.calls);
+    }
+
+    @Test public void flyweightViewReadsAreBoundedByTheDeclaredCount() throws Throwable {
+        RecordingChain chain = new RecordingChain(3, 3, 4, 5);
+        AtomicReference<Throwable> beyond = new AtomicReference<Throwable>();
+        AtomicReference<Throwable> negative = new AtomicReference<Throwable>();
+        assertEquals(7, run(spec("args.view.bounds").access(ParameterAccess.READ_ARGS_VIEW).before(i -> {
+            ReadArgsInvocation args = (ReadArgsInvocation) i;
+            beyond.set(captureThrowable(() -> args.getArgument(2)));
+            negative.set(captureThrowable(() -> args.getArgument(-1)));
+        }), chain));
+        assertTrue(beyond.get() instanceof IndexOutOfBoundsException);
+        assertTrue(negative.get() instanceof IndexOutOfBoundsException);
+        assertEquals("out-of-range reads never reach the chain", Collections.singletonList("proceed()"), chain.calls);
+    }
+
+    @Test public void channelWithoutTheChainTransportKeepsTheDirectAfterBinding() throws Throwable {
+        Framework framework = new Framework();
+        LibXposed102Backend real = new LibXposed102Backend(framework.api(),
+                new LibXposed102Context("args.fallback.102", getClass().getClassLoader(), 1L));
+        HookBackend directOnly = new HookBackend() {
+            @Override public String id() { return real.id(); }
+            @Override public io.github.jichuo1.meguviz.hook.api.BackendCapabilities capabilities() { return real.capabilities(); }
+            @Override public io.github.jichuo1.meguviz.hook.core.spi.BackendContext context() { return real.context(); }
+            @Override public BackendHandle install(BoundPlan plan, DispatchChannel channel) throws BackendInstallException {
+                return real.install(plan, new DirectOnlyChannel((DirectAfterDispatchChannel) channel));
+            }
+        };
+        HookEnvironment env = HookEnvironment.create(directOnly);
+        try {
+            RegistrationReceipt receipt = env.install(spec("args.fallback.direct").access(ParameterAccess.READ_ARGS)
+                    .before(i -> assertEquals(3, ((ReadArgsInvocation) i).getArgument(0))).build());
+            assertTrue(receipt.toString(), receipt.isInstalled());
+            assertEquals("direct", transport(framework.hooker.get()));
+            RecordingChain chain = new RecordingChain(2, 3, 4);
+            assertEquals(7, framework.hooker.get().intercept(chain.chain()));
+            assertEquals(Arrays.asList("getArg0", "getArg1", "proceed(args)"), chain.calls);
+        } finally {
+            env.close();
+        }
+    }
+
+    /** A third-party channel offering only the direct-after transport. */
+    private static final class DirectOnlyChannel implements DirectAfterDispatchChannel {
+        private final DirectAfterDispatchChannel delegate;
+
+        DirectOnlyChannel(DirectAfterDispatchChannel delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override public Object dispatchDirect(BackendInvocation invocation) throws Throwable {
+            return delegate.dispatchDirect(invocation);
+        }
+
+        @Override public DispatchResult dispatch(BackendInvocation invocation) {
+            return delegate.dispatch(invocation);
+        }
+    }
+
+    @Test public void chainBridgeLookupIsCachedAndDistinguishesOldAndInconsistentCores() throws Exception {
+        LibXposed102Backend.ChainBridgeLookup first = LibXposed102Backend.chainBridgeLookup();
+        assertSame("resolved once per backend class", first, LibXposed102Backend.chainBridgeLookup());
+        assertNotNull(first.bind);
+        assertNull(first.failure);
+
+        ClassLoader own = getClass().getClassLoader();
+        LibXposed102Backend.ChainBridgeLookup older = LibXposed102Backend.ChainBridgeLookup.resolve(new HidingLoader(own,
+                LibXposed102Backend.ChainBridgeLookup.BRIDGE, LibXposed102Backend.ChainBridgeLookup.CHANNEL,
+                LibXposed102Backend.ChainBridgeLookup.ACCESSOR));
+        assertNull("a round-1 core has no chain transport", older.bind);
+        assertNull(older.failure);
+
+        LibXposed102Backend.ChainBridgeLookup missingBridge = LibXposed102Backend.ChainBridgeLookup.resolve(
+                new HidingLoader(own, LibXposed102Backend.ChainBridgeLookup.BRIDGE));
+        assertNull(missingBridge.bind);
+        assertEquals("core advertises the chain transport but its bridge is missing", missingBridge.failure);
+        assertTrue(missingBridge.cause instanceof ClassNotFoundException);
+
+        LibXposed102Backend.ChainBridgeLookup missingAccessor = LibXposed102Backend.ChainBridgeLookup.resolve(
+                new HidingLoader(own, LibXposed102Backend.ChainBridgeLookup.ACCESSOR));
+        assertNull(missingAccessor.bind);
+        assertEquals("chain bridge is incomplete", missingAccessor.failure);
     }
 
     @Test public void bridgeLookupIsCachedAndDistinguishesOldAndInconsistentCores() throws Exception {

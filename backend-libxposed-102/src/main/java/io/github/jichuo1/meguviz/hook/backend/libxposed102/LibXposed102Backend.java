@@ -18,6 +18,7 @@ import io.github.jichuo1.meguviz.hook.core.spi.BackendContext;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
+import io.github.jichuo1.meguviz.hook.core.spi.ChainAccessor;
 import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 
 import io.github.libxposed.api.XposedInterface;
@@ -244,6 +245,116 @@ public final class LibXposed102Backend implements HookBackend {
         return value instanceof DispatchResult ? ((DispatchResult) value).value() : value;
     }
 
+    /** Flyweight binding; like {@link AfterBinding} it holds only types of the earlier core. */
+    static final class ChainBinding {
+        final java.util.function.Function<Object, Object> function;
+        final Object notEntered;
+        ChainBinding(java.util.function.Function<Object, Object> function, Object notEntered) {
+            this.function = function;
+            this.notEntered = notEntered;
+        }
+    }
+
+    /**
+     * Outcome of the reflective {@code CoreChainBridge.bind} lookup, resolved once per backend class
+     * like {@link BridgeLookup}. A core without the flyweight transport yields no method, and routes
+     * then keep the direct-after or ordinary transport; a core that has the channel type but lacks
+     * the bridge or accessor type is inconsistent and fails every binding loudly.
+     */
+    static final class ChainBridgeLookup {
+        static final String BRIDGE = "io.github.jichuo1.meguviz.hook.core.CoreChainBridge";
+        static final String CHANNEL = "io.github.jichuo1.meguviz.hook.core.ChainDispatchChannel";
+        static final String ACCESSOR = "io.github.jichuo1.meguviz.hook.core.spi.ChainAccessor";
+
+        final java.lang.reflect.Method bind;
+        final String failure;
+        final Throwable cause;
+
+        private ChainBridgeLookup(java.lang.reflect.Method bind, String failure, Throwable cause) {
+            this.bind = bind;
+            this.failure = failure;
+            this.cause = cause;
+        }
+
+        static ChainBridgeLookup resolve(ClassLoader loader) {
+            final Class<?> bridge;
+            try {
+                bridge = Class.forName(BRIDGE, false, loader);
+            } catch (ClassNotFoundException missingBridge) {
+                try {
+                    Class.forName(CHANNEL, false, loader);
+                } catch (ClassNotFoundException olderCore) {
+                    return new ChainBridgeLookup(null, null, null);
+                }
+                return new ChainBridgeLookup(null, "core advertises the chain transport but its bridge is missing",
+                        missingBridge);
+            }
+            try {
+                Class<?> accessor = Class.forName(ACCESSOR, false, loader);
+                return new ChainBridgeLookup(bridge.getMethod("bind", DispatchChannel.class, Object.class, accessor),
+                        null, null);
+            } catch (ClassNotFoundException incomplete) {
+                return new ChainBridgeLookup(null, "chain bridge is incomplete", incomplete);
+            } catch (NoSuchMethodException incomplete) {
+                return new ChainBridgeLookup(null, "chain bridge is incomplete", incomplete);
+            }
+        }
+    }
+
+    private static volatile ChainBridgeLookup chainBridgeLookup;
+
+    static ChainBridgeLookup chainBridgeLookup() {
+        ChainBridgeLookup current = chainBridgeLookup;
+        if (current == null) {
+            current = ChainBridgeLookup.resolve(LibXposed102Backend.class.getClassLoader());
+            chainBridgeLookup = current;
+        }
+        return current;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ChainBinding optionalChain(DispatchChannel channel, int parameterCount) {
+        ChainBridgeLookup lookup = chainBridgeLookup();
+        if (lookup.failure != null) throw new IllegalStateException(lookup.failure, lookup.cause);
+        if (lookup.bind == null) return null;
+        try {
+            Object marker = new Object();
+            Object bound = lookup.bind.invoke(null, channel, marker, FlyweightAccessors.create(parameterCount));
+            if (bound == null) return null;
+            if (!(bound instanceof java.util.function.Function)) {
+                throw new IllegalStateException("core returned an invalid chain binding");
+            }
+            return new ChainBinding((java.util.function.Function<Object, Object>) bound, marker);
+        } catch (java.lang.reflect.InvocationTargetException wrapper) {
+            Throwable cause = wrapper.getCause();
+            if (cause instanceof Error) throw (Error) cause;
+            if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+            throw new IllegalStateException("chain bridge binding failed", cause);
+        } catch (ReflectiveOperationException failure) {
+            throw new IllegalStateException("chain bridge is incomplete", failure);
+        }
+    }
+
+    /**
+     * The only code that names {@link ChainAccessor102}, kept out of this class: it runs only after
+     * the lookup found the flyweight types, and a core without them can then affect (for example in
+     * verification) just this cold holder, never the hot hooker paths of the backend class.
+     */
+    private static final class FlyweightAccessors {
+        private FlyweightAccessors() {
+        }
+
+        static Object create(int parameterCount) {
+            return new ChainAccessor102(parameterCount);
+        }
+    }
+
+    private static Object dispatchChain(ChainBinding binding, XposedInterface.Chain chain) throws Throwable {
+        Object value = binding.function.apply(chain);
+        if (value == binding.notEntered) return chain.proceed();
+        return value instanceof DispatchResult ? ((DispatchResult) value).value() : value;
+    }
+
     private static XposedInterface.ExceptionMode exceptionMode(ErrorPolicy policy) throws BackendInstallException {
         if (policy == ErrorPolicy.PROPAGATE) return XposedInterface.ExceptionMode.PASSTHROUGH;
         if (policy == ErrorPolicy.FRAMEWORK_PROTECTIVE) return XposedInterface.ExceptionMode.PROTECTIVE;
@@ -276,6 +387,11 @@ public final class LibXposed102Backend implements HookBackend {
             };
         }
         boolean requiresInvocation = channel.requiresInvocation();
+        if (requiresInvocation) {
+            // Flyweight first: the core reads the chain through one stateless accessor per hooker.
+            ChainBinding flyweight = optionalChain(channel, plan.target().getParameterCount());
+            if (flyweight != null) return chain -> dispatchChain(flyweight, chain);
+        }
         AfterBinding direct = requiresInvocation ? optionalAfter(channel) : null;
         if (direct != null) {
             // Captured once per binding: the target and its declared parameter count never change.
@@ -429,14 +545,7 @@ public final class LibXposed102Backend implements HookBackend {
          */
         @Override
         public Object[] arguments() {
-            int count = parameterCount;
-            Object[] values = new Object[count];
-            try {
-                for (int i = 0; i < count; i++) values[i] = chain.getArg(i);
-            } catch (IndexOutOfBoundsException fewerSlots) {
-                return chain.getArgs().toArray();
-            }
-            return values;
+            return slotArray(chain, parameterCount);
         }
 
         @Override
@@ -446,6 +555,53 @@ public final class LibXposed102Backend implements HookBackend {
 
         @Override
         public Object proceed(Object[] args) throws Throwable {
+            return args == null ? chain.proceed() : chain.proceed(args);
+        }
+    }
+
+    /** Shared by both transports: one new array filled by getArg, list form if slots are missing. */
+    static Object[] slotArray(XposedInterface.Chain chain, int count) {
+        Object[] values = new Object[count];
+        try {
+            for (int i = 0; i < count; i++) values[i] = chain.getArg(i);
+        } catch (IndexOutOfBoundsException fewerSlots) {
+            return chain.getArgs().toArray();
+        }
+        return values;
+    }
+
+    /**
+     * Stateless flyweight accessor bound once per route: the core reads the framework chain
+     * directly, so a call allocates neither {@link Chain102Invocation} nor {@link ArgumentView}.
+     * Single-slot reads keep the view's bounds (declared parameter count) and slot stability.
+     */
+    static final class ChainAccessor102 implements ChainAccessor<XposedInterface.Chain> {
+        private final int parameterCount;
+
+        ChainAccessor102(int parameterCount) {
+            this.parameterCount = parameterCount;
+        }
+
+        @Override
+        public Object thisObject(XposedInterface.Chain chain) {
+            return chain.getThisObject();
+        }
+
+        @Override
+        public Object argument(XposedInterface.Chain chain, int index) {
+            if (index < 0 || index >= parameterCount) {
+                throw new IndexOutOfBoundsException("argument index " + index + ", size " + parameterCount);
+            }
+            return chain.getArg(index);
+        }
+
+        @Override
+        public Object[] arguments(XposedInterface.Chain chain) {
+            return slotArray(chain, parameterCount);
+        }
+
+        @Override
+        public Object proceed(XposedInterface.Chain chain, Object[] args) throws Throwable {
             return args == null ? chain.proceed() : chain.proceed(args);
         }
     }

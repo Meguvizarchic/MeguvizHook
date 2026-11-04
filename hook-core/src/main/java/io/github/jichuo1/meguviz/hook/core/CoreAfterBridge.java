@@ -19,20 +19,23 @@ public final class CoreAfterBridge {
         DirectAfterDispatchChannel direct = (DirectAfterDispatchChannel) channel;
         return invocation -> {
             try {
-                Object encoded = direct.dispatchDirect(invocation);
-                if (encoded == DirectAfterDispatchChannel.NOT_ENTERED) return notEntered;
-                Object value = DirectAfterDispatchChannel.unescape(encoded);
-                // Preserve application values even when they equal the marker or a result wrapper.
-                return value == notEntered || value instanceof DispatchResult
-                        ? DispatchResult.returned(value) : value;
+                return decode(direct.dispatchDirect(invocation), notEntered);
             } catch (Throwable failure) {
                 return CoreAfterBridge.<RuntimeException, Object>throwUnchecked(failure);
             }
         };
     }
 
+    /** Maps the channel encoding onto the backend's own marker; shared with {@link CoreChainBridge}. */
+    static Object decode(Object encoded, Object notEntered) {
+        if (encoded == DirectAfterDispatchChannel.NOT_ENTERED) return notEntered;
+        Object value = DirectAfterDispatchChannel.unescape(encoded);
+        // Preserve application values even when they equal the marker or a result wrapper.
+        return value == notEntered || value instanceof DispatchResult ? DispatchResult.returned(value) : value;
+    }
+
     @SuppressWarnings("unchecked")
-    private static <T extends Throwable, R> R throwUnchecked(Throwable failure) throws T {
+    static <T extends Throwable, R> R throwUnchecked(Throwable failure) throws T {
         throw (T) failure;
     }
 }

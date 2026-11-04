@@ -11,6 +11,7 @@ import io.github.jichuo1.meguviz.hook.core.spi.BackendCloseReport;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
+import io.github.jichuo1.meguviz.hook.core.spi.ChainAccessor;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * One logical registration and its immutable per-target plans. Every backend entry gets a channel
@@ -30,7 +30,7 @@ final class CoreRegistration implements HookRegistration {
     private final List<BoundPlan> plans;
     private final DiagnosticsSink diagnostics;
     private final Map<BoundPlan, BackendHandle> handles = new LinkedHashMap<BoundPlan, BackendHandle>();
-    private final AtomicInteger inFlight = new AtomicInteger();
+    private final InFlightCounter inFlight = new InFlightCounter();
     private final AtomicBoolean closeOnce = new AtomicBoolean();
     private volatile RegistrationState state = RegistrationState.INSTALLED;
     private volatile CloseReport lastCloseReport;
@@ -85,7 +85,7 @@ final class CoreRegistration implements HookRegistration {
         state = RegistrationState.RETIRED_RESIDENT;
         closeOnce.set(true);
         lastCloseReport = new CloseReport(state, true, CloseReport.EntryRestoration.UNKNOWN,
-                inFlight.get(), CloseReport.PhysicalRelease.UNKNOWN,
+                inFlight.sum(), CloseReport.PhysicalRelease.UNKNOWN,
                 "adoption committed or indeterminate; new channel retired, handles retained, no unhook attempted");
     }
 
@@ -152,7 +152,7 @@ final class CoreRegistration implements HookRegistration {
             handles.remove(previous);
             state = RegistrationState.CLOSED;
             lastCloseReport = new CloseReport(state, true, CloseReport.EntryRestoration.NOT_RESTORED,
-                    inFlight.get(), CloseReport.PhysicalRelease.NOT_CLAIMED,
+                    inFlight.sum(), CloseReport.PhysicalRelease.NOT_CLAIMED,
                     "superseded by generation " + plan.generation() + "; backend handle ownership transferred");
             closeOnce.set(true);
             replacement.pendingReplacementHandle = null;
@@ -180,10 +180,10 @@ final class CoreRegistration implements HookRegistration {
         replacement.closeOnce.set(true);
         try {
             lastCloseReport = new CloseReport(state, true, CloseReport.EntryRestoration.UNKNOWN,
-                    inFlight.get(), CloseReport.PhysicalRelease.UNKNOWN,
+                    inFlight.sum(), CloseReport.PhysicalRelease.UNKNOWN,
                     "replacement outcome is unknown; handles retained and no unhook attempted");
             replacement.lastCloseReport = new CloseReport(replacement.state, true, CloseReport.EntryRestoration.UNKNOWN,
-                    replacement.inFlight.get(), CloseReport.PhysicalRelease.UNKNOWN,
+                    replacement.inFlight.sum(), CloseReport.PhysicalRelease.UNKNOWN,
                     "replacement outcome is unknown; handles retained and no unhook attempted");
         } catch (Throwable reportFailure) {
             if (TypeChecks.isFatal(reportFailure) && !TypeChecks.isFatal(failure)) {
@@ -290,7 +290,7 @@ final class CoreRegistration implements HookRegistration {
             synchronized (this) {
                 state = RegistrationState.CLOSED;
                 lastCloseReport = new CloseReport(state, true, CloseReport.EntryRestoration.UNKNOWN,
-                        inFlight.get(), CloseReport.PhysicalRelease.NOT_CLAIMED, "no backend handle was bound");
+                        inFlight.sum(), CloseReport.PhysicalRelease.NOT_CLAIMED, "no backend handle was bound");
                 return lastCloseReport;
             }
         }
@@ -353,7 +353,7 @@ final class CoreRegistration implements HookRegistration {
             }
             synchronized (this) {
                 state = resident ? RegistrationState.RETIRED_RESIDENT : RegistrationState.CLOSED;
-                lastCloseReport = new CloseReport(state, true, restoration, inFlight.get(), physical,
+                lastCloseReport = new CloseReport(state, true, restoration, inFlight.sum(), physical,
                         messages.toString());
             }
             if (firstError != null) {
@@ -423,10 +423,11 @@ final class CoreRegistration implements HookRegistration {
 
     /**
      * Generic plan channel (before callbacks, several callbacks, around). Backends that bind the
-     * optional {@link CoreAfterBridge} use {@link #dispatchDirect}; others keep {@link #dispatch}.
-     * Both run the same state machine under the same admission and in-flight lease.
+     * optional {@link CoreChainBridge} use {@link #dispatchChain}, those that bind
+     * {@link CoreAfterBridge} use {@link #dispatchDirect}; others keep {@link #dispatch}. All three
+     * run the same state machine under the same admission and in-flight lease.
      */
-    private final class PlanChannel implements DirectAfterDispatchChannel {
+    private final class PlanChannel implements ChainDispatchChannel {
         private final BoundPlan plan;
 
         private PlanChannel(BoundPlan plan) {
@@ -434,14 +435,26 @@ final class CoreRegistration implements HookRegistration {
         }
 
         @Override
+        public <C> Object dispatchChain(ChainAccessor<C> accessor, C chain) throws Throwable {
+            if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+            int lease = inFlight.enter();
+            try {
+                if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+                return DirectAfterDispatchChannel.escape(Dispatcher.dispatchValue(plan, accessor, chain, diagnostics));
+            } finally {
+                inFlight.exit(lease);
+            }
+        }
+
+        @Override
         public Object dispatchDirect(BackendInvocation invocation) throws Throwable {
             if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
-            inFlight.incrementAndGet();
+            int lease = inFlight.enter();
             try {
                 if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
                 return DirectAfterDispatchChannel.escape(Dispatcher.dispatchValue(plan, invocation, diagnostics));
             } finally {
-                inFlight.decrementAndGet();
+                inFlight.exit(lease);
             }
         }
 
@@ -450,20 +463,20 @@ final class CoreRegistration implements HookRegistration {
             if (state != RegistrationState.INSTALLED) {
                 return DispatchResult.passthrough();
             }
-            inFlight.incrementAndGet();
+            int lease = inFlight.enter();
             try {
                 if (state != RegistrationState.INSTALLED) {
                     return DispatchResult.passthrough();
                 }
                 return Dispatcher.dispatch(plan, invocation, diagnostics);
             } finally {
-                inFlight.decrementAndGet();
+                inFlight.exit(lease);
             }
         }
     }
 
     /** Single-after specialization selected at bind; all other plans keep their original dispatch. */
-    private final class SingleAfterPlanChannel implements DirectAfterDispatchChannel {
+    private final class SingleAfterPlanChannel implements ChainDispatchChannel {
         private final BoundPlan plan;
         private final AfterCallback callback;
 
@@ -473,27 +486,40 @@ final class CoreRegistration implements HookRegistration {
         }
 
         @Override
+        public <C> Object dispatchChain(ChainAccessor<C> accessor, C chain) throws Throwable {
+            if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+            int lease = inFlight.enter();
+            try {
+                if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
+                return DirectAfterDispatchChannel.escape(
+                        Dispatcher.dispatchSingleAfterValue(plan, callback, accessor, chain, diagnostics));
+            } finally {
+                inFlight.exit(lease);
+            }
+        }
+
+        @Override
         public Object dispatchDirect(BackendInvocation invocation) throws Throwable {
             if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
-            inFlight.incrementAndGet();
+            int lease = inFlight.enter();
             try {
                 if (state != RegistrationState.INSTALLED) return DirectAfterDispatchChannel.NOT_ENTERED;
                 return DirectAfterDispatchChannel.escape(
                         Dispatcher.dispatchSingleAfterValue(plan, callback, invocation, diagnostics));
             } finally {
-                inFlight.decrementAndGet();
+                inFlight.exit(lease);
             }
         }
 
         @Override
         public DispatchResult dispatch(BackendInvocation invocation) {
             if (state != RegistrationState.INSTALLED) return DispatchResult.passthrough();
-            inFlight.incrementAndGet();
+            int lease = inFlight.enter();
             try {
                 if (state != RegistrationState.INSTALLED) return DispatchResult.passthrough();
                 return Dispatcher.dispatchSingleAfter(plan, callback, invocation, diagnostics);
             } finally {
-                inFlight.decrementAndGet();
+                inFlight.exit(lease);
             }
         }
     }
@@ -502,7 +528,7 @@ final class CoreRegistration implements HookRegistration {
     private final class ConstantPlanChannel implements FusedConstantDispatchChannel {
         // Keep the registration owner (and its lifetime) while avoiding a repeated outer-field
         // lookup for the one counter shared by every target of this registration.
-        private final AtomicInteger counter;
+        private final InFlightCounter counter;
         private final DispatchResult result;
         private final Object constant;
 
@@ -522,9 +548,9 @@ final class CoreRegistration implements HookRegistration {
             if (state != RegistrationState.INSTALLED) {
                 return false;
             }
-            counter.incrementAndGet();
+            int lease = counter.enter();
             if (state != RegistrationState.INSTALLED) {
-                counter.decrementAndGet();
+                counter.exit(lease);
                 return false;
             }
             return true;
@@ -537,17 +563,17 @@ final class CoreRegistration implements HookRegistration {
 
         @Override
         public void exit() {
-            counter.decrementAndGet();
+            counter.exitUntracked();
         }
 
         @Override
         public Object dispatchValueOrNotEntered() {
             if (state != RegistrationState.INSTALLED) return NOT_ENTERED;
-            counter.incrementAndGet();
+            int lease = counter.enter();
             try {
                 return state == RegistrationState.INSTALLED ? constant : NOT_ENTERED;
             } finally {
-                counter.decrementAndGet();
+                counter.exit(lease);
             }
         }
 
@@ -572,15 +598,15 @@ final class CoreRegistration implements HookRegistration {
         }
         @Override public boolean tryEnter() {
             if (state != RegistrationState.INSTALLED) return false;
-            inFlight.incrementAndGet();
+            int lease = inFlight.enter();
             if (state != RegistrationState.INSTALLED) {
-                inFlight.decrementAndGet();
+                inFlight.exit(lease);
                 return false;
             }
             return true;
         }
         @Override public Object constantValue() { return value; }
-        @Override public void exit() { inFlight.decrementAndGet(); }
+        @Override public void exit() { inFlight.exitUntracked(); }
         @Override public DispatchResult dispatch(BackendInvocation invocation) {
             if (!tryEnter()) return DispatchResult.passthrough();
             try {
@@ -616,9 +642,9 @@ final class CoreRegistration implements HookRegistration {
 
         @Override public boolean tryEnter() {
             if (state != RegistrationState.INSTALLED) return false;
-            inFlight.incrementAndGet();
+            int lease = inFlight.enter();
             if (state != RegistrationState.INSTALLED) {
-                inFlight.decrementAndGet();
+                inFlight.exit(lease);
                 return false;
             }
             return true;
@@ -634,7 +660,7 @@ final class CoreRegistration implements HookRegistration {
 
         @Override public Object constantValue() { return constant; }
 
-        @Override public void exit() { inFlight.decrementAndGet(); }
+        @Override public void exit() { inFlight.exitUntracked(); }
 
         @Override public DispatchResult dispatch(BackendInvocation invocation) {
             if (!tryEnter()) return DispatchResult.passthrough();
