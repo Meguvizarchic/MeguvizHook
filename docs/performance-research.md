@@ -10,6 +10,35 @@ MeguvizHook 使用所选框架执行 Hook。SDK 的优化目标是减少不必�
 - 诊断支持显式批量、RAW 回退和可选压缩会话；所有传输均由调用方选择、配对并提供后台执行。压缩或批量可能增加小记录、低压缩率数据的成本。
 - 可选 Ref 桥在安装期解析目标，并可显式复用与 loader、代码代次绑定的会话；它不参与普通 Hook 回调，不能因为缓存命中就推断全 DEX 覆盖。
 
+## 第 2 轮优化（当前开发源码）
+
+同样分三条线并行，另加安装期批量。数字均为宿主 JDK 17 x86-64 上的 JMH，不是 ART、真实框架、Binder 或
+设备证据。
+
+| 方向 | 主要改动 | 宿主测量（旧 → 新） | 详细记录 |
+|---|---|---|---|
+| 安装期 | `installAll` 与可选 SPI `BatchMemberResolver`：同一次调用内按类复用加载结果与声明成员表，loader 或 epoch 变化即重开，不跨调用、不缓存未找到 | `java.lang.String` 上 20 个描述符 Hook：79.3 → 23.0 µs，321 → 75 KB；`java.util.Collections` 上 89.9 → 54.9 µs | 本节 |
+| 每次调用的适配器 | 可选 flyweight 链传输（`spi.ChainAccessor`、`CoreChainBridge`）：101/102 不再每次分配 `Chain10xInvocation`，`READ_ARGS_VIEW` 不再分配视图 | 回调调用点多态时 before NO_ARGS 27.1 → 23.6 ns、88 → 64 B；`READ_ARGS_VIEW` 112 → 64 B；before + after 46.3 → 40.2 ns | [热路径第 2 轮](research/hotpath-round-2.md) |
+| 多线程在途计数 | 观察到租约重叠后改用按线程填充的计数单元；无争用快路径仍是一次原子加 | 同一注册 8 线程：常量替换 565.5 → 27.2 ns，单 before 418.7 → 43.0 ns，AROUND 391.3 → 52.4 ns；单线程持平 | 同上 |
+| 投递延迟 | 可选 `WaitExpiry.DEADLINE`：观察等待到期时安排一次普通评估 | 5/20/16 单条记录加信号：p50 22.7 → 20.1 ms，p99 25.2 → 20.5 ms | [传输第 2 轮](research/transport-round-2.md) |
+| 诊断编码 | 非 ASCII 消息分块写入；可选 `SlicedRecordWriter` 免去最后一次复制；`TraceBatchDispatcher` 每次提交少两个对象 | unicode 记录 7816 → 6160 B；128 条批帧发送 187 → 136 KB；切片发送 CPU 时间 0.69–0.95× | 同上 |
+| Ref 多线程调用 | MeguvizRef 1.1 开发版：观察到竞争后分段准入，close 按字交接排空，jcstress 与变异检查覆盖 | 一个作用域 2/4/8 线程计划调用 106/228/725 → 19.1/19.4/28.9 ns；单线程与作用域开关不变 | MeguvizRef `docs/performance.md` |
+| Ref 安装批量 | 同一作用域内复用最近成员表、精确描述符按发起加载器缓存类型 | 一个作用域 20 个精确描述符 23.8 → 16.7 µs | 同上 |
+
+安装期改动的依据：HotSpot 的 `getDeclaredMethods()` 每次返回全部 `Method` 的新副本
+（[JDK 17 `Class.copyMethods`](https://github.com/openjdk/jdk17u/blob/master/src/java.base/share/classes/java/lang/Class.java)），
+ART 每次按隐藏 API 规则过滤并分配新的镜像（[AOSP java_lang_Class.cc](https://android.googlesource.com/platform/art/+/refs/heads/main/runtime/native/java_lang_Class.cc)）。
+模块启动时同一个类上的 N 个 Hook 因此复制 N 次成员表。批次只在一次 `installAll` 内、同一 loader 与 epoch
+下复用正向结果，与 ADR-0001 §1 的缓存键要求一致；它依赖 epoch 单调不回到旧值。独立审查提出的问题
+（合同文字、DSL 中带 owner 的 `hook` 会被静默丢弃、批次打开/关闭失败的处理、测试覆盖）已在提交前修正。
+
+评估后未做：同目标多个注册的自动融合（早退、before 失败、形状、PROTECTIVE、跨模块优先级与生命周期都不等价，
+设计说明见热路径第 2 轮 §4）；时间轮（每个 poller 最多一个到期评估，STPE 堆的代价可以忽略）；接收端切片写入；
+Ref 桥的安装批量（Ref 1.0.0 的共享作用域会累计 binding，需等 Ref 1.1 发布后改用 `resolveRaw`）。
+
+下一轮候选：在真实 101/102 框架与设备上复测（B01–B08，尤其多个 Binder 线程命中同一 Hook）；frame 仍为 64 B，
+单 after 的结果槽 32 B；Ref 1.1 发布后桥接改用 `resolveRaw`、`isCurrent` 并实现批次；显式的同目标 Hook 组。
+
 ## 第 1 轮优化（当前开发源码）
 
 本轮分三条线并行：分发热路径、诊断传输、MeguvizRef 与桥。所有数字来自宿主 JDK 17 x86-64 上的
