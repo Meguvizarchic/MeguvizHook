@@ -236,6 +236,22 @@ public class HookOwnerScope internal constructor(
     public fun install(id: String, target: Executable, configure: HookSpecDsl.() -> Unit): RegistrationReceipt =
         install(id, member(target), configure)
 
+    /**
+     * Build several specs with this owner, then install them in order with
+     * [HookEnvironment.installAll]: one receipt per spec, same checks as [install], and the default
+     * resolver copies each class's declared members once for the whole call. Every spec is built
+     * before anything is installed, so a configuration error installs nothing.
+     *
+     * ```kotlin
+     * val receipts = hooks.installAll {
+     *     hook("feature.title", titleMethod) { replaceConstant("") }
+     *     hook("feature.log", method("com.example.Foo", "log")) { beforeArgs { trace(it.getArgument(0)) } }
+     * }
+     * ```
+     */
+    public fun installAll(configure: HookBatchDsl.() -> Unit): List<RegistrationReceipt> =
+        environment.installAll(HookBatchDsl(this).apply(configure).specs())
+
     /** Explicit single-target replacement; no automatic retry or lifecycle ownership is added. */
     public fun replace(id: String, target: TargetSpec, configure: HookSpecDsl.() -> Unit): RegistrationReceipt =
         environment.replace(spec(id, target, configure))
@@ -249,6 +265,26 @@ public class HookOwnerScope internal constructor(
 
     public fun forceReplace(id: String, target: Executable, configure: HookSpecDsl.() -> Unit): RegistrationReceipt =
         forceReplace(id, member(target), configure)
+}
+
+/** Collects specs for [HookOwnerScope.installAll]; nothing is installed until the block returns. */
+@HookDsl
+public class HookBatchDsl internal constructor(
+    private val scope: HookOwnerScope,
+) {
+    private val specs = ArrayList<HookSpec>()
+
+    /** Add a spec for a descriptor or member target; it is installed in the order added. */
+    public fun hook(id: String, target: TargetSpec, configure: HookSpecDsl.() -> Unit) {
+        specs += scope.spec(id, target, configure)
+    }
+
+    /** Add a spec for an already resolved method or constructor. */
+    public fun hook(id: String, target: Executable, configure: HookSpecDsl.() -> Unit) {
+        specs += scope.spec(id, target, configure)
+    }
+
+    internal fun specs(): List<HookSpec> = ArrayList(specs)
 }
 
 @HookDsl
