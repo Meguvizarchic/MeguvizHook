@@ -9,6 +9,7 @@ import io.github.jichuo1.meguviz.hook.api.InvocationResult;
 import io.github.jichuo1.meguviz.hook.api.MutableArgsInvocation;
 import io.github.jichuo1.meguviz.hook.api.ParameterAccess;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInvocation;
+import io.github.jichuo1.meguviz.hook.core.spi.ChainAccessor;
 
 import java.lang.reflect.Executable;
 import java.util.List;
@@ -22,16 +23,24 @@ import java.util.Objects;
  * <p>The frame owns the shared state for the whole invocation. Each callback receives a distinct
  * borrowed view; invalidating that view never invalidates a later callback's view. Both the frame
  * and the view enforce the registered shape, so a callback cannot widen it by casting.
+ *
+ * <p>Backend access goes through one (accessor, chain) pair: the ordinary transport pairs
+ * {@link InvocationAccessor} with the backend's {@link BackendInvocation}; the flyweight transport
+ * pairs a backend's stateless {@link ChainAccessor} with the framework's own chain object, so no
+ * per-call adapter exists. Lifetime, thread, shape and fatal rules do not depend on the transport.
  */
 final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation, MutableArgsInvocation {
     private final BoundPlan plan;
-    private final BackendInvocation backend;
+    private final ChainAccessor<Object> accessor;
+    private final Object chain;
     private final Thread owner;
     private boolean valid = true;
 
     private Object[] args;
-    private Object[] entrySnapshot;
-    private List<?> argsView;
+    // The shapes are exclusive, so one field keeps the frame at its former size: the ENTRY_SNAPSHOT
+    // copy (Object[]), or for READ_ARGS_VIEW on the ordinary transport the backend's view (List).
+    // The flyweight READ_ARGS_VIEW reads slots through the accessor and leaves it null.
+    private Object shapeState;
 
     private CallOutcome.State proceedState = CallOutcome.State.NOT_CALLED;
     private CallOutcome proceedOutcome = CallOutcome.notCalled();
@@ -44,23 +53,39 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     // Before-only and around registrations never need an after-stage result slot.
     private ResultSlot resultSlot;
 
+    /** Ordinary transport through the backend's per-call adapter. */
     InvocationFrame(BoundPlan plan, BackendInvocation backend) {
+        this(plan, InvocationAccessor.INSTANCE, backend, backend);
+    }
+
+    /** Flyweight transport: the frame reads the framework chain through the backend's accessor. */
+    <C> InvocationFrame(BoundPlan plan, ChainAccessor<C> accessor, C chain) {
+        this(plan, accessor, chain, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private InvocationFrame(BoundPlan plan, ChainAccessor<?> accessor, Object chain, BackendInvocation viewSource) {
         this.plan = plan;
-        this.backend = backend;
+        this.accessor = (ChainAccessor<Object>) accessor;
+        this.chain = chain;
         this.owner = Thread.currentThread();
         ParameterAccess access = plan.access();
         if (access == ParameterAccess.READ_ARGS_VIEW) {
-            // Only the explicitly read-only shape borrows the adapter's argument view.
-            this.argsView = Objects.requireNonNull(backend.readOnlyArguments(), "readOnlyArguments");
+            // Only the explicitly read-only shape borrows the adapter's argument view. The flyweight
+            // accessor needs no view object: it reads single slots on demand.
+            if (viewSource != null) {
+                this.shapeState = Objects.requireNonNull(viewSource.readOnlyArguments(), "readOnlyArguments");
+            }
         } else if (access == ParameterAccess.READ_ARGS) {
             // The shape exists to read slots, so it materializes at entry: deferring would only add
             // a branch, and keeps the frame easier to scalar-replace for JITs that can.
-            this.args = backend.arguments();
+            this.args = this.accessor.arguments(chain);
         } else if (access == ParameterAccess.ENTRY_SNAPSHOT) {
             // The snapshot is defined at entry, so this shape stays eager. Shallow slot copy: the
             // array is copied, the argument objects are shared.
-            this.args = backend.arguments();
-            this.entrySnapshot = args.clone();
+            Object[] incoming = this.accessor.arguments(chain);
+            this.args = incoming;
+            this.shapeState = incoming.clone();
         }
         // MUTABLE_ARGS and AROUND obtain the backend array on first slot access (see slots());
         // NO_ARGS never does.
@@ -75,7 +100,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     private Object[] materializeSlots() {
         Object[] materialized;
         try {
-            materialized = backend.arguments();
+            materialized = accessor.arguments(chain);
         } catch (Error failure) {
             // Runs inside a callback: a fatal VM event must stay fatal even if that callback
             // catches it. Ordinary failures surface to the callback that touched the slots.
@@ -88,11 +113,13 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
 
     void invalidate() {
         valid = false;
-        argsView = null;
+        // Nothing reads the view or the snapshot once the frame is invalid; drop the references.
+        shapeState = null;
     }
 
-    BackendInvocation backend() {
-        return backend;
+    /** Runs downstream once with the slots callbacks used, or the incoming ones (see argsForProceed). */
+    Object proceedDownstream() throws Throwable {
+        return accessor.proceed(chain, args);
     }
 
     private void check() {
@@ -208,13 +235,13 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public Object thisObject() {
         check();
-        return plan.isInstanceMethod() ? backend.thisObject() : null;
+        return plan.isInstanceMethod() ? accessor.thisObject(chain) : null;
     }
 
     @Override
     public Object constructorReceiver() {
         check();
-        return plan.isConstructor() ? backend.thisObject() : null;
+        return plan.isConstructor() ? accessor.thisObject(chain) : null;
     }
 
     @Override
@@ -238,7 +265,9 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
     @Override
     public Object getArgument(int index) {
         requireReadable();
-        return plan.access() == ParameterAccess.READ_ARGS_VIEW ? argsView.get(index) : slots()[index];
+        if (plan.access() != ParameterAccess.READ_ARGS_VIEW) return slots()[index];
+        Object view = shapeState;
+        return view != null ? ((List<?>) view).get(index) : accessor.argument(chain, index);
     }
 
     @Override
@@ -253,7 +282,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         if (plan.access() != ParameterAccess.ENTRY_SNAPSHOT) {
             throw new HookContractException("entry snapshot requires ParameterAccess.ENTRY_SNAPSHOT");
         }
-        return entrySnapshot[index];
+        return ((Object[]) shapeState)[index];
     }
 
     @Override
@@ -262,7 +291,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         if (plan.access() != ParameterAccess.ENTRY_SNAPSHOT) {
             throw new HookContractException("entry snapshot requires ParameterAccess.ENTRY_SNAPSHOT");
         }
-        return entrySnapshot.clone();
+        return ((Object[]) shapeState).clone();
     }
 
     @Override
@@ -310,7 +339,7 @@ final class InvocationFrame implements AroundInvocation, EntrySnapshotInvocation
         }
         proceedState = CallOutcome.State.RUNNING;
         try {
-            Object value = backend.proceed(argsForProceed());
+            Object value = accessor.proceed(chain, argsForProceed());
             proceedOutcome = CallOutcome.returned(value);
             proceedState = CallOutcome.State.RETURNED;
         } catch (Throwable throwable) {

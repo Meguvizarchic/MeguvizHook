@@ -102,6 +102,15 @@ CallbackExceptionTracker.Transport transport = new JsonLineTraceTransport(uplink
 文件已写入、持久化或不重复。进程死亡、部分写入和重试结果可能不确定，SDK 不自动重试。
 SDK 不自动声明／导出服务，Binder 身份、畸形 Parcel 和真实跨进程行为尚需设备验证。
 
+`BinderTrace102.sender` 返回的写入器同时实现可选接口 `JsonLineTraceTransport.SlicedRecordWriter`。
+`JsonLineTraceTransport.send`、`BatchTraceTransport.sender` 和 `BoundedTraceCompression` 的批量发送端
+遇到这类写入器时，直接交出编码缓冲区的一个切片（数组、偏移、长度），由它以
+`Parcel.writeByteArray(buffer, offset, length)` 写入，省去把记录或批帧裁剪成精确长度数组的那次复制。
+Parcel 布局与写入复制后的数组相同：AOSP 中整数组重载就是以偏移 0 调用这个切片重载。切片先按缓冲区
+边界和记录上限检查，再取得 Parcel。只实现 `RecordWriter` 的写入器（包括包装了它的 lambda）照旧收到
+精确长度的数组，字节、确认和失败语义都不变。自定义写入器实现该接口时，只能在调用期间读取给定区间，
+不得保留、修改或转交缓冲区，区间外的字节没有定义。宿主测试无法执行 Parcel，这条路径同样需要设备验证。
+
 如果调用方需要在批量发送时避免持有 tracker 的交付锁，可显式选择
 [`tryDeliverBatch`](nonblocking-trace-delivery.md)；需要交给自己的执行器时可组合
 [`TraceBatchDispatcher`](trace-batch-dispatcher.md)，或使用调用方后台调度器进行
@@ -154,7 +163,9 @@ if (head != null) {
 
 `ModuleRemoteTraceWriter102` 同时实现 `BatchTraceTransport.BatchWriter`：`writeBatch` 先按同一上限
 检查整批记录，任一无效则不打开流；随后只调用一次 opener，按序写入各条记录（不另行拼接复制），
-最后 flush 一次并关闭。逐条 `writeRecord` 仍是每条打开一次流。批内写入中途失败时，已追加的前缀
+最后 flush 一次并关闭。逐条 `writeRecord` 仍是每条打开一次流；它也实现 `SlicedRecordWriter`，切片在打开流
+之前按缓冲区边界和同一上限检查，再以 `write(buffer, offset, length)` 写入，因此模块侧的
+`JsonLineTraceTransport` 可直接写编码缓冲区。批内写入中途失败时，已追加的前缀
 （可能以半条记录结尾）不会回滚，重试整批可能重复。
 
 `compressedReceiver` 等价于显式组合 codec 解码与批帧接收；它仅在内部复用 codec 新建的明文数组，
@@ -166,10 +177,12 @@ if (head != null) {
 codec 的解压上限和批帧上限分别检查；若前者配置得更大，数据可能先完成解压分配，再因
 超过批帧上限被拒绝。处理不可信输入时应同时约束两者。
 
-`codec.batchSender(...)` 将新建且尚未暴露的批帧直接交给 codec，省去一次整帧输入快照；
-`session.batchSender(...)` 是复用会话状态的对应入口，仍只能在会话所属线程使用。普通
-`codec.encode(...)`、`codec.encodingWriter(...)` 和 `BatchTraceTransport.sender(...)` 的行为不变，
-编码后的帧仍传给调用方指定的 writer，确认和失败语义与原有组合一致。
+`codec.batchSender(...)` 将新建且尚未暴露的批帧直接交给 codec，省去一次整帧输入快照；批帧以发送端
+私有缓冲区的切片交出，压缩或 RAW 编码直接读取这段区间，也不再先裁剪成精确长度的数组，生成的帧逐字节
+不变。`session.batchSender(...)` 与 `serializedSession.batchSender(...)` 是复用会话状态的对应入口，
+前者仍只能在会话所属线程使用。普通 `codec.encode(...)`、`codec.encodingWriter(...)` 和
+`BatchTraceTransport.sender(...)` 的行为不变，编码后的帧仍传给调用方指定的 writer，确认和失败语义与
+原有组合一致。
 
 压缩对整个输入完整试压，不使用可能误判的采样；根据配置阈值与包含帧头的节省量决定是否选压缩，
 否则发 RAW 帧。即使选 RAW，显式压缩协议仍有固定帧头。解码独立限制压缩帧和解压后数据大小、拒绝

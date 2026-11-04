@@ -175,7 +175,7 @@ public class LibXposed102BackendTest {
     }
 
     @Test
-    public void directAfterPreservesReservedResultsAndClosedPassthrough() throws Throwable {
+    public void valueTransportPreservesReservedResultsAndClosedPassthrough() throws Throwable {
         Method target = SampleTargets.class.getMethod("objectValue");
         Object marker = DirectAfterDispatchChannel.NOT_ENTERED;
         Object escaped = DirectAfterDispatchChannel.escape(marker);
@@ -187,11 +187,7 @@ public class LibXposed102BackendTest {
             HookRegistration registration = TestSupport.install(environment,
                     HookSpec.forMember("adapter102.after." + i, "adapter-test", target)
                     .after((invocation, result) -> { callbacks.incrementAndGet(); result.setResult(expected); }).build());
-            boolean direct = false;
-            for (java.lang.reflect.Field field : framework.hooker.getClass().getDeclaredFields()) {
-                if (field.getType().getSimpleName().equals("AfterBinding")) direct = true;
-            }
-            assertTrue("direct route must be selected", direct);
+            assertEquals("flyweight route must be selected", "chain", ChainArguments102Test.transport(framework.hooker));
             Object downstream = new Object();
             framework.proceedResult = downstream;
             assertSame(expected, framework.invokeHook(target, null));

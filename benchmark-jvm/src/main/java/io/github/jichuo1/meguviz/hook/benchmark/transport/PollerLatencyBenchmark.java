@@ -30,9 +30,12 @@ import java.util.concurrent.locks.LockSupport;
  * transport has accepted all of them. An untimed per-invocation setup parks for a random fraction
  * of the poll interval so arrivals are not phase-locked to poll ticks.
  *
- * <p>config = pollMillis/waitMillis/triggerCount. wake=signal wires the tracker's opt-in
+ * <p>config = pollMillis/waitMillis/triggerCount; 10/15/16 is a wait that is not a multiple of the
+ * poll interval, so a single record below the trigger is quantized to the next tick (about 20 ms).
+ * wake=signal wires the tracker's opt-in
  * CaptureSignal to TraceBatchPoller.requestPoll (one coalesced executor submission on the
- * capturing thread); wake=none is the default periodic polling. Host JVM only: no Binder, ART,
+ * capturing thread); wake=none is the default periodic polling. expiry=deadline adds the opt-in
+ * one-shot evaluation at observedAt + wait (TraceBatchPoller.WaitExpiry.DEADLINE). Host JVM only: no Binder, ART,
  * device scheduler or power management is represented, and the spin-wait adds no wake-up latency.
  */
 @State(Scope.Thread)
@@ -40,7 +43,7 @@ import java.util.concurrent.locks.LockSupport;
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @Fork(1)
 public class PollerLatencyBenchmark {
-    @Param({"2/0/1", "10/0/1", "5/20/16"})
+    @Param({"2/0/1", "10/0/1", "5/20/16", "10/15/16"})
     public String config;
 
     @Param({"1", "16"})
@@ -49,10 +52,18 @@ public class PollerLatencyBenchmark {
     @Param({"none", "signal"})
     public String wake;
 
+    /**
+     * poll = WaitExpiry.NEXT_POLL (default), deadline = WaitExpiry.DEADLINE, round1 = verbatim
+     * round-1 poller copy (Round1Poller, periodic semantics) for a same-run A/B of the default path.
+     */
+    @Param({"poll", "deadline", "round1"})
+    public String expiry;
+
     private ScheduledThreadPoolExecutor executor;
     private CallbackExceptionTracker tracker;
     private TraceFixtures.Producer producer;
     private TraceBatchPoller poller;
+    private Round1Poller round1;
     private final AtomicLong delivered = new AtomicLong();
     private long expected;
     private long pollNanos;
@@ -70,18 +81,29 @@ public class PollerLatencyBenchmark {
             return thread;
         });
         AtomicReference<TraceBatchPoller> target = new AtomicReference<TraceBatchPoller>();
+        AtomicReference<Round1Poller> round1Target = new AtomicReference<Round1Poller>();
         tracker = "signal".equals(wake)
                 ? new CallbackExceptionTracker("bench-latency", 4096, () -> {
                     TraceBatchPoller current = target.get();
                     if (current != null) current.requestPoll();
+                    Round1Poller old = round1Target.get();
+                    if (old != null) old.requestPoll();
                 })
                 : new CallbackExceptionTracker("bench-latency", 4096);
         producer = new TraceFixtures.Producer(tracker, "bench.latency.hook",
                 new TraceFixtures.SyntheticFailure("latency", 4));
         CallbackExceptionTracker.BatchTransport transport = this::accept;
-        poller = TraceBatchPoller.startDraining(executor, tracker, transport, trigger, 64, 4,
-                pollMillis, waitMillis, TimeUnit.MILLISECONDS);
-        target.set(poller);
+        if ("round1".equals(expiry)) {
+            round1 = Round1Poller.startDraining(executor, tracker, transport, trigger, 64, 4,
+                    pollMillis, waitMillis, TimeUnit.MILLISECONDS);
+            round1Target.set(round1);
+        } else {
+            poller = TraceBatchPoller.startDraining(executor, tracker, transport, trigger, 64, 4,
+                    pollMillis, waitMillis, TimeUnit.MILLISECONDS, System::nanoTime,
+                    "deadline".equals(expiry) ? TraceBatchPoller.WaitExpiry.DEADLINE
+                            : TraceBatchPoller.WaitExpiry.NEXT_POLL);
+            target.set(poller);
+        }
     }
 
     private int accept(List<CallbackExceptionTracker.Event> events) {
@@ -91,9 +113,16 @@ public class PollerLatencyBenchmark {
 
     @TearDown(Level.Trial)
     public void tearDown() {
-        poller.close();
+        Throwable failure;
+        if (round1 != null) {
+            round1.close();
+            failure = round1.lastFailure();
+        } else {
+            poller.close();
+            failure = poller.lastFailure();
+        }
         executor.shutdownNow();
-        if (poller.lastFailure() != null) throw new IllegalStateException(poller.lastFailure());
+        if (failure != null) throw new IllegalStateException(failure);
     }
 
     @Setup(Level.Invocation)
@@ -109,7 +138,8 @@ public class PollerLatencyBenchmark {
         while (delivered.get() < expected) {
             Thread.onSpinWait();
             if (System.nanoTime() - start > TimeUnit.SECONDS.toNanos(10)) {
-                throw new IllegalStateException("not delivered: " + poller.state() + " " + poller.lastFailure());
+                throw new IllegalStateException("not delivered: " + (round1 != null
+                        ? round1.state() + " " + round1.lastFailure() : poller.state() + " " + poller.lastFailure()));
             }
         }
         return expected;

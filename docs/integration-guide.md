@@ -79,17 +79,37 @@ hooks.install("feature.title", target) { replaceConstant("") }
 | 原方法成功后替换结果 | `replaceResultOnSuccess(v)` | 无调用帧 |
 | 某个字符串参数等于给定值时返回常量 | `replaceIfStringArgumentEquals(i, s, v)` | 无调用帧；按下标读一个参数 |
 | 只需知道被调用 | `before { }`（默认 `NO_ARGS`） | 一个调用帧，不取参数 |
-| 读取参数 | `beforeArgs { }`／`afterArgs { }`（`READ_ARGS_VIEW`） | 一个调用帧加一个按下标读取的只读视图 |
+| 读取参数 | `beforeArgs { }`／`afterArgs { }`（`READ_ARGS_VIEW`） | 一个调用帧；101/102 上按下标直接读框架参数槽，不建视图对象 |
 | 改写参数 | `beforeMutableArgs { }`（`MUTABLE_ARGS`） | 首次访问参数槽时才取一个数组 |
 | 包住原方法、至多调用一次下游 | `around { it.proceed() }` | 参数只在访问时获取 |
 | 需要入口时刻的参数快照 | `access(ENTRY_SNAPSHOT)` | 入口取参数并复制一份快照 |
 
-宿主 JDK 17 x86-64 上的 JMH 微基准（回调调用点已多态，见[热路径第 1 轮](research/hotpath-round-1.md)）：
-单 before `NO_ARGS` 约 26 ns、88 B；`READ_ARGS_VIEW` 约 36 ns、112 B；before + after 约 43 ns、168 B；
-AROUND 一次 proceed 约 29 ns、112 B。这些数字只用于比较形状之间的相对开销，**不是** ART、真实框架或
-设备上的结果。
+宿主 JDK 17 x86-64 上的 JMH 微基准（回调调用点已多态，101/102 的 flyweight 传输，见
+[热路径第 2 轮](research/hotpath-round-2.md)）：单 before `NO_ARGS` 约 24 ns、64 B；`READ_ARGS_VIEW`
+约 32 ns、64 B；before + after 约 40 ns、144 B；AROUND 一次 proceed 约 29 ns、88 B。多个线程同时命中同一
+Hook 时，每次调用的额外开销不再随线程数线性上升（8 线程单 before 约 43 ns）。这些数字只用于比较形状之间的
+相对开销，**不是** ART、真实框架或设备上的结果。
 
 ## 5. 多个 Hook 与解析
+
+模块启动时一次安装多个 Hook，优先用 `installAll`（开发源码）。每个 spec 的检查、顺序和回执与逐个
+`install` 完全相同，但默认解析器在这一次调用内对同一个类只加载一次、只复制一次声明成员表：
+
+```kotlin
+val receipts = environment.forOwner("my-module").installAll {
+    hook("feature.title", method("com.example.Foo", "title")) { replaceConstant("") }
+    hook("feature.log", method("com.example.Foo", "log")) { beforeArgs { trace(it.getArgument(0)) } }
+}
+```
+
+```java
+List<RegistrationReceipt> receipts = environment.installAll(Arrays.asList(titleSpec, logSpec));
+```
+
+宿主测量（JDK 17 x86-64，不含框架安装成本）：在 `java.lang.String` 上安装 20 个描述符 Hook，逐个
+`install` 79 µs、321 KB，`installAll` 23 µs、75 KB；只有一个 spec 时 `installAll` 略慢（约 +0.4 µs），
+直接用 `install`。同一类上的 spec 会拿到同一个 `Method` 实例；某个 spec 的安装抛出未检查异常时，剩余 spec
+不再尝试，已安装的注册仍归环境所有，需要逐个取得回执时使用 Java 的 `installAll(specs, receipt -> ...)`。
 
 - 同一模块的多个 Hook 复用 `forOwner(owner)`（Kotlin）。
 - 多个描述符需要并发定位时，见[显式并行预解析与顺序安装](prepared-install.md)。
@@ -113,6 +133,11 @@ TraceBatchPoller poller = TraceBatchPoller.start(worker, tracker, transport, 16,
 - 低延迟投递（开发源码）：给 tracker 传入 `CaptureSignal` 并在其中调用 `poller.requestPoll()`，
   宿主测量中捕获到确认的 p50 从毫秒级降到数十微秒；代价只在失败路径，约 0.3 µs。执行器的
   `execute` 必须不阻塞、不内联执行。见[后台批量轮询](trace-batch-poller.md#显式提前触发可选)。
+- 等待到期即发送（开发源码）：用 `TraceBatchPoller.startDraining(..., clock, WaitExpiry.DEADLINE)`，
+  未达数量门槛的单条记录在观察等待到期时发送，而不是到期后的下一次轮询；宿主测量中 5/20/16 配置加信号的
+  p99 从 25.2 ms 降到 20.5 ms。见[按到期时刻评估观察等待](trace-batch-poller.md#按到期时刻评估观察等待可选)。
+- 自定义写入器可实现 `JsonLineTraceTransport.SlicedRecordWriter`，直接收到编码缓冲区的切片，省去最后一次
+  复制；`BinderTrace102` 与 `ModuleRemoteTraceWriter102` 已实现。写入器不得保留缓冲区或读取区间外的字节。
 - 跨进程投递、压缩和授权见[异常诊断与远程传输](remote-diagnostics-102.md)。接收确认不代表持久化。
 
 ## 7. 关闭
@@ -120,6 +145,15 @@ TraceBatchPoller poller = TraceBatchPoller.start(worker, tracker, transport, 16,
 单个 Hook 用 `registration.close()` 并检查 `CloseReport`；模块生命周期结束时关闭 environment。
 `MeguvizRefResolverSession`、`TraceBatchPoller` 和压缩会话各自独立关闭。关闭请求、在途工作退出
 和物理释放是不同状态，见[显式请求关闭](close-request.md)。
+
+## 8. 自定义后端（可选）
+
+第三方后端实现 `HookBackend` 并把 `DispatchChannel` 接到框架回调即可，普通 `dispatch()` 路径始终可用。
+需要去掉每次调用的适配器对象时，可额外实现无状态的 `spi.ChainAccessor<框架链类型>`，在绑定 hooker 时
+通过 `CoreChainBridge.bind(channel, 标记, accessor)` 取得函数，再在每次回调中以框架链对象调用它；返回标记
+表示需要原样执行一次原方法。101/102 后端的实现可作参考，语义与 `BackendInvocation` 相同，见
+[运行时合同 ADR](adr/ADR-0001-runtime-contract.md) §2、§6。后端的 `exit` 须与 `tryEnter` 在同一线程调用，
+在途数的并发界限以此为前提。
 
 ## 常见问题
 

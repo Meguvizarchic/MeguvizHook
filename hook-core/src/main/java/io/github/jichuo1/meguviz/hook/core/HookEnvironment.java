@@ -17,6 +17,7 @@ import io.github.jichuo1.meguviz.hook.api.StringArgumentCondition;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendHandle;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendAdoption;
 import io.github.jichuo1.meguviz.hook.core.spi.BackendInstallException;
+import io.github.jichuo1.meguviz.hook.core.spi.BatchMemberResolver;
 import io.github.jichuo1.meguviz.hook.core.spi.HookBackend;
 import io.github.jichuo1.meguviz.hook.core.spi.MemberResolver;
 
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -43,7 +45,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * PARTIALLY_INSTALLED and no cross-target atomicity is claimed. An identity change is different: every
  * entry installed by the unpublished attempt is closed and no stale registration is published.
  * Ordinary installation has no resolution cache. The explicit preparation API retains a bounded
- * positive snapshot for one checked commit, never a reusable negative lookup.
+ * positive snapshot for one checked commit, never a reusable negative lookup. {@link #installAll}
+ * lets a {@link BatchMemberResolver} reuse positive work across the targets of that one call only.
  */
 public final class HookEnvironment implements AutoCloseable {
     private final HookBackend backend;
@@ -95,6 +98,147 @@ public final class HookEnvironment implements AutoCloseable {
      */
     public synchronized RegistrationReceipt install(HookSpec spec) {
         return guardedInstall(spec, null);
+    }
+
+    /**
+     * Install several specs in order, each with exactly the checks, ordering and receipt of
+     * {@link #install(HookSpec)}, under one acquisition of the environment monitor. Specs are
+     * independent: one failing, conflicting or missing target never skips or rolls back another,
+     * and no cross-spec atomicity is claimed. A {@code close()} from another thread waits until the
+     * whole call returns.
+     *
+     * <p>When the environment's resolver is a {@link BatchMemberResolver}, descriptor targets that
+     * observe the same loader and code epoch share one {@link BatchMemberResolver.Batch}. A target
+     * that observes a different loader or epoch closes it and opens a new one, and the last one is
+     * closed before this method returns or throws, so nothing is reused after the call and no
+     * missing target is remembered. The default {@link ReflectiveMemberResolver} then loads each
+     * class and copies its declared members once per call instead of once per spec; specs on one
+     * class therefore receive the same {@code Method}/{@code Constructor} instances, which their
+     * callbacks see through {@code HookInvocation.target()} (as with several
+     * {@code TargetSpec.ofMember} specs sharing one object). Batch reuse relies on the backend's
+     * code epoch never returning to an earlier value. If {@code openBatch} throws
+     * {@link BackendInstallException}, or a batch's {@code close} throws a non-fatal throwable,
+     * the event goes to the environment's {@link DiagnosticsSink} as {@code BACKEND_FAILURE} and
+     * the affected targets resolve through {@link BatchMemberResolver#resolve} as {@code install}
+     * would; fatal VM events propagate.
+     *
+     * <p>An unchecked exception or error from one install propagates as it would from
+     * {@code install}, and the remaining specs are not attempted. Registrations installed by
+     * earlier specs stay installed and owned by this environment (closed by {@link #close()}); use
+     * {@link #installAll(Iterable, Consumer)} to receive each receipt as soon as it exists.
+     *
+     * @return one receipt per spec, in iteration order
+     */
+    public synchronized List<RegistrationReceipt> installAll(Iterable<HookSpec> specs) {
+        final List<RegistrationReceipt> receipts = new ArrayList<RegistrationReceipt>();
+        installAll(specs, new Consumer<RegistrationReceipt>() {
+            @Override public void accept(RegistrationReceipt receipt) { receipts.add(receipt); }
+        });
+        return receipts;
+    }
+
+    /**
+     * {@link #installAll(Iterable)} that hands each receipt to {@code receipts} right after that
+     * spec's installation returns, before the next spec starts. The consumer runs under the
+     * environment monitor and must not wait for another thread that uses this environment. If it
+     * throws, the exception propagates and the remaining specs are not attempted.
+     */
+    public synchronized void installAll(Iterable<HookSpec> specs, Consumer<? super RegistrationReceipt> receipts) {
+        Objects.requireNonNull(specs, "specs");
+        Objects.requireNonNull(receipts, "receipts");
+        InstallBatch batch = resolver instanceof BatchMemberResolver
+                ? new InstallBatch((BatchMemberResolver) resolver, diagnostics) : null;
+        Throwable primary = null;
+        try {
+            for (HookSpec spec : specs) {
+                receipts.accept(guardedInstall(spec, null, null, null, batch));
+            }
+        } catch (Throwable failure) {
+            primary = failure;
+            throw TypeChecks.rethrow(failure);
+        } finally {
+            if (batch != null) batch.finish(primary);
+        }
+    }
+
+    /**
+     * Resolution through at most one open batch at a time, bound to the loader and epoch observed
+     * by the target that opened it. Used only by installAll, under the environment monitor.
+     */
+    private static final class InstallBatch {
+        private final BatchMemberResolver source;
+        private final DiagnosticsSink diagnostics;
+        private BatchMemberResolver.Batch current;
+        // No batch for the bound identity: openBatch declined or failed; resolve per target.
+        private boolean unavailable;
+        private ClassLoader loader;
+        private long epoch;
+        private HookId lastId;
+
+        InstallBatch(BatchMemberResolver source, DiagnosticsSink diagnostics) {
+            this.source = source;
+            this.diagnostics = diagnostics;
+        }
+
+        List<Executable> resolve(HookId id, TargetSpec.DescriptorTarget target, ClassLoader targetLoader, long targetEpoch)
+                throws BackendInstallException {
+            lastId = id;
+            if ((current != null || unavailable) && (targetLoader != loader || targetEpoch != epoch)) {
+                closeCurrent(null);
+            }
+            if (current == null && !unavailable) {
+                loader = targetLoader;
+                epoch = targetEpoch;
+                try {
+                    current = source.openBatch(targetLoader);
+                } catch (BackendInstallException failure) {
+                    report(id, failure, "member batch could not be opened; resolving each target separately");
+                    current = null;
+                }
+                unavailable = current == null;
+            }
+            return current == null ? source.resolve(target, targetLoader) : current.resolve(target);
+        }
+
+        /** Closes the open batch; a non-fatal failure is reported, a fatal one propagates. */
+        private void closeCurrent(Throwable primary) {
+            BatchMemberResolver.Batch closing = current;
+            current = null;
+            unavailable = false;
+            if (closing == null) return;
+            try {
+                closing.close();
+            } catch (Throwable cleanup) {
+                if (TypeChecks.isFatal(cleanup)) {
+                    if (primary == null) throw TypeChecks.fatal(cleanup);
+                    if (!TypeChecks.isFatal(primary)) {
+                        suppressPreservingFatal(cleanup, primary);
+                        throw TypeChecks.fatal(cleanup);
+                    }
+                    suppressPreservingFatal(primary, cleanup);
+                    return;
+                }
+                if (primary != null) {
+                    suppressPreservingFatal(primary, cleanup);
+                } else {
+                    report(lastId, cleanup, "member batch close failed; the call continues");
+                }
+            }
+        }
+
+        void finish(Throwable primary) {
+            closeCurrent(primary);
+        }
+
+        private void report(HookId id, Throwable failure, String message) {
+            try {
+                diagnostics.record(new DiagnosticsSink.Event(DiagnosticsSink.Event.Kind.BACKEND_FAILURE,
+                        id, -1L, failure, message));
+            } catch (Throwable sinkFailure) {
+                if (TypeChecks.isFatal(sinkFailure)) throw TypeChecks.fatal(sinkFailure);
+                // A failing diagnostics sink never changes an installation outcome.
+            }
+        }
     }
 
     /**
@@ -389,10 +533,15 @@ public final class HookEnvironment implements AutoCloseable {
 
     private RegistrationReceipt guardedInstall(HookSpec spec, BackendAdoption adoption, PreparedPayload prepared,
                                                 ResolutionFailureCapture capture) {
+        return guardedInstall(spec, adoption, prepared, capture, null);
+    }
+
+    private RegistrationReceipt guardedInstall(HookSpec spec, BackendAdoption adoption, PreparedPayload prepared,
+                                                ResolutionFailureCapture capture, InstallBatch batch) {
         HookId id = checkMutation(spec);
         try {
             activeMutations.add(id);
-            return installInternal(spec, adoption, prepared, capture);
+            return installInternal(spec, adoption, prepared, capture, batch);
         }
         finally { activeMutations.remove(id); }
     }
@@ -406,7 +555,7 @@ public final class HookEnvironment implements AutoCloseable {
     }
 
     private RegistrationReceipt installInternal(HookSpec spec, BackendAdoption adoption, PreparedPayload prepared,
-                                                 ResolutionFailureCapture capture) {
+                                                 ResolutionFailureCapture capture, InstallBatch batch) {
         Objects.requireNonNull(spec, "spec");
         HookId id = spec.id();
         String backendId = backend.id();
@@ -494,7 +643,10 @@ public final class HookEnvironment implements AutoCloseable {
             candidates = Collections.singletonList(((TargetSpec.MemberTarget) spec.target()).executable());
         } else {
             try {
-                candidates = resolver.resolve((TargetSpec.DescriptorTarget) spec.target(), loaderBefore);
+                TargetSpec.DescriptorTarget descriptor = (TargetSpec.DescriptorTarget) spec.target();
+                candidates = batch != null
+                        ? batch.resolve(id, descriptor, loaderBefore, epochBefore)
+                        : resolver.resolve(descriptor, loaderBefore);
             } catch (BackendInstallException failure) {
                 if (capture != null) capture.failure = failure;
                 if (identityChanged(loaderBefore, epochBefore)) {

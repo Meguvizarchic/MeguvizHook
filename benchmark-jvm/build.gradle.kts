@@ -15,6 +15,8 @@ dependencies {
     implementation(project(":hook-core"))
     implementation(project(":hook-testing"))
     implementation(libs.jmh.core)
+    // Object layouts for the allocation tables (benchmark module only, never published).
+    implementation("org.openjdk.jol:jol-core:0.17")
     annotationProcessor(libs.jmh.generator)
 }
 
@@ -37,4 +39,12 @@ tasks.register<JavaExec>("jmh") {
         listOf(include.get()) + extra.get().split(' ').filter { it.isNotBlank() } +
             listOf("-rf", "json", "-rff", output.absolutePath)
     })
+}
+
+tasks.register<JavaExec>("layouts") {
+    group = "benchmark"
+    description = "Prints JOL object layouts of the per-call dispatch objects (host HotSpot only)."
+    dependsOn(tasks.named("classes"))
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("io.github.jichuo1.meguviz.hook.benchmark.dispatch.LayoutReport")
 }

@@ -332,7 +332,7 @@ public final class TraceWireDifferentialTest {
         assertTrue("rejected " + rejected, rejected > 50);
     }
 
-    private static int frameLimit(Random random, List<CallbackExceptionTracker.Event> events,
+    static int frameLimit(Random random, List<CallbackExceptionTracker.Event> events,
                                   boolean includeMessage, int maxFrames) {
         switch (random.nextInt(4)) {
             case 0: return 13 + random.nextInt(400);

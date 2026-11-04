@@ -108,6 +108,16 @@ registration：调用方须保留原 handle，且不能将其当成已强制换�
 该辅助方法属于当前开发源码，已发布的 1.0.0 尚无此方法；使用 1.0.0 时可显式比较上述两个
 状态，并遵循同样的 handle 所有权规则。
 
+当前开发源码提供 `installAll(specs)`／`installAll(specs, receipts)`：按顺序对每个 spec 执行与
+`install(spec)` 完全相同的检查、顺序与回执，在一次环境监视器获取内完成；各 spec 相互独立，不承诺
+跨 spec 原子性。解析器实现 `BatchMemberResolver` 时，观察到相同 loader 与 code epoch 的描述符目标
+共用一个批次（见 ADR-0001 §1），默认解析器因此对同一类只加载一次、复制一次声明成员表，同一类上的
+spec 会拿到同一个 `Method`／`Constructor` 实例。批次打开或关闭的非致命失败交给环境的
+`DiagnosticsSink`（`BACKEND_FAILURE`），受影响的目标改为逐个解析；致命 VM 事件照常传播。某个 spec
+的安装抛出未检查异常时，异常照常传播，剩余 spec 不再尝试，之前已安装的注册仍归环境所有并随
+`close()` 关闭；需要逐个取得回执时使用带 `receipts` 回调的重载。Kotlin DSL 对应
+`forOwner(owner).installAll { hook(id, target) { ... } }`，所有 spec 先全部构建再安装。
+
 当前开发源码还提供显式 `installWithResolutionDiagnostics(spec)`：`receipt()` 给出与普通安装
 同合同的回执，`resolutionFailure()` 仅返回本次 `MemberResolver.resolve` 抛出的原始受检
 `BackendInstallException`。解析后身份复核可能使回执为 `STALE_IDENTITY`，同时保留发生在身份
@@ -139,7 +149,8 @@ backend 的 `BackendInstallException` 必须保证该次调用未安装入口，
 这不保证隔离自身遭异步致命事件中断或无法分配必要状态时一定成功。
 
 `CloseReport`：状态（`CLOSED` 或 `RETIRED_RESIDENT`）、是否拒绝新回调、入口恢复、在途观察数、
-物理释放（默认 `NOT_CLAIMED`）。`close()` 幂等，不等待宿主调用，不撤销 raw Member。
+物理释放（默认 `NOT_CLAIMED`）。在途观察数在没有调用并发进出时精确，否则是不为负的非原子观察值
+（定义见 ADR-0001 §5）。`close()` 幂等，不等待宿主调用，不撤销 raw Member。
 卸载抛出运行时异常时无法判断入口是否已恢复，报告 `UNKNOWN` 并记录失败。环境关闭时，注册抛出的
 非致命 `Error` 或未处理的运行时异常不会跳过后续注册：所有已知注册均尝试关闭，未确认入口仍保留
 引用，然后重抛首个 `Error`（若无 `Error` 则重抛首个未处理的运行时异常）。

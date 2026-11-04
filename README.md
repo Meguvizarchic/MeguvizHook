@@ -16,6 +16,8 @@ Maven Central 已发布 `1.0.0`；当前工作树的默认开发版本为 `0.1.0
 - 当前开发源码减少了每次调用的分配和包装：101/102 按下标读取参数、通用分发直接返回值、参数改写和
   around 在首次访问时才取参数；诊断编码与队列快照减少复制，并可选择由捕获直接唤醒轮询。宿主 JVM
   微基准与取舍见[性能研究记录](docs/performance-research.md#第-1-轮优化当前开发源码)，尚无设备证据。
+- 第 2 轮：`installAll` 批量安装、101/102 不再每次分配适配器对象、多线程命中同一 Hook 时在途计数不再争用
+  同一缓存行，以及可选的到期即发送与切片写入，见[第 2 轮记录](docs/performance-research.md#第-2-轮优化当前开发源码)。
 
 批量交付确认的含义取决于接收端：接收回调正常返回不代表持久化。发送失败可能已有副作用，显式重试可能重复；跨进程使用者仍需处理授权、连接、队列容量、隐私和保存策略。参见 [异常诊断与远程传输](docs/remote-diagnostics-102.md)。
 
@@ -62,8 +64,9 @@ hooks.install("feature.title", resolvedMethod) {
 }
 ```
 
-Java 对应 `beforeArgs`、`beforeMutableArgs`、`afterArgs`。从依赖到诊断和关闭的完整步骤见
-[接入指南](docs/integration-guide.md)。
+Java 对应 `beforeArgs`、`beforeMutableArgs`、`afterArgs`。模块启动时一次安装多个 Hook 用
+`installAll`（Kotlin：`hooks.installAll { hook(id, target) { ... } }`），同一个类只加载一次、只复制一次成员表。
+从依赖到诊断和关闭的完整步骤见[接入指南](docs/integration-guide.md)。
 
 ## 构建与示例
 

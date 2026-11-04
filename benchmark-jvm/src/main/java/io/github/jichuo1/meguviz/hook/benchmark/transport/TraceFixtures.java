@@ -90,6 +90,15 @@ final class TraceFixtures {
         return text.toString();
     }
 
+    /** Pure CJK text: three UTF-8 bytes per unit, the largest share without escapes. */
+    static String cjkMessage(int chars) {
+        StringBuilder text = new StringBuilder(chars);
+        String words = "处理请求失败状态就绪重试";
+        while (text.length() < chars) text.append(words);
+        text.setLength(chars);
+        return text.toString();
+    }
+
     static String message(String kind) {
         switch (kind) {
             case "none": return null;

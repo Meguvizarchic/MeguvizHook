@@ -12,7 +12,9 @@ package io.github.jichuo1.meguviz.hook.core;
  * null. Observer, comparison, downstream and fatal exceptions must retain their identities.
  *
  * <p>requiresInvocation remains true: an unaware backend continues using dispatch with an ordinary
- * BackendInvocation. Thus implementing this interface is optional for existing backends.
+ * BackendInvocation. Thus implementing this interface is optional for existing backends. Call
+ * exit on the thread that called tryEnter, as a framework continuation does: the concurrent bounds
+ * of the reported in-flight count rely on it; a quiescent count stays exact either way.
  */
 public interface ConditionalDispatchChannel extends DispatchChannel {
     int argumentIndex();
