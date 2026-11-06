@@ -1,4 +1,39 @@
+<div align="center">
+
+<img src="docs/brand/MeguvizHook.svg" width="96" height="96" alt="MeguvizHook">
+
 # MeguvizHook
+
+**面向 Android 模块开发的 Hook SDK**
+
+Java API · JVM 执行核心 · Kotlin DSL · libxposed 适配
+
+<br>
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-00AEEC?style=flat-square&labelColor=2d3a55)](LICENSE)
+[![Language](https://img.shields.io/badge/lang-Java-DEA584?style=flat-square&labelColor=2d3a55)](https://github.com/Meguvizarchic/MeguvizHook)
+[![Issues](https://img.shields.io/github/issues/Meguvizarchic/MeguvizHook?style=flat-square&labelColor=2d3a55)](https://github.com/Meguvizarchic/MeguvizHook/issues)
+
+[功能](#功能) · [模块](#模块) · [简洁声明](#简洁声明) · [构建与示例](#构建与示例) · [运行时合同](#运行时合同) · [验证范围](#验证范围) · [许可证](#许可证)
+
+</div>
+
+---
+
+<details>
+<summary><b>目录</b></summary>
+
+- [功能](#功能)
+- [模块](#模块)
+- [简洁声明](#简洁声明)
+- [构建与示例](#构建与示例)
+- [运行时合同](#运行时合同)
+- [验证范围](#验证范围)
+- [许可证](#许可证)
+
+</details>
+
+---
 
 MeguvizHook 是一个面向 Android 模块开发的 Hook SDK，提供独立的 Java API、JVM 执行核心、Kotlin DSL 和 libxposed API 101／102 适配器。实际方法拦截由运行框架完成；SDK 不替代框架管理器、注入器或 Android Runtime。
 
