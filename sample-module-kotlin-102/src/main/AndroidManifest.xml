@@ -3,5 +3,7 @@
     <application
         android:allowBackup="false"
         android:label="MeguvizHook Kotlin Sample 102"
-        android:supportsRtl="true" />
+        android:supportsRtl="true"
+        android:icon="@mipmap/ic_meguviz_hook"
+        android:roundIcon="@mipmap/ic_meguviz_hook"/>
 </manifest>

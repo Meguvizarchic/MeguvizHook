@@ -4,5 +4,7 @@
     <application
         android:allowBackup="false"
         android:label="MeguvizHook Sample 101"
-        android:supportsRtl="true" />
+        android:supportsRtl="true"
+        android:icon="@mipmap/ic_meguviz_hook"
+        android:roundIcon="@mipmap/ic_meguviz_hook"/>
 </manifest>
