@@ -1,59 +1,46 @@
-# API102 模块热重载接入
+# API 102 模块热重载接入
 
-API102 的模块热重载会在同一目标进程中创建新的模块代码代次；它与同一 `HookEnvironment`
-内调用 `replace` 更新回调不是同一件事。以下接入仅适用于提供 API102 热重载生命周期的框架；
-API101 没有这组模块生命周期。框架支持、模块正确接入和真实设备表现需要分别验证。
+API 102 的模块热重载会在同一目标进程中创建新的模块代码代次，这与在同一 `HookEnvironment` 内调用 `replace` 更新回调属于完全不同的生命周期事件。以下指南仅适用于支持 API 102 热重载的宿主框架（API 101 不提供此生命周期）。
+
+> **适用范围与验证说明**：以下约定基于 libxposed API `102.0.0` 接口合同与 JVM 框架替身验证，真实设备上的热重载支持、触发方式与跨代性能需在目标环境单独验证。
 
 ## 接入前提
 
-- 模块入口按需启用框架的热重载触发方式；如选择更新 APK 时触发，需在模块元数据中配置
-  `autoHotReload=true`，并且旧代 `onHotReloading` 仍须明确返回 `true`。SDK 不替应用启用它。
-- 模块建立自己的跨代映射。旧代必须记录足以**无歧义**识别待移交 Hook 的中性元数据；新代明确
-  将框架交付的每个旧 handle 与新的 `HookSpec` 对应。不要仅根据 executable 猜测：同一模块可在
-  同一目标上有多个 Hook，且框架 handle 不暴露完整的 owner、priority 和异常模式。
-- SDK 的普通 API102 安装不设置框架 ID，SDK 的 `HookId` 仅在各自的 `HookEnvironment` 内有效。
-  因此不能把 `HookId` 直接当成框架全局 ID，也不能依赖 `getOldHookHandles()` 的列表顺序。
-  如果无法建立唯一、可信的对应关系，就不要接管该 handle；由模块按自己的明确策略处理。
-- 跨代只传不依赖旧模块类加载器的值，例如基础类型、字符串及其数组。不得将旧 `HookEnvironment`、
-  回调、SDK 注册、模块自定义对象或包含它们的对象图放进 saved state。新代必须自行重建自己的
-  backend、环境、回调和描述符。
+- **按需启用元数据**：如期望在更新模块 APK 时自动触发热重载，需在模块元数据中配置 `autoHotReload=true`，且旧代 `onHotReloading` 须显式返回 `true`。SDK 不会自动代为开启该配置。
+- **建立无歧义的跨代映射**：旧代必须持久化记录足以唯一识别每个待移交 Hook 的跨类加载器中性元数据，新代据此将框架交来的每个旧 `HookHandle` 精确对应到新的 `HookSpec`。切勿仅按目标方法猜映射（同一模块可对同一方法挂多个 Hook，且 `HookHandle` 不暴露 `owner`、`priority` 或异常策略）。
+- **禁止跨代传递旧 SDK 对象**：SDK 的 `HookId` 仅属于各自的 `HookEnvironment`，不等于全局框架 ID，也不可依赖 `getOldHookHandles()` 的列表顺序。Saved state 中只能放入基础类型、字符串及其数组等中性数据，禁止放入旧 `HookEnvironment`、回调、`HookRegistration` 或模块自定义类实例。
 
-## 生命周期示意
+## 生命周期协作骨架
 
-下面展示调用顺序；`module*` 方法代表模块自行实现并审查的业务逻辑，不是 SDK 内置函数。
-模块负责保证映射和清理条件，SDK 无法代替它验证这些约束。
+下面示例中的 `module*` 方法代表业务模块自行实现并审查的逻辑：
 
 ```java
-// 旧模块实例：保留已经安装的框架 Hook 供新代接管。
+// 旧模块实例：保留已安装的框架 Hook，交由新代接管。
 @Override
 public boolean onHotReloading(HotReloadingParam param) {
-    // 只保存基础类型、字符串等跨类加载器中性数据。
     Object neutralState = moduleBuildNeutralState();
-    // 停止本模块拥有的线程、外部回调、native hook 和 JNI 引用等。
-    // 若不能确认清理完成，拒绝重载；不要承诺安全交接。
+    // 停止本模块自己启动的线程、外部回调、native Hook 与 JNI 引用。
+    // 若无法确认清理完成，返回 false 拒绝热重载。
     if (!moduleStopOwnedResources()) return false;
     param.setSavedInstanceState(neutralState);
-    // 不要在此调用旧 environment.close()：它会卸载待移交的框架 Hook。
+    // 切勿在此调用旧 environment.close()：否则会提前卸载待移交的框架 Hook。
     return true;
 }
 
-// 新模块实例：框架不会重放 onModuleLoaded / package 生命周期。
+// 新模块实例：热重载时框架不会重新回调 onModuleLoaded / onPackageReady。
 @Override
 public void onHotReloaded(HotReloadedParam param) {
     Object state = param.getSavedInstanceState();
-    // 从新代实际的宿主目标类加载器和进程信息重建上下文；epoch 使用模块自己的代次方案。
     LibXposed102Backend backend = new LibXposed102Backend(this,
             new LibXposed102Context(param.getProcessName(), moduleHostLoader(), moduleNewEpoch(state)));
     HookEnvironment env = HookEnvironment.create(backend);
 
-    // 每次框架回调只创建一个 session，并在回调返回前关闭；不能跨回调缓存 session/token。
+    // 每次热重载回调内创建并关闭专属 session，禁止跨回调缓存 session 或 adoption 令牌。
     try (LibXposed102ReloadSession session = new LibXposed102ReloadSession(backend, param)) {
         for (XposedInterface.HookHandle old : session.oldHandles()) {
-            // 依据可信的跨代元数据和模块自己的安装记录做唯一匹配。
-            // 同时确认目标、owner、priority、异常模式与旧注册兼容；无法确认时返回 null。
             HookSpec next = moduleResolveUnambiguousSpec(old, state);
             if (next == null) {
-                moduleHandleUnclaimedOldHook(old); // 模块显式决定是否 unhook 或保留并报告
+                moduleHandleUnclaimedOldHook(old); // 由模块显式决定 unhook 或保留记录
                 continue;
             }
             RegistrationReceipt receipt = env.adopt(next, session.adoption(old));
@@ -61,72 +48,24 @@ public void onHotReloaded(HotReloadedParam param) {
                 moduleHandleAdoptionReceipt(old, receipt);
             }
         }
-        moduleKeepNewEnvironment(env); // 按模块生命周期持有，并在最终关闭时处理
+        moduleKeepNewEnvironment(env); // 交由新代模块生命周期托管直至退出
     }
 }
 ```
 
-示意中的 host loader 必须是目标实际使用的类加载器，而不是新模块自身的类加载器；模块可用
-自己的可靠记录或其他经过验证的宿主信息重建它。`moduleResolveUnambiguousSpec` 必须在接管前
-验证目标和旧代属性，不能按 `oldHandles()` 的序号匹配。对既没有唯一映射又不属于模块管理范围
-的 handle，不要擅自处理。
+`moduleHostLoader()` 必须返回宿主目标实际使用的 `ClassLoader`，而非新模块自身的加载器。
 
-接管期间，当前 session 会持有自己的监视器调用框架 handle 的检查和替换方法；`close()` 与
-`oldHandles()` 也需要该监视器。如果框架或调用方在替换中同步等待另一个线程关闭或查询同一
-session，就可能形成等待环。桌面 JVM 的受控框架替身已复现该交错，但尚不能据此判断真实
-框架的触发频率。调用方应避免这种跨线程同步等待，并在框架允许的生命周期内完成接管、再
-关闭 session；单独协调也不能保证消除调用方或框架自己的其他锁环。
+## 非阻塞请求关闭与重入保护
 
-当前开发源码提供 `session.requestClose()`：它只设置关闭请求，不取得 session 监视器、不
-调用框架，也不安排后台任务。若被替换过程等待的线程只是需要提出关闭请求，可调用该方法并
-返回，由不处于该等待链的协调步骤在**框架回调返回前**等待已认领接管结束，再调用同步
-`session.close()`：
+- 接管期间，`LibXposed102ReloadSession` 会持锁调用框架句柄的检查与替换方法（`close()` 与 `oldHandles()` 同样获取该锁）。若外部回调线程需要避免因请求关闭而互等，可调用 `session.requestClose()`（不加锁、不调用框架、不启动线程），并由另一条不在等待链中的协调路径在 **`onHotReloaded` 返回前** 调用同步 `session.close()`。
+- `isCloseRequested()` 仅表示关闭请求已发起或同步关闭已启动，不能证明接管或清理已结束。若关闭请求先于接管入口检查到达，`oldHandles()` 与签发令牌会拒绝，未经确认的 `env.adopt` 会返回确定未提交的 `FAILED` 回执，不会调用框架替换。
+- 若框架在检查旧句柄时重入关闭了同一个 `session` 且令牌尚未调用替换，SDK 会判定本次接管确定未提交；若该令牌在嵌套调用中已尝试替换，外层则按未知结果保守隔离，不再重复替换。
 
-```java
-// 被接管过程等待的线程：只请求，不在这里等待接管或调用 close()。
-session.requestClose();
+## 失败处理与结果语义
 
-// 另一个合适的协调步骤：完成已认领接管后，仍须在 onHotReloaded 返回前执行。
-session.close();
-```
+- **单目标原子替换**：API 102 的 `replaceHook` 会保留原目标、优先级、异常策略和框架 ID，返回新句柄后旧句柄失效，改由新代 SDK 注册持有卸载权。
+- **异常策略须显式一致**：`session.adoption(old)` 默认按 `ErrorPolicy.PROPAGATE` 声明；若旧代采用了 `FRAMEWORK_PROTECTIVE`，必须显式调用 `session.adoption(old, ErrorPolicy.FRAMEWORK_PROTECTIVE)` 且新 `HookSpec` 使用相同策略。框架句柄不提供策略 getter，此一致性需由模块自己保证。
+- **隔离未知结果**：若接管过程中抛出未声明异常、`Error`、返回空句柄，或提交后发生身份漂移，切勿假设旧 Hook 仍然完好。SDK 会停用新通道、隔离该 `HookId` 并保留新句柄；**切勿对可能已失效的旧句柄重试接管或盲目 `unhook()`**。
+- **不承诺跨 Hook 原子性与即时内存回收**：多 Hook 逐一接管时不保证整体原子切换；已在途调用按原快照继续完成，旧代类加载器与 native 资源何时回收由 ART 运行时决定。
 
-`isCloseRequested()` 只表示已请求或同步关闭已认领，不能证明接管、引用释放或框架清理完成。
-请求先于准入时，后续 `oldHandles()` 和签发 token 会拒绝；未使用 token 通过 `env.adopt`
-尝试接管会得到明确未提交的 `FAILED` 回执，框架替换不会发生。请求若发生在操作通过准入
-检查后，该操作仍可能继续并完成，调用方须处理其真实回执和句柄。前述 `FAILED` 适用于已通过
-environment 其他前置检查、实际到达 token 准入检查的接管；其他阶段可能返回不同状态。
-`oldHandles()`、签发 token、
-接管及同步 `close()` 仍可能等待监视器；只有请求和查询请求标志自身不等待该监视器。
-不能在被接管过程等待的线程同步等待协调步骤，也不能让已认领操作跨出框架回调生命周期。
-此入口属于当前开发源码，不应假定已包含在既有发布制品中；它不能消除其他调用方、SDK 或
-框架锁形成的等待环。
-
-目标检查调用框架 handle 时，如果它同步重入并关闭了 session，而该令牌尚未发起替换，当前
-开发源码会将本次接管报告为确定未提交；若同一令牌已在嵌套调用中尝试替换，外层则按未知
-结果保守处理，不会再次调用替换。调用方仍须检查各次回执，不能把这一检查当成对任意框架
-重入的完整保证。
-
-## 结果和失败处理
-
-- 成功接管只覆盖一个已解析目标：API102 `replaceHook` 保留原框架目标、优先级、异常处理模式和
-  框架 ID，返回新 handle 后旧 handle 失效。新代 SDK 注册持有卸载权；旧代的对象不能负责卸载新代。
-- `session.adoption(old)` 按旧代 `PROPAGATE` 声明；旧代使用 `FRAMEWORK_PROTECTIVE` 时，必须显式
-  使用 `session.adoption(old, ErrorPolicy.FRAMEWORK_PROTECTIVE)` 且新计划选择同一策略。框架 handle
-  没有模式 getter，此声明由模块保证，SDK 无法独立验证；错误声明不能安全接管。
-- `FAILED` 回执表示 bridge 确认本次未提交，旧 hook 仍有效；模块可按明确策略处理。预检查
-  拒绝并不表示完成了交接。
-- 未检查异常、`Error`、空 handle，以及接管提交后身份改变或发布失败，都不能假定旧 hook 仍在。
-  新 channel 会被停用、相关 ID 被隔离，已取得的 handle 会保留；**不要对可能已失效的旧 handle
-  重试接管或盲目 unhook**。模块应记录并报告异常情况，由其生命周期策略决定后续处理。
-- 每个旧 handle 是否接管、移除或保留，均由模块负责。对未尝试接管且模块明确拥有的 handle，
-  可根据模块政策调用 `unhook()`；不应把这套政策应用到已提交或结果未知的 handle。
-- 替换是单目标行为，不保证多个 Hook 共同原子切换；在途调用按原有快照继续，旧模块类加载器及
-  native 制品何时释放由运行时决定。不要把该功能表述成物理卸载保证。
-- session 是否只在框架回调内使用、目标的真实身份和模块资源是否清理完毕，最终都由调用方保证。
-  保留 session/旧 handle 副本可能延长旧代对象的生命周期。
-- session 在开放期间保留按对象身份建立的旧 handle 索引，供归属和单次签发检查；该索引随旧
-  handle 数量增长，即使调用方只接管部分 handle 也会占用内存。`close()` 会释放 session 对
-  索引的引用；调用方自行持有的 `oldHandles()` 副本仍由其自行释放。
-
-上游合同见 [libxposed API102 生命周期](https://github.com/libxposed/api/blob/102.0.0/api/src/main/java/io/github/libxposed/api/XposedModuleInterface.java)
-和 [HookHandle 替换合同](https://github.com/libxposed/api/blob/102.0.0/api/src/main/java/io/github/libxposed/api/XposedInterface.java)。
+上游合同参考：[libxposed API 102 生命周期](https://github.com/libxposed/api/blob/102.0.0/api/src/main/java/io/github/libxposed/api/XposedModuleInterface.java) 与 [HookHandle 替换合同](https://github.com/libxposed/api/blob/102.0.0/api/src/main/java/io/github/libxposed/api/XposedInterface.java)。

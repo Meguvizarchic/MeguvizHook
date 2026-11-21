@@ -1,32 +1,20 @@
 # 显式并行预解析与顺序安装
 
-`HookEnvironment.prepareConcurrently(spec, maxCandidates)` 允许调用方把多个描述符目标的
-**解析**交给自己管理的工作线程；它不创建线程、队列或重试。每个 `READY` 结果携带一个
-一次性 `PreparedInstall`。由调用方的**后台协调线程**按业务指定顺序调用 `commit()`，
-实际安装仍沿用环境的串行检查、后端安装和逐目标回执。不要在 Android UI 线程或 Hook
-回调中等待准备任务或提交：解析、后端和清理都可能阻塞。
+`HookEnvironment.prepareConcurrently(spec, maxCandidates)` 允许调用方把多个描述符目标的**解析**交给自己管理的工作线程执行；SDK 本身不创建线程、队列或重试。每个 `READY` 结果携带一个一次性 `PreparedInstall`，由调用方的**后台协调线程**按业务顺序调用 `commit()`，实际安装仍沿用环境的串行检查、后端安装与逐目标回执。切勿在 Android UI 线程或 Hook 回调中等待准备任务或提交，因为解析、后端调用与清理都可能阻塞。
 
-这是一条显式路径，不改变现有 `install`／`adopt` 的调用顺序。它适合确实存在多个待解析
-描述符且解析器支持并发的场景；如果调用方已验证并持有具体 `Method`／`Constructor`，
-可直接用 `HookSpec.forMember(...)`，不需要再次枚举目标。并行准备不是性能保证，是否
-值得采用需要用实际目标、命中率、provider 和执行器测量。
-
-并行准备可能增加线程调度、同步和会话管理开销，应结合应用实际负载比较；性能设计依据与
-验证边界见[性能研究记录](performance-research.md)。
+> **适用范围与验证说明**：并行准备用于确实存在多描述符并发定位需求的场景，本身不构成性能保证（性能设计与验证边界见[性能研究记录](performance-research.md)）。如已持有验证过的 `Method` / `Constructor`，直接使用 `HookSpec.forMember(...)` 即可。
 
 ## 准备与提交
 
-调用方可在其有界执行器中对每个 `HookSpec` 提交一项：
+调用方可在有界执行器中为每个 `HookSpec` 提交准备任务：
 
 ```java
-// prepareExecutor 由调用方创建、限流和关闭；spec 是已创建的描述符 HookSpec。
+// prepareExecutor 由调用方创建、限流和关闭；spec 为已构造的描述符 HookSpec。
 Future<HookEnvironment.Preparation> future = prepareExecutor.submit(
         () -> environment.prepareConcurrently(spec, 128));
 ```
 
-协调层应按原输入顺序保存各任务及其结果，**即使某项失败也要接管其他任务的结果**。
-下方只展示已由协调层取得并拥有的单项结果如何消费；`moduleReport...` 是调用方自己实现
-的记录／决策方法，不是 SDK 方法：
+协调层应按输入顺序保存各任务与结果，即使某项失败也必须接管并处理其余任务返回的令牌（下面 `moduleReport...` 为调用方自定义记录方法）：
 
 ```java
 void processPrepared(HookEnvironment.Preparation preparation) {
@@ -37,65 +25,23 @@ void processPrepared(HookEnvironment.Preparation preparation) {
     try (HookEnvironment.PreparedInstall token = preparation.prepared()) {
         RegistrationReceipt receipt = token.commit();
         moduleReportInstall(receipt);
-        // PARTIALLY_INSTALLED 的 registration 仍可能非空；调用方必须继续持有并管理它。
+        // PARTIALLY_INSTALLED 下的 registration 仍可能非空，调用方须继续持有并管理。
     }
 }
 ```
 
-在后台协调线程按业务顺序处理这些结果；每项 `commit()` 返回自己的 `RegistrationReceipt`，
-应检查状态、逐目标结果和非空 registration。多目标安装不保证跨目标原子性；部分成功必须
-按回执管理，不能把整个批次当成自动回滚。提交可能抛异常；不管成功、失败还是抛错，
-**已领取的令牌都不能再提交**。关闭未领取的令牌表示放弃；关闭不会中断已经领取的提交。
-
-超时、取消、调度拒绝、`Future.get()` 异常或协调线程中断时，协调层仍必须负责已得到的
-每个 `READY` 令牌，并确保迟到结果也由任务持有者接收并关闭。仅调用 `Future.cancel()`
-不能证明 resolver/provider 已停止，也不能保证迟到的已生成令牌可被调用方取回；应让工作
-任务与结果持有器共同实现明确的所有权交接。不要在超时后无条件重试：类初始化、provider
-或后端可能已有副作用。执行器若内联运行任务，则提交本身也可能阻塞调用线程。
+- **单次提交原则**：不管 `commit()` 成功、失败或抛异常，已领取的令牌均不能再次提交；关闭未领取令牌代表放弃，不会中断已经开始领取的提交。
+- **超时与取消处理**：超时、取消、调度拒绝或线程中断时，协调层仍须对已生成的 `READY` 令牌以及迟到完成的结果负责关闭，不能仅靠 `Future.cancel()` 假定工作已停止。超时后切勿盲目重试，以免放大类初始化或 Provider 的副作用。
 
 ## 结果、身份与生命周期
 
-- 只有 `READY` 有可提交令牌。`CLOSED` 包括已请求关闭但尚未实际卸载；`FILTERED`、`UNSUPPORTED`、`TARGET_UNSUPPORTED`、
-  `NOT_FOUND_NOW`、`TOO_MANY`、`INVALID_RESULT`、`STALE_IDENTITY`、`RESOLUTION_FAILED` 和
-  `IDENTITY_CHECK_FAILED` 都不是安装成功；应根据业务判断是否停止或重新准备。
-- 检查 `failure()` 和 `checkFailure()`：解析 checked 异常和随后身份复核的非致命异常可能
-  同时存在，即使状态是 `CLOSED` 也可能有错误。致命 VM 事件按原对象传播；尝试附加的
-  suppressed 异常不保证一定成功。调用方执行器可能将线程异常封装在 `ExecutionException` 中。
-- `READY` 是环境锁内的某一时点结果；调用方收到它之前环境也可能已经关闭。令牌绑定原环境、
-  spec、ClassLoader 身份和 code epoch；提交会重新检查。身份可靠性依赖调用方提供真实、线程
-  安全、单调且不发生 ABA 的 epoch，采样不能取代框架提供的原子身份认证。
-- 令牌持有候选成员、spec 和环境等强引用，可能使类加载器继续可达；提交领取或 `close()`
-  会清空令牌直接持有的负载，但返回的结果、回调、异常、执行器或业务对象仍可能持有引用。
-  这不保证 ClassLoader 已回收。请及时提交或放弃，不要把令牌作为跨进程或跨重启数据保存。
-- 若使用 `MeguvizRefResolverSession`，已得到 `READY` 的令牌不会因 session 关闭而自动撤销；
-  它仍在提交时检查环境、loader 和 epoch。会话关闭也不会自动关闭已安装的 Hook。反之，
-  准备仍在途时 session 关闭可能使该准备失败；按会话的 `requestClose()`／`report()` 合同
-  管理资源，注意无在途查询时 provider 清理仍可能同步阻塞。
+- **状态枚举**：仅 `READY` 携带可提交令牌；`CLOSED`（含已收到 `requestClose()` 请求）、`FILTERED`、`UNSUPPORTED`、`TARGET_UNSUPPORTED`、`NOT_FOUND_NOW`、`TOO_MANY`、`INVALID_RESULT`、`STALE_IDENTITY`、`RESOLUTION_FAILED` 与 `IDENTITY_CHECK_FAILED` 均需按未就绪状态处理。
+- **检查异常字段**：同时检查 `failure()` 与 `checkFailure()`；致命 VM 事件原样传播。
+- **时点快照与强引用**：`READY` 仅反映准备期间某一时刻的状态，提交时会再次验证环境、`ClassLoader` 与 `codeEpoch`（依赖调用方提供线程安全、单调递增、无 ABA 的 epoch）。令牌持有候选成员、spec 与环境强引用，请及时提交或 `close()` 放弃。
+- **搭配 `MeguvizRefResolverSession`**：获得 `READY` 令牌后即使关闭解析会话，令牌也不会失效（提交时仍重检环境身份）；反之会话关闭不会卸载已安装的 Hook，准备期间关闭会话则可能使该准备失败。
 
 ## 并发前提与边界
 
-调用方必须确认所选 resolver、backend context、查询工厂、provider 以及其返回列表均支持
-需要的并发访问，且列表在复制期间保持稳定；已有 `MemberResolver` 接口不会自动赋予这项
-能力。loader 和 epoch 读取为分时采样。准备方法在当前线程已持环境监视器时直接拒绝；
-预检和身份复核回调中同步递归准备任何 ID 都会被拒绝，resolver 内则只拒绝递归准备相同 ID。
-它不占用安装事务 guard 跨越锁外 resolver，因此其他线程可在
-解析期间关闭环境。READY 即使产生，也仍需在提交时重检。
-
-准备阶段自身不调用 `backend.install`，但外部的 context、resolver、provider 或工厂可能
-自行重入并产生安装或其他副作用。预检和身份复核的 backend/context 调用在环境监视器外执行，
-每步之间短暂检查关闭状态；检查后环境仍可能立即关闭，已开始或即将开始的外部调用可以在关闭
-后执行或完成。类加载、初始化、查询及 provider 的操作也可以比普通 `install()` 更早发生，
-因此准备结果是分时观察，不承诺普通安装的副作用先后顺序；context 必须支持这种并发及关闭竞争。
-最终 token 在环境锁内检查关闭状态，`commit()` 仍重新检查身份并沿用普通串行安装。
-初始预检中抛出的未检查异常，以及 resolver 返回列表在复制时抛出的异常，仍直接传播；
-并发关闭不会保证将这些异常转换为 `CLOSED` 或 `checkFailure()`。
-
-普通安装和替换仍可能持环境监视器调用 backend/context；持环境监视器重入关闭时也沿用原同步
-关闭路径。外部实现不得同步等待需要当前持有的环境或注册监视器的其他线程，否则仍可能形成
-等待环。预解析的短状态检查也可能等待其他线程持有的环境锁。普通环境关闭在快照后释放环境
-监视器，再逐个关闭注册。
-
-`maxCandidates` 必须为 1–4096；它限制的是准备结果保留的候选副本，**不限制** resolver
-在返回前已分配的集合、provider 工作量、Throwable 对象图或执行时间。结果为空时不创建
-可提交令牌，也不将未命中缓存为未来代码代次的结论。不要根据这个限制推断整个系统的内存
-上限，也不要根据 JVM 代理验证推断真实框架、ART、BIL 或设备性能。
+- 调用方必须自行确保所选 `MemberResolver`、`BackendContext`、查询工厂及 Provider 支持并发访问。
+- 准备方法禁止在当前线程已持有环境锁时调用，预检与复核回调中也禁止同线程重入；方法在环境锁外执行，不占用事务锁，因此其他线程可在解析中途关闭环境。
+- `maxCandidates`（1–4096）仅限制 `Preparation` 最终保留的候选副本数量，不限制解析器在返回前已分配的集合或执行时间；结果为空时不创建令牌，也不缓存负结果。

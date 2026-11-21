@@ -1,8 +1,8 @@
-# API102 框架 ID
+# API 102 框架 ID
 
-默认构造 `new LibXposed102Backend(framework, context)` 不调用框架的 `setId`。SDK 逻辑 Hook ID 只属于对应的 `HookEnvironment`，不会自动转换成框架 ID。
+默认构造 `new LibXposed102Backend(framework, context)` 不调用框架的 `setId`。SDK 逻辑 `HookId` 仅在各自的 `HookEnvironment` 内有效，不会自动映射为框架 ID。
 
-确实需要 API102 的具名 Hook 时，明确选择一个由调用方管理的 ID：
+确实需要使用 API 102 具名 Hook 时，请通过显式工厂方法指定由调用方管理的框架 ID：
 
 ```java
 LibXposed102Backend backend = LibXposed102Backend.withFrameworkId(
@@ -10,6 +10,5 @@ LibXposed102Backend backend = LibXposed102Backend.withFrameworkId(
 HookEnvironment environment = HookEnvironment.create(backend);
 ```
 
-该 ID 用于这个后端实例初次安装的每个目标；同一模块在同一目标上再次安装相同框架 ID 可能按 API102 合同原子替换已有 Hook，原 handle 失效。旧 `HookEnvironment` 不会因此自动收到状态变更通知，调用方须协调 ID 所有权。不同目标使用同一 ID 不构成该冲突。
-
-`environment.replace(...)` 仍使用已有 handle 的 `replaceHook`，保留框架 ID；匿名 Hook 同样支持 handle 替换。此处描述的是 API 合同和 JVM 测试假体，不保证特定设备框架的实际表现。
+- 该 ID 会用于此后端实例初次安装的每一个目标；若同一模块在同一目标方法上再次使用相同框架 ID 安装，可能按 API 102 合同原子替换既有 Hook 并使旧句柄失效，而旧 `HookEnvironment` 不会自动收到通知，调用方须自行协调 ID 归属。不同目标方法使用相同 ID 不构成冲突。
+- `environment.replace(...)` 基于已有 `HookHandle` 调用 `replaceHook`，会自动保留原框架 ID；匿名 Hook 同样支持通过句柄替换。此处行为基于 API 102 接口合同与 JVM 替身测试，实际设备表现仍需在目标框架验证。

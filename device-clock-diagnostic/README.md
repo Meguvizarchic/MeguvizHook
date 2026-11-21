@@ -1,8 +1,6 @@
 # 独立时钟诊断
 
-这个测试应用没有依赖 Hook SDK 或 Xposed，不在后台自动采样。它只对显式指定组件、标准小写
-UUID 和有界参数执行一次；每个进程只接受一次有效请求。`deviceTest` 为本地调试证书签名的测试
-变体，不是发布制品。
+本测试应用不依赖 Hook SDK 或 Xposed 框架，也不会在后台自动采样；仅在显式启动组件并传入标准小写 UUID 与合法参数时执行一次（每个进程只接收一次有效请求）。`deviceTest` 为本地调试证书签名的测试变体，非发布制品。
 
 ```text
 adb -s <指定设备> shell am start -W \
@@ -10,15 +8,10 @@ adb -s <指定设备> shell am start -W \
   --es run_id <标准小写UUID> --ei warmup 20 --ei samples 100
 ```
 
-每条 `MeguvizHookClock` 事件含 run ID、进程和线程 ID。顺序为 `start`、逐项 `warmup`、逐项
-`sample`、`end`，原样记录每次相邻读取的 `wall_before_ns`、`cpu_before_ns`、`cpu_after_ns`、
-`wall_after_ns`；日志输出不在这四次读取之间。`warmup` 范围为 0–100，`samples` 范围为 1–200。
-未完成、缺失或截断的日志不是成功结果。
+## 事件格式与约束
 
-CPU 读取不可用或任一时钟倒退会报告失败并终止；读数相等合法。没有观测到正增量只能说本次窗口
-未解析出正增量，不能说分辨率或成本为零。[Android 文档](https://developer.android.com/reference/android/os/Debug#threadCpuTimeNanos())
-说明线程 CPU 时间以纳秒表示并不保证纳秒精度，不支持时返回 `-1`。墙钟和线程 CPU 是不同指标，
-本应用不把两者差值归因到特定等待。
+- 每条 `MeguvizHookClock` 日志包含 `run_id`、进程与线程 ID，按 `start`、逐项 `warmup`、逐项 `sample`、`end` 顺序输出，原样记录 `wall_before_ns`、`cpu_before_ns`、`cpu_after_ns` 与 `wall_after_ns`（日志打印不穿插在四次读取之间）。
+- 参数范围：`warmup` 为 0–100，`samples` 为 1–200；日志未完成、缺失或截断均视为失败。
+- 若线程 CPU 读取不可用或任一时钟发生倒退，应用直接报告失败并终止；相邻两次读数相等属于合法值。未观察到正增量只代表本次窗口未分辨出增量，不能说明时钟分辨率或耗时为零（参考 [Debug.threadCpuTimeNanos](https://developer.android.com/reference/android/os/Debug#threadCpuTimeNanos())）。
 
-相邻 CPU 读数的差包含测试方式自身的影响，不能视为完整读钟开销、callback CPU 或逐调用延迟；
-不自动减去开销、不填正式性能指标，也不冻结阈值。它不验证框架装载、Hook 或业务性能。
+> **适用范围与验证说明**：相邻 CPU 读数差值包含测试采集自身影响，不代表完整读钟开销、回调 CPU 或单次调用延迟，也不自动扣除开销、冻结阈值或替代框架/Hook 业务性能验证。
